@@ -1670,6 +1670,7 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R5` — [`full`]
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
@@ -1722,6 +1723,9 @@ Architectural decisions
 10. `Секреты нормализуются как ссылки`
    *ConfigurationAdapter проверяет только каноническое написание абсолютных ссылок на файлы секретов и не читает значение секрета. Проверка типа файла, владельца, прав доступа и свежего содержимого принадлежит D.001 непосредственно перед изменением базовой реализации. Нормализованные контракты и отчет о состоянии не содержат значения секрета.*
 
+11. `Конфигурационно заданное число присутствующих путей`
+   *Profile должен нормализовать одну семантическую цель `0 | N | all`: ни одного, заданное конечное число либо все разрешенные пути. Отсутствие будущего явного переопределения означает `all` и сохраняет прежнее поведение. Точное имя пользовательского поля не является свойством этой компонентной границы до отдельного решения о каноническом представлении.*
+
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
 сохраняет внешний Device mode при отсутствии `managed_vpn`, выводит exact binding/UDP
@@ -1739,6 +1743,11 @@ typed `CurrentConfig.wireguard_groups` напрямую, поэтому преж
 `ManagedWireGuardConfig.shared_prefixes` one-group bridge удален и второго prefix source
 между A.002 и D.002 больше нет. Дальнейшие gaps принадлежат D.002/C.001/runtime composition,
 а не configuration normalization.
+
+По `VPNG-U001-R1.R3.R7.R3` вклад A.002 пока [`partial`]: текущая конфигурация не имеет
+нормализованной цели `0 | N | all`, поэтому существующий parser фактически реализует только
+случай `all`. Каноническое имя пользовательского поля и его нормализация остаются текущим
+configuration frontier.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -1802,7 +1811,7 @@ policy.
 - `VPNG-U004-R4` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
@@ -1845,10 +1854,15 @@ Architectural decisions
 8. `Готовность управляемого WireGuard не равна привязке`
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
-**Материализация:** A.004 полностью материализует собственную архитектурную обязанность
-по generalized R8: он получает уже current A.007 availability projection после D.002-generation
-synchronization и сходится только по этой projection. D.002 realization currentness не является
-дополнительной обязанностью A.004 и поэтому не может служить основанием для `partial` статуса.
+9. `Политика полезного трафика не создает потребность в VPN`
+   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Такая потребность определяется отдельной конфигурационно заданной проекцией.*
+
+**Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
+он получает уже current A.007 availability projection после D.002-generation synchronization
+и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` вклад теперь [`partial`]:
+текущий Manager умеет сохранять structural membership и участвовать в dependency release,
+но новая конфигурационная проекция требуемого присутствия Devices ему не принадлежит и пока
+не материализована отдельной границей.
 
 **Evidence:** `EV-00280`.
 
@@ -2202,25 +2216,25 @@ Implementation
 ## [A.012] ManagedDeviceManager
 
 Manager текущей базовой VPN-реализации только для Devices, которым пользователь явно
-передал управление VPN-GATE. Он преобразует структурную потребность Device в требование
-наличия или отсутствия VPN-экземпляра, вызывает D.001 и публикует подтвержденное поколение
+передал управление VPN-GATE. Он принимает вычисленную конфигурационную потребность в наличии
+или отсутствии управляемого Device, вызывает D.001 и публикует подтвержденное поколение
 базовой реализации. Внешне управляемые Devices в его предметную область не входят.
 
 **Implements:**
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 
 API
 
-    <нормализованное намерение управления / структурная потребность / текущая проекция политики полезного трафика> — заменить текущий требуемый контекст.
+    <нормализованное намерение управления / вычисленный desired managed-Device set / подтверждение снятия зависимостей> — заменить текущий требуемый контекст.
     <reconciliation trigger> — заново наблюдать фактическое состояние и при необходимости привести его к требуемому через D.001.
     <ManagedDeviceRealization InfoEvent> — публиковать подтвержденное отсутствие/наличие с поколением либо problem.
 
 Implementation
 
-    design/NG3/code/python/rou/managed_device_manager.py — current-only Manager структурной потребности явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
+    design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
     design/NG3/code/python/rou/alpha_runtime.py — Release-1 composition: startup/reconciliation до fresh C.004 observation, подтвержденное снятие product-owned policy dependencies при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
@@ -2228,8 +2242,8 @@ Architectural decisions
 1. `Только явное включение управления`
    *Manager вообще не создает управляемое состояние для Device без явного нормализованного намерения управления. Внешний Device продолжает появляться только через наблюдение и привязку C.004, как до введения R7.*
 
-2. `Структурная потребность — первый контракт подключения по потребности`
-   *VPN-экземпляр требуется только тогда, когда Device включен и используется хотя бы одним включенным Profile. Первый пакет, время простоя и иная активация по фактическому трафику этим Manager не выводятся.*
+2. `Потребность задается конфигурацией, а не трафиком`
+   *A.012 получает уже вычисленный desired set управляемых Devices. Его источник должен учитывать заданное Profile число присутствующих разрешенных путей `0 | N | all` и свежее присутствие endpoints, но не пользовательские пакеты, первый пакет, время простоя или availability outcome. A.012 не вычисляет эту Profile policy самостоятельно.*
 
 3. `Поколение базовой реализации задано явно`
    *Manager различает желаемое поколение конфигурации и подтвержденное D.001 поколение фактической реализации. Команда запуска или сам факт существования службы не превращаются в подтвержденное поколение.*
@@ -2238,7 +2252,7 @@ Architectural decisions
    *Успешная реализация D.001 лишь позволяет VPN-endpoint появиться. C.004 независимо заново наблюдает и подтверждает `PathBinding`; для WireGuard по R8 D.002 дополнительно подтверждает реализацию выбранного пира. Manager не подменяет ни одну из этих границ.*
 
 5. `VPN-экземпляр удаляется после зависимостей`
-   *При исчезновении структурной потребности политика полезного трафика должна перестать использовать Device, а специфичное для VPN динамическое состояние должно быть снято до подтвержденного удаления базовой реализации D.001. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей.*
+   *При исчезновении вычисленной потребности политика полезного трафика должна перестать использовать Device, а специфичное для VPN динамическое состояние должно быть снято до подтвержденного удаления базовой реализации D.001. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей.*
 
 6. `Общая остановка продукта сохраняет единственного владельца`
    *A.001 при общей остановке задает отсутствие потребности во всех управляемых Devices и ожидает подтвержденного A.012 отсутствия до уничтожения Private network. Это не превращает A.001 во второго владельца состояния и не делает A.012 глобальным Manager жизненного цикла.*
@@ -2249,19 +2263,31 @@ Architectural decisions
 8. `Правдивое текущее состояние`
    *A.012 передает A.008 желаемое и подтвержденное поколения, а также problem-state. Для внешне управляемого Device отсутствие состояния A.012 не изображается как результат управляемого жизненного цикла.*
 
+9. `Один Device агрегирует потребность всех Profiles`
+   *В A.012 поступает один итоговый desired verdict на Device. Снятие потребности одним Profile не разрешает остановку, пока тот же Device требуется другому Profile. Выбор минимального набора managed Devices при дефиците и сохранение уже присутствующих подходящих путей относятся к вычислению demand, а не к lifecycle actuation A.012.*
+
 **Evidence:** `EV-00080`, `EV-00090`.
 
-**Материализация:** `ManagedDeviceManager` вычисляет потребность только для явно
-управляемых Devices из `CurrentConfig.structural.active_device_ids`, получает
-`desired_generation` через D.001 до мутации, принимает только совпадающее подтвержденное
-поколение D.001, переводит ошибки lifecycle в problem-state и не вызывает
-`converge_absent`, пока caller не включил Device в `dependency_free_device_ids`.
-Если управление Device удалено из новой конфигурации после прежнего владения, Manager
-сохраняет этот Device в текущем наборе очистки до подтвержденного отсутствия.
+**Материализация:** Текущий `ManagedDeviceManager` использует
+`CurrentConfig.structural.active_device_ids`: каждый enabled managed Device, упомянутый хотя
+бы одним enabled Profile, считается требуемым. Это точно материализует только новый случай
+`all`, поэтому вклад A.012 в `VPNG-U001-R1.R3.R7.R3` теперь [`partial`]. Нормализация
+`0 | N | all`, свежий pre-A.012 учет уже присутствующих endpoints, агрегация per-Profile
+demand и последовательное расширение demand после неудачи кандидата еще отсутствуют.
 
-Alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
+В уже реализованной части A.012 получает `desired_generation` через D.001 до мутации,
+принимает только совпадающее подтвержденное поколение D.001, переводит ошибки lifecycle в
+problem-state и не вызывает `converge_absent`, пока caller не включил Device в
+`dependency_free_device_ids`. Если управление Device удалено из новой конфигурации после
+прежнего владения, Manager сохраняет этот Device в текущем наборе очистки до подтвержденного
+отсутствия.
+
+Текущая alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
 portal, но до первого fresh C.004/VPN-path observation; каждый normal reconciliation снова
-начинается с A.012 fresh convergence до зависимой path/policy observation. При общей остановке
+начинается с A.012 fresh convergence до зависимой path/policy observation. Для нового numeric
+warm-target принята другая целевая последовательность: fresh C.004 endpoint observation без
+commit binding state → pure demand projection → A.012/D.001 convergence → повторное fresh
+C.004 observation и обычная binding projection. При общей остановке
 A.001 сначала закрывает forwarding и подтвержденно снимает product-owned payload policy и
 return-affinity dependencies, затем передает все управляемые Devices как
 `dependency_free_device_ids`, требует confirmed A.012 absence и только после этого начинает
@@ -2545,6 +2571,7 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 - `VPNG-U001-R1.R3.R4.R3` — [`full`]
 - `VPNG-U001-R1.R3.R4.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R4.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 - `VPNG-D001-R1.R1.R3` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
 
@@ -2584,6 +2611,9 @@ Architectural decisions
 
 10. `Binding is not route realization`
    *`VPNPathAdapter` доказывает current concrete endpoint, но не угадывает Linux `gateway/onlink`. Exact route realization предоставляет отдельная capability supported integration contract в `VPN external ends`; generic `NetworkPolicyAdapter` только потребляет этот уже доказанный lower fact. Direct-device realization является одной explicit integration capability, а не универсальным свойством bound interface.*
+
+11. `Fresh presence observation может предшествовать lifecycle demand`
+   *`observe_device_endpoints(...)` может использоваться как свежий read-only вход для расчета числа уже присутствующих Profile-eligible endpoints до A.012. Такое наблюдение не создает `PathBinding`, не меняет retained binding state и не становится lifecycle owner; после возможной D.001 mutation обычный binding postcondition подтверждается новым observation.*
 
 ## [C.005] ForwardingGate
 
