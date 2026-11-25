@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address
 import subprocess
 from typing import Protocol, Sequence
 
+from .interface_identity import InterfaceIdentity
 from .probe_policy import AvailabilityProbeMechanism
 from .probe_runtime import (
     ProbeObservationContext,
@@ -48,6 +50,24 @@ class IcmpProbeExecutionPolicy:
     @property
     def process_timeout_seconds(self) -> int:
         return self.reply_timeout_seconds + self.process_grace_seconds
+
+
+@dataclass(frozen=True, slots=True)
+class IcmpProbePhysicalContext:
+    """Protocol-neutral physical context for one exact ICMP attempt."""
+
+    endpoint: InterfaceIdentity
+    target: IPv4Address
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.endpoint, InterfaceIdentity):
+            raise IcmpProbeDriverError(
+                "endpoint must be InterfaceIdentity"
+            )
+        if not isinstance(self.target, IPv4Address):
+            raise IcmpProbeDriverError(
+                "target must be IPv4Address"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,19 +153,14 @@ class LinuxIcmpProbeDriver:
                 "execution_policy must be IcmpProbeExecutionPolicy"
             )
 
-    def check(
+    def execute(
         self,
-        context: ProbeObservationContext,
+        context: IcmpProbePhysicalContext,
     ) -> ProbeTechnicalObservation:
-        """Classify one ping attempt as reply, no-reply, or local execution error."""
-
-        if not isinstance(context, ProbeObservationContext):
+        """Execute one bounded physical ICMP check without semantic owner identity."""
+        if not isinstance(context, IcmpProbePhysicalContext):
             raise IcmpProbeDriverError(
-                "context must be ProbeObservationContext"
-            )
-        if context.intent.mechanism is not AvailabilityProbeMechanism.ICMP:
-            raise IcmpProbeDriverError(
-                "LinuxIcmpProbeDriver supports only ICMP"
+                "context must be IcmpProbePhysicalContext"
             )
 
         try:
@@ -178,9 +193,29 @@ class LinuxIcmpProbeDriver:
             ),
         )
 
-    def _command(
+    def check(
         self,
         context: ProbeObservationContext,
+    ) -> ProbeTechnicalObservation:
+        """Compatibility wrapper for the A.007 availability attempt contract."""
+        if not isinstance(context, ProbeObservationContext):
+            raise IcmpProbeDriverError(
+                "context must be ProbeObservationContext"
+            )
+        if context.intent.mechanism is not AvailabilityProbeMechanism.ICMP:
+            raise IcmpProbeDriverError(
+                "LinuxIcmpProbeDriver supports only ICMP"
+            )
+        return self.execute(
+            IcmpProbePhysicalContext(
+                endpoint=context.endpoint,
+                target=context.intent.target,
+            )
+        )
+
+    def _command(
+        self,
+        context: IcmpProbePhysicalContext,
     ) -> tuple[str, ...]:
         return (
             "ip", "netns", "exec", self.namespace,
@@ -195,7 +230,7 @@ class LinuxIcmpProbeDriver:
             "-W", str(
                 self.execution_policy.reply_timeout_seconds
             ),
-            str(context.intent.target),
+            str(context.target),
         )
 
 
