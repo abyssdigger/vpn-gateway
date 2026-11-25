@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[6]
 ARCHITECTURE = ROOT / "design/NG3/architecture-ng.md"
 REQUIREMENTS = ROOT / "design/NG3/requirements.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
-PRODUCTION = ROOT / "design/NG3/code/python/rou"
+EVIDENCE_INDEX = ROOT / "design/NG3/evidence-index.md"
+REFERENCE_IMPLEMENTATION = ROOT / "design/NG3/code/python/rou"
 STATUS_BASIS = ROOT / "design/NG3/requirement-status-basis.md"
 REQUIREMENT_STATUSES = (
     "open",
@@ -45,6 +46,11 @@ def requirement_nodes() -> tuple[dict[str, object], ...]:
         parent = stack[level - 1]["id"] if level else None
         node: dict[str, object] = {
             "id": requirement_id,
+            "kind": (
+                "constraint"
+                if re.search(r"\.C\d+$", requirement_id)
+                else "requirement"
+            ),
             "decomposition": decomposition,
             "statuses": tuple(statuses),
             "parent": parent,
@@ -163,25 +169,120 @@ def component_requirement_edges(body: str) -> tuple[tuple[str, str], ...]:
     result: list[tuple[str, str]] = []
     in_edges = False
     for line in body.splitlines():
-        if re.match(
-            r"^\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*$",
-            line,
-        ):
+        if line == "**Implements:**":
             in_edges = True
             continue
         if not in_edges:
             continue
-        if line.startswith("- \x60VPNG-"):
+        if line.startswith("- \\x60VPNG-"):
             match = re.match(
-                r"^- \x60(VPNG-[^\x60]+)\x60 — \[\x60(full|partial|none)\x60\]$",
+                r"^- \\x60(VPNG-[^\\x60]+)\\x60 — \\[\\x60(full|partial|none)\\x60\\]$",
                 line,
             )
             if match is None:
-                raise AssertionError(f"requirement edge lacks materialization status: {line}")
+                raise AssertionError(
+                    f"requirement edge lacks materialization status: {line}"
+                )
             result.append((match.group(1), match.group(2)))
             continue
         if not line.strip() or line.startswith("**"):
             in_edges = False
+    return tuple(result)
+
+
+def component_constraint_edges(body: str) -> tuple[str, ...]:
+    result: list[str] = []
+    lines = body.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith("**Constrained by:**"):
+            continue
+        result.extend(re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", line))
+        if line.strip() != "**Constrained by:**":
+            continue
+        cursor = index + 1
+        while cursor < len(lines) and lines[cursor].startswith("- \\x60VPNG-"):
+            match = re.fullmatch(
+                r"- \\x60(VPNG-[^\\x60]+)\\x60",
+                lines[cursor],
+            )
+            if match is None:
+                raise AssertionError(
+                    f"constraint edge has non-canonical form: {lines[cursor]}"
+                )
+            result.append(match.group(1))
+            cursor += 1
+    return tuple(result)
+
+
+def explicit_coverage_index_ids() -> frozenset[str]:
+    architecture = ARCHITECTURE.read_text(encoding="utf-8")
+    start = architecture.index(
+        "## 2.10. Closed requirement architecture coverage index"
+    )
+    end = architecture.index("\n## 3.", start)
+    section = architecture[start:end]
+    result: set[str] = set()
+    in_requirements = False
+    for line in section.splitlines():
+        if line.startswith("**Requirements:**"):
+            in_requirements = True
+            result.update(
+                re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", line)
+            )
+            continue
+        if not in_requirements:
+            continue
+        if not line.strip():
+            in_requirements = False
+            continue
+        result.update(re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", line))
+    return frozenset(result)
+
+
+def explicit_architecture_coverage_ids() -> frozenset[str]:
+    result: set[str] = set(explicit_coverage_index_ids())
+    for body in component_specs().values():
+        result.update(item[0] for item in component_requirement_edges(body))
+        result.update(component_constraint_edges(body))
+
+    architecture = ARCHITECTURE.read_text(encoding="utf-8")
+    for match in re.finditer(
+        r"^\\*\\*Covers:\\*\\*(.+)$",
+        architecture,
+        re.MULTILINE,
+    ):
+        result.update(
+            re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", match.group(1))
+        )
+    return frozenset(result)
+
+
+def architecture_evidence_ids() -> tuple[str, ...]:
+    lines = ARCHITECTURE.read_text(encoding="utf-8").splitlines()
+    result: list[str] = []
+    for index, line in enumerate(lines):
+        if not line.startswith("**Evidence:**"):
+            continue
+        payload = line.removeprefix("**Evidence:**").strip()
+        cursor = index + 1
+        while cursor < len(lines) and lines[cursor].strip():
+            if lines[cursor].startswith("**") or lines[cursor].startswith("#"):
+                break
+            payload += " " + lines[cursor].strip()
+            cursor += 1
+        ids = re.findall(r"\\x60(EV-\\d{5})\\x60", payload)
+        remainder = re.sub(r"\\x60EV-\\d{5}\\x60", "", payload)
+        remainder = remainder.translate(str.maketrans("", "", " ,.;"))
+        if remainder.strip():
+            raise AssertionError(
+                "stable architecture Evidence field contains non-EV content: "
+                + payload
+            )
+        if not ids:
+            raise AssertionError(
+                "stable architecture Evidence field has no stable EV address"
+            )
+        result.extend(ids)
     return tuple(result)
 
 
@@ -207,18 +308,29 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
     def test_stable_architecture_uses_only_stable_evidence_addresses(self):
         architecture = ARCHITECTURE.read_text(encoding="utf-8")
         self.assertIsNone(
-            re.search(r"\bEXP-\d+\b", architecture),
+            re.search(r"\\bEXP-\\d+\\b", architecture),
             "stable architecture must reference experiment evidence only through EV IDs",
         )
+        ids = architecture_evidence_ids()
+        self.assertTrue(ids)
+        registered = set(
+            re.findall(
+                r"^## (EV-\\d{5}) \\u2014 ",
+                EVIDENCE_INDEX.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        )
+        self.assertTrue(registered)
+        self.assertEqual(set(), set(ids) - registered)
 
     def test_pending_closure_requirements_have_structured_architecture_entry(self):
-        architecture = ARCHITECTURE.read_text(encoding="utf-8")
         pending = [
             str(node["id"])
             for node in requirement_nodes()
             if node["statuses"] == ("pending_closure",)
         ]
-        missing = [item for item in pending if f"\x60{item}\x60" not in architecture]
+        direct = explicit_architecture_coverage_ids()
+        missing = [item for item in pending if item not in direct]
         self.assertEqual([], missing)
 
     def test_external_requirement_status_basis_is_explicit(self):
@@ -259,36 +371,58 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                 self.assertIn("Architecture:", content)
                 self.assertIn(spec_id, content)
 
-    def test_every_production_python_unit_is_traced_or_explicit_debt(self):
+    def test_every_reference_python_unit_is_traced_or_explicit_debt(self):
         mapping, debt = trace_manifest()
-        actual = {str(path.relative_to(ROOT)) for path in PRODUCTION.glob("*.py")}
+        actual = {
+            str(path.relative_to(ROOT))
+            for path in REFERENCE_IMPLEMENTATION.glob("*.py")
+        }
         self.assertEqual(actual, set(mapping) | set(debt))
         for path, reason in debt.items():
             with self.subTest(debt=path):
-                self.assertTrue(reason.strip(), "architecture debt requires an explicit reason")
+                self.assertTrue(
+                    reason.strip(),
+                    "architecture debt requires an explicit reason",
+                )
 
     def test_closed_requirements_have_direct_or_aggregate_architecture_closure(self):
-        architecture = ARCHITECTURE.read_text(encoding="utf-8")
         nodes = requirement_nodes()
-        children: dict[str, list[dict[str, object]]] = {}
+        by_id = {str(node["id"]): node for node in nodes}
+        children: dict[str, list[str]] = {}
         for node in nodes:
             parent = node["parent"]
             if parent is not None:
-                children.setdefault(str(parent), []).append(node)
+                children.setdefault(str(parent), []).append(str(node["id"]))
+
+        direct = explicit_architecture_coverage_ids()
+        self.assertEqual(set(), direct - set(by_id))
+        cache: dict[str, bool] = {}
+
+        def covered(requirement_id: str) -> bool:
+            if requirement_id in cache:
+                return cache[requirement_id]
+            if requirement_id in direct:
+                cache[requirement_id] = True
+                return True
+            node = by_id[requirement_id]
+            immediate = children.get(requirement_id, [])
+            value = (
+                node["decomposition"] == "complete"
+                and bool(immediate)
+                and all(covered(child_id) for child_id in immediate)
+            )
+            cache[requirement_id] = value
+            return value
 
         closed = [node for node in nodes if node["statuses"] == ("closed",)]
         self.assertTrue(closed)
         for node in closed:
             requirement_id = str(node["id"])
-            if f"\x60{requirement_id}\x60" in architecture:
-                continue
-            immediate = children.get(requirement_id, [])
             with self.subTest(requirement=requirement_id):
-                self.assertEqual("complete", node["decomposition"])
-                self.assertTrue(immediate, "aggregate closure requires immediate children")
                 self.assertTrue(
-                    all(child["statuses"] == ("closed",) for child in immediate),
-                    "aggregate closure requires every immediate child to be closed",
+                    covered(requirement_id),
+                    "closed node lacks structured direct coverage "
+                    "or complete-child aggregation",
                 )
 
     def test_every_trace_target_is_a_requirement_bearing_component_spec(self):
@@ -298,10 +432,7 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
             for spec_id in targets:
                 with self.subTest(path=path, spec=spec_id):
                     self.assertIn(spec_id, specs)
-                    self.assertRegex(
-                        specs[spec_id],
-                        r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
-                    )
+                    self.assertIn("**Implements:**", specs[spec_id])
 
     def test_component_ids_are_unique_and_match_annex(self):
         text = annex_text()
@@ -325,12 +456,29 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
         specs = component_specs()
         self.assertTrue(specs)
         for spec_id, body in specs.items():
-            if re.search(
-                r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
-                body,
-            ):
+            if "**Implements:**" in body:
                 with self.subTest(spec=spec_id):
                     self.assertTrue(component_requirement_edges(body))
+
+    def test_component_edges_are_typed_requirement_vs_constraint(self):
+        nodes = {str(node["id"]): node for node in requirement_nodes()}
+        for spec_id, body in component_specs().items():
+            self.assertNotIn("**Implements / supports:**", body)
+            self.assertNotIn("**Supports implementation of:**", body)
+            for requirement_id, _ in component_requirement_edges(body):
+                with self.subTest(spec=spec_id, implements=requirement_id):
+                    self.assertIn(requirement_id, nodes)
+                    self.assertEqual(
+                        "requirement",
+                        nodes[requirement_id]["kind"],
+                    )
+            for constraint_id in component_constraint_edges(body):
+                with self.subTest(spec=spec_id, constrained_by=constraint_id):
+                    self.assertIn(constraint_id, nodes)
+                    self.assertEqual(
+                        "constraint",
+                        nodes[constraint_id]["kind"],
+                    )
 
     def test_non_full_requirement_edges_explain_the_gap(self):
         for spec_id, body in component_specs().items():
