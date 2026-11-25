@@ -34,3 +34,5 @@ ADD_TAG	ng3-snapshot-production-d003-wireguard-ownership-source	534d8d4f14bc50ea
 DEL_BRANCH	ng3-wireguard-d003-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-peer-probe-seam-source	31a884ac546c63d261885a4675523aa8ca2363bf	Reusable WireGuard peer-probe lower seam.
 DEL_BRANCH	ng3-wireguard-peer-probe-seam-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d002-manager-core-source	9f1627f98fdf3429220dac97db29b49807c5d8c4	D.002 WireGuard peer Manager core.
+DEL_BRANCH	ng3-wireguard-d002-manager-cdc-20261125
