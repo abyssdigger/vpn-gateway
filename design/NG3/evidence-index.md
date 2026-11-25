@@ -315,3 +315,26 @@ group, invalidation on current-owner local error, and no generation publication 
 D.003 confirmation. The old `shared_prefixes` bridge is removed; D.002 receives the accepted
 A.002 typed group contract directly. Optional group-endpoint checking is deliberately rejected
 before I/O until its separate semantic owner/precondition is materialized.
+
+## EV-00160 — owner-scoped shared probe-plane readiness
+
+**Status:** accepted / C.001 scoped-readiness lower seam  
+**Scope:** read-only readiness projection from one fresh physical snapshot, one complete accepted
+probe union and one requested semantic-owner subset; accepted sibling state is permitted,
+requested missing state blocks, sibling missing state does not block, shared physical
+probe-local rules can confirm multiple semantic owners, and unattributed reserved probe state
+remains fail-closed. Legacy whole-scope readiness semantics remain unchanged.  
+**Implementation:** `design/NG3/code/python/rou/probe_precondition.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_probe_precondition.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-probe-owner-scoped-readiness-review.md`.  
+**Executable evidence:** GitHub Actions run `45572212707`, unit job
+`139061480440` — PASS on source
+`ff608b8b6fda124dfd8e98b0a365c2f5faad066b`.
+
+The focused tests prove that exact A.007 and WireGuard peer semantic owners can each receive a
+confirmed scoped precondition from the same full physical union; a missing sibling does not
+block the requested owner while the unchanged legacy whole-union verifier still reports that
+missing sibling; a missing requested selector blocks; and an additional reserved RPDB object
+outside the complete accepted union blocks every scoped owner. One physical nft INPUT/OUTPUT
+pair simultaneously satisfies both semantic owners when their lower physical identity is
+identical.
