@@ -1690,11 +1690,13 @@ transport intent, нормализует ordered WireGuard peers, secret refs и
 `probe_target /32`. Текущая R8 normalization реализует только один implicit payload group,
 выведенный из действующих `Profile.destinations`.
 
-**Пробел материализации:** generalized R8 config еще не умеет stable group identity,
-independent prefix bundles, group-local peer membership/order/reserve, optional group endpoint
-и rejection overlap между independently switchable groups. Поэтому A.002 contribution к R8
-понижен до [`partial`]; R8.R2/R8.R2.C1/R8.R3.R1/R8.R4 остаются [`none`] на configuration
-boundary до отдельного config-format review.
+**Пробел материализации:** canonical generalized config теперь определяет group identity
+как `(Profile, managed WireGuard Device)`, bundle из `Profile.destinations` и optional
+`profile.<id>.device_membership.<device>.peer_order` с group-local `:reserve`. Текущий
+parser еще не normalizes эту membership detail, не строит typed per-Profile WireGuard groups и
+не reuses qualifying Profile availability description как optional group endpoint. Поэтому
+A.002 contribution к R8 остается [`partial`]; R8.R2/R8.R2.C1/R8.R3.R1/R8.R4 остаются
+нематериализованными до parser/runtime normalization implementation.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -2845,8 +2847,8 @@ API
 
 Architectural decisions
 
-1. `Пир не является LogicalPathId`
-   *Все альтернативные пиры одного `wg0` остаются внутренними членами одной реализации WireGuard. Их выбор для одной или нескольких групп не создает дополнительные Device slots, `LogicalPathId` или `PathBinding`.*
+1. `Пир и recoverable group не являются LogicalPathId`
+   *Все альтернативные пиры одного `wg0` остаются внутренними членами одной реализации WireGuard. Recoverable group выводится из `(Profile, managed WireGuard Device membership)`, а ее payload bundle — из `Profile.destinations`. Ни group, ни выбор peer для нее не создают дополнительные Device slots, `LogicalPathId` или `PathBinding`. Отдельный user-facing group с дублирующим prefix list не вводится без нового требования.*
 
 2. `Base/interface/group-ownership generations различаются`
    *Поколение базовой VPN-реализации D.001, поколение конкретного интерфейса C.004 и D.002 realization, включающая текущую group -> peer ownership map, являются разными фактами. Замена любого основания делает зависимое evidence устаревшим. Первая безопасная реализация может консервативно менять один Device-wide D.002 generation при смене любой группы; более узкая group generation допустима только при явной безопасной привязке зависимых availability subjects.*
@@ -2880,8 +2882,9 @@ case: один shared-prefix bundle, один selected peer, sticky ordinary sel
 technical probes и D.003 exact convergence. `wireguard_peer_probe_executor.py` materializes
 production peer-probe execution against confirmed C.001 readiness.
 
-**Пробел материализации:** generalized R8 требует normalized recoverable-group input,
-group-local candidate/reserve policy, independent group ownership state, optional group endpoint
+**Пробел материализации:** generalized R8 требует A.002 normalized group input,
+выводимый из `(Profile, managed WireGuard Device)`, Profile-local peer candidate/reserve
+policy, independent group ownership state, optional qualified Profile-check -> group endpoint
 probe owner/executor, multi-group generation/publication and alpha/runtime composition. До этой
 перестройки также остается ранее выявленный C.001 owner-subset readiness gap и обязательная
 инвалидизация зависимого A.007 evidence. Поэтому D.002 остается [`partial`].
