@@ -364,7 +364,7 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
             REQUIREMENTS,
         )
         forbidden = (
-            re.compile(r"\bproject holder\b", re.IGNORECASE),
+            re.compile(r"\bproject\s+holder\b", re.IGNORECASE),
             re.compile(r"\bproject-holder\b", re.IGNORECASE),
             re.compile(r"владел(?:ец|ьца|ьцу|ьцем|ьце)\s+проекта", re.IGNORECASE),
             re.compile(r"владелец\s+разработки", re.IGNORECASE),
