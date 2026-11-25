@@ -249,3 +249,23 @@ confirmed suitable, generation change across owner/base/interface/order context 
 no generation publication when D.003 is unconfirmed. The production C.001/C.008/D.003 lower
 seams are separately accepted by EV-00110/EV-00100; runtime composition remains explicit
 follow-up work.
+
+## EV-00130 — confirmed D.002 WireGuard peer-probe executor
+
+**Status:** accepted / partial D.002 runtime-composition materialization  
+**Scope:** production composition from one D.002 peer identity to the already accepted C.001
+exact execution precondition and C.008 physical ICMP Driver, without converting peer identity
+into a Profile/path availability subject.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_probe_executor.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_peer_probe_executor.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-peer-probe-executor-review.md`.  
+**Executable evidence:** GitHub Actions run `45554729474`, `unit` job
+`139003923124` — PASS on source
+`a3ec1d1cb2705d87883c9e9b292ac85c0f7e7b66`.
+
+The executor refuses physical I/O unless the exact
+`(WireGuardPeerProbeOwner, ICMP, probe_target, InterfaceIdentity)` key belongs to a freshly
+confirmed peer-specific precondition. Owner/peer mismatch, Device/path mismatch, missing
+readiness and stale interface generation are rejected before the shared physical Driver is
+invoked. The Linux ICMP mechanism itself is unchanged and already covered by the C.008
+evidence selected in EV-00110.
