@@ -1792,7 +1792,7 @@ policy.
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
 - `VPNG-M001-R2.R1.R2` — [`full`]
@@ -1834,11 +1834,12 @@ Architectural decisions
 8. `Готовность управляемого WireGuard не равна привязке`
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
-**Пробел материализации:** broad edge R8 остается [`partial`] в A.004 только потому,
-что A.004 владеет effective path-order projection, а не D.002 realization currentness.
-Подтвержденное D.002 generation теперь входит в A.007 context до fresh observation; A.004
-получает уже пересчитанную projection и не должен иметь отдельную прямую зависимость от
-WireGuard generation. Отдельного незакрытого A.004 implementation gap для R8.R6 нет.
+**Материализация R8:** A.004 полностью материализует собственную архитектурную обязанность
+по generalized R8: он получает уже current A.007 availability projection после D.002-generation
+synchronization и сходится только по этой projection. D.002 realization currentness не является
+дополнительной обязанностью A.004 и поэтому не может служить основанием для `partial` статуса.
+
+**Evidence:** `EV-00280`.
 
 ## [A.005] PayloadPolicyCalculator
 
@@ -2318,8 +2319,8 @@ lower network-policy domain Private network. Общая physical realization н�
 
 **Implements:**
 - `VPNG-U001-R1.R1` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R1` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R6.R2` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1` — [`full`]
@@ -2389,7 +2390,7 @@ Profile/path membership, exact current `RoutePriorityPathRoute` для D.002 int
 уникальность semantic owner до allocation; physical lowering по-прежнему принадлежит одному
 `bound_probe_policy.py`, а не новому projector.
 
-**Evidence:** `EV-00160`, `EV-00170`, `EV-00200`, `EV-00210`.
+**Evidence:** `EV-00160`, `EV-00170`, `EV-00200`, `EV-00210`, `EV-00280`.
 
 Production alpha materializes эту composition: current managed-WireGuard group memberships
 проецируются только на подтвержденные current Device paths; peer/group owners входят в тот же
@@ -2399,11 +2400,11 @@ Availability cycle проверяет A.007 subset через
 stale/conflict boundary. Legacy A.007-only direct test/experiment seam сохранен без изменения
 whole-scope semantics.
 
-**Пробел материализации:** broad edges R8/R8.R1 остаются [`partial`] в C.001 только потому,
-что C.001 владеет общим lower probe-policy/convergence/readiness contribution, а peer/group
-selection, generation и Profile-evidence semantics принадлежат D.002/A.007. Full-union lower
-runtime, scoped readiness и ordering `C.001 prepare -> D.002 -> A.007 -> A.004` теперь
-материализованы; отдельного незакрытого C.001 implementation gap для R8.R6 нет.
+**Материализация R8:** C.001 полностью материализует собственную архитектурную обязанность
+по R8/R8.R1: полный A.007+D.002 probe-owner union, collision-free lower allocation,
+full-union convergence и owner-scoped readiness работают в production alpha. Peer/group
+selection и Profile-evidence semantics принадлежат D.002/A.007 и не являются отсутствующей
+частью обязанности C.001; поэтому они не могут служить основанием для `partial` статуса.
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
