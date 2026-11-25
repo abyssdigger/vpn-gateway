@@ -54,6 +54,11 @@ through its current owner:
 A peer may therefore remain technically reachable while one recoverable group behind it is
 unreachable.
 
+A configured group endpoint must be a payload address covered by that group's prefix bundle
+and must not equal any peer's permanent `probe_target`. Otherwise the WireGuard longest-prefix
+selection could send the supposedly group-scoped check through a permanent peer-specific
+`/32` or through ownership outside the group, invalidating the meaning of the evidence.
+
 As elsewhere in NG3, `local_error` is observation failure, not negative health evidence, and
 must not be converted into failover evidence.
 
@@ -122,6 +127,11 @@ unsuitable.
 For a group without an endpoint, fresh positive peer evidence plus confirmed D.003 ownership
 is sufficient to confirm the ownership realization, but it is **not** end-to-end evidence that
 the remote payload network itself is reachable.
+
+If all allowed candidates are confirmed unsuitable for a group, the group has no confirmed
+owner. Its mutable payload prefixes must not remain attributed to a peer merely because that
+peer was the last attempted owner; D.002 must converge/represent the no-owner state consistently
+with the existing one-group fail-closed model.
 
 ### 5. One implicit/explicit full group degenerates to the current D.002 behavior
 
@@ -214,7 +224,8 @@ The product semantics require, regardless of final TOML spelling:
 - a non-empty prefix bundle;
 - an ordered set/subset of allowed peer memberships;
 - ordinary/reserve role local to each group membership;
-- optional explicit group availability endpoint;
+- optional explicit group availability endpoint that belongs to the group's payload prefix
+  bundle and is distinct from every permanent peer `probe_target`;
 - no ambiguous effective payload-prefix ownership;
 - peer definitions retaining permanent unique technical `probe_target /32` values.
 
