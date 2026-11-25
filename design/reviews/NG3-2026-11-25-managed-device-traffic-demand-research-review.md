@@ -133,3 +133,16 @@ None in this unit. No Requirement/Constraint is opened, modified or closed. Ther
 traffic-demand decision. Existing A.012/D.001 lifecycle machinery should remain unchanged until
 D1–D4 are decided; requirement/configuration/implementation work for this capability is
 blocked on those explicit product choices.**
+
+
+## Later classification note — 2026-11-25
+
+Subsequent product clarification established that traffic-driven presence is not the active
+Device Manager requirement. The accepted current direction is configuration-driven redundancy
+and aggregated desired Device presence; payload traffic does not participate in lifecycle
+demand.
+
+This does not invalidate the reviewed technical research or the PASS verdict for the question
+it actually studied. It changes only its project role: D1–D4 are future re-entry decisions, not
+blockers for current Device Manager development. The durable non-normative index is
+`design/future-possibilities.md`.
