@@ -687,6 +687,28 @@ Administrator-facing recovery documentation must preserve the ownership split be
 authoritative product state, external integration state and peaceful-helper contributions
 returned to administrator control.
 
+### Runtime service privilege boundary
+
+**Requirements:** `VPNG-M001-R5`, `VPNG-M001-R5.R1`, `VPNG-M001-R5.R1.R1`,
+`VPNG-M001-R5.R1.R2`, `VPNG-M001-R5.R2`, `VPNG-M001-R5.R3`,
+`VPNG-M001-R5.C1`.
+
+**Architecture coverage:** это cross-cutting deployment/runtime boundary, а не новая STACK
+component role. Target service packaging/supervision обязаны выбирать минимально достаточный
+service account privilege tier; любое расширение от ordinary non-root к restricted sudoer,
+unrestricted sudoer или root требует явного rationale согласно requirement hierarchy.
+Filesystem access, необходимый выбранному non-root service account, является частью
+administrator-facing deployment contract и поэтому должен быть перечислен в публикуемой
+admin documentation и проходить применимую documentation-driven acceptance. Разовые
+installer/upgrade/admin operations не становятся частью long-running service privilege
+boundary только потому, что используют `sudo`/root.
+
+Для первого release эта boundary нормативно исключена из обязательного release gate
+`VPNG-M001-R5.C1`; поэтому отсутствие non-root service realization само по себе не является
+Release-1 architecture gap. Когда release scope впервые не использует это исключение,
+конкретный service-unit/deployment realization и необходимая lower privilege mechanism должны
+получить отдельную architecture/evidence review до заявления conformance.
+
 ### Maintainability, continuity, evidence and development boundaries
 
 **Requirements:** `VPNG-D001-R1`, `VPNG-D001-R1.R1`, `VPNG-D001-R1.R1.R2`,

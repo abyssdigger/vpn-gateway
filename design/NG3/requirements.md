@@ -555,6 +555,20 @@ NG3 requirement merely because it existed before.
 
         - **[VPNG-M001-R4.C2]** *Поскольку major-версия служит явной границей для изменений, которые невозможно выполнить без несовместимого изменения поддерживаемого внешнего контракта.* | Новый major release может намеренно нарушить обратную совместимость с предыдущей major-линией, если несовместимость явно объявлена в утвержденном release scope и для затронутых поддерживаемых контрактов определены применимые последствия и способ миграции; повышение major само по себе не разрешает скрытое или неописанное несовместимое изменение. [`decomposition`: `complete`] [`closed`]
 
+    - **[VPNG-M001-R5]** *Чтобы эксплуатация релизного VPN-GATE не требовала выдавать long-running сервису более широкие системные полномочия, чем нужны для поддерживаемых runtime-функций, и тем самым не увеличивала стоимость безопасного администрирования хоста.* | Для релизного продукта runtime service account VPN-GATE должен использовать минимально достаточный уровень системных полномочий; выбор более привилегированного уровня допускается только по явному техническому основанию. Это требование относится к long-running service runtime и само по себе не ограничивает разовые installation/upgrade/administrative operations, выполняемые администратором с повышенными полномочиями. [`decomposition`: `complete`] [`permanent`]
+
+        - **[VPNG-M001-R5.R1]** *Чтобы обычная работа сервиса не предоставляла процессу полный административный доступ к хосту только ради ограниченного набора сетевых операций.* | Если поддерживаемая runtime-функциональность может быть реализована без `root` и без права произвольно выполнять команды через `sudo`, service account должен быть непривилегированным пользователем без такого общего административного доступа. [`decomposition`: `complete`] [`permanent`]
+
+            - **[VPNG-M001-R5.R1.R1]** *Чтобы необходимость отдельных повышенных операций не превращалась автоматически в запуск всего long-running сервиса от `root`.* | Если полностью непривилегированный runtime недостаточен, запуск сервиса от отдельного non-root sudoer должен предпочитаться запуску сервиса непосредственно от `root`, когда такой вариант практически реализуем для требуемой функциональности. [`decomposition`: `complete`] [`permanent`]
+
+            - **[VPNG-M001-R5.R1.R2]** *Чтобы разрешение использовать `sudo` не предоставляло long-running сервису неограниченную возможность выполнять произвольные административные команды.* | Если service account обязан быть sudoer, его `sudoers` policy должна по возможности ограничивать разрешения конечным явно перечисленным набором необходимых команд/операций; такой restricted sudoer должен предпочитаться unrestricted sudoer. [`decomposition`: `complete`] [`permanent`]
+
+        - **[VPNG-M001-R5.R2]** *Чтобы расширение полномочий runtime не становилось неявным implementation convenience и могло быть проверено при сопровождении и выпуске продукта.* | Если для поддерживаемого service runtime выбран уровень полномочий шире более предпочтительного варианта из `VPNG-M001-R5.R1*`, невозможность либо существенная практическая проблемность использования каждого применимого более узкого варианта должна быть явно технически обоснована в архитектурной, deployment или release evidence, достаточной для review выбранной privilege boundary. [`decomposition`: `complete`] [`permanent`]
+
+        - **[VPNG-M001-R5.R3]** *Чтобы администратору не приходилось экспериментально выяснять filesystem-права, необходимые service account при запуске не от `root`.* | Если поддерживаемый runtime service запускается от non-root пользователя, административная документация должна явно перечислять файлы и каталоги, к которым этому пользователю требуется доступ для штатной установки/запуска/эксплуатации соответствующего service path, и указывать необходимый характер доступа/ownership там, где он не следует однозначно из installation procedure. [`decomposition`: `complete`] [`permanent`]
+
+        - **[VPNG-M001-R5.C1]** *Поскольку минимизация полномочий long-running service account является эксплуатационным hardening и не является обязательным условием доказательства базовой функциональной применимости самого первого выпуска.* | Для первого release VPN-GATE выполнение `VPNG-M001-R5` и его privilege-minimization descendants не является обязательным release gate; последующие release scopes не получают это исключение автоматически. [`decomposition`: `complete`] [`closed`]
+
 
 ## Initial acceptance/evidence expectations
 
@@ -571,6 +585,7 @@ This table adds no new requirement semantics.
 | `VPNG-D001-R1.R1` | architecture/review traceability plus isolated-change evidence |
 | `VPNG-M001-R2.R2` | human-readable report checked against the authoritative current runtime snapshot |
 | `VPNG-M001-R2.R3` | configured severity filtering plus transition/error/component-reaction logging scenarios |
+| `VPNG-M001-R5` | service/deployment privilege-boundary inspection, escalation rationale where applicable, and documentation-driven verification of required non-root filesystem access |
 
 ## Constraint policy for this NG3 pass
 
