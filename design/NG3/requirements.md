@@ -20,8 +20,12 @@ Current NG3 requirement namespaces are:
 - `VPNG-D0xx` — project-holder development-cost requirements;
 - `VPNG-M0xx` — project-holder operational/maintenance-cost requirements.
 
-The namespace letter/range classifies the optimized concern; it does not change Requirement /
-Constraint ancestry semantics.
+The namespace letter/range classifies the optimized concern and therefore the requirement's
+beneficiary, not the actor that must implement or comply with it. A restriction imposed on
+developers belongs under `VPNG-D0xx` only when its accepted value is reduction of
+development/change cost; a rule implemented by developers but primarily reducing operator,
+upgrade or maintenance cost belongs under `VPNG-M0xx`. The namespace does not change
+Requirement / Constraint ancestry semantics.
 
 Canonical compact form:
 
@@ -528,6 +532,13 @@ NG3 requirement merely because it existed before.
         - **[VPNG-M001-R3.R2]** *Чтобы будущая проверка пригодности для слабого gateway опиралась на конкретный минимально полезный сценарий, а не на неопределённый класс «weak device».* | Future representative resource-constrained target для acceptance evidence должен быть Raspberry Pi 2, обслуживающий два enabled Devices, используемых одним enabled Profile, при суммарной управляемой нагрузке 100 Mbit/s. Конкретный traffic mix, VPN implementations и availability-check load должны быть определены дальнейшей декомпозицией при снятии отдельного resource-evidence deferral. [`decomposition`: `incomplete`] [`postponed`]
 
             - **[VPNG-M001-R3.R2.R1]** *Чтобы минимально полезный workload на Raspberry Pi 2 имел измеримый resource envelope, а «пригодность» не оставалась качественной оценкой.* | Для representative workload `VPNG-M001-R3.R2` steady-state потребление VPN-GATE не должно превышать 10% CPU и 30 MiB RAM, а peak — 80% CPU и 50 MiB RAM. Точная методика измерения CPU/RAM, длительность steady-state окна и определение допустимого peak interval должны быть заданы дальнейшей декомпозицией до acceptance evidence. [`decomposition`: `incomplete`] [`postponed`]
+
+    - **[VPNG-M001-R4]** *Чтобы обновление VPN-GATE после появления публично поддерживаемого контрактного baseline не требовало от оператора непредсказуемой переделки конфигурации, автоматизации и эксплуатационных процедур при каждом обычном выпуске.* | После первого выпуска, явно назначенного projectholder как обязывающий (`binding release`), поддерживаемые внешние контракты VPN-GATE должны сохранять обратную совместимость в пределах той же major-версии, кроме контрактов, которые явным нормативным или release-specific решением исключены из compatibility guarantee. [`decomposition`: `complete`] [`permanent`]
+
+        - **[VPNG-M001-R4.C1]** *Поскольку до появления первого обязывающего выпуска продукт и его публичные контракты еще формируются, а раннее закрепление каждой промежуточной формы увеличило бы стоимость достижения целевой архитектуры без уже принятого эксплуатационного baseline.* | До первого выпуска, явно назначенного projectholder как `binding release`, обратная совместимость между версиями не является обязательной; сам факт публикации версии, включая `0.x.y`, не делает ее обязывающей и не создает compatibility guarantee. [`decomposition`: `complete`] [`closed`]
+
+        - **[VPNG-M001-R4.C2]** *Поскольку major-версия служит явной границей для изменений, которые невозможно выполнить без несовместимого изменения поддерживаемого внешнего контракта.* | Новый major release может намеренно нарушить обратную совместимость с предыдущей major-линией, если несовместимость явно объявлена в утвержденном release scope и для затронутых поддерживаемых контрактов определены применимые последствия и способ миграции; повышение major само по себе не разрешает скрытое или неописанное несовместимое изменение. [`decomposition`: `complete`] [`closed`]
+
 
 ## Initial acceptance/evidence expectations
 

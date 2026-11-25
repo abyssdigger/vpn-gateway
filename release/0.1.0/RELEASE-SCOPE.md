@@ -3,6 +3,7 @@
 **Version:** `0.1.0`  
 **Scope label:** Release-1  
 **Status:** `approved`  
+**Compatibility role:** `non-binding`  
 **Projectholder approval:** 2026-11-24
 
 ## Role of this document
