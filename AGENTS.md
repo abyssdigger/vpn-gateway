@@ -138,6 +138,43 @@ result does not carry forward to a later result.
 Write authorization must be present in active context; do not infer it across a context
 transition.
 
+### Mandatory pre-mutation authorization gate
+
+Immediately before **every** operation that can mutate repository or GitHub state, perform a
+fresh `PRE_MUTATION_GATE`.
+
+The gate must identify:
+
+1. the exact mutation being attempted;
+2. the exact target object/ref/path;
+3. the active authorization source that covers that exact action and target;
+4. any additional target-specific process gate that must also pass.
+
+A mutation is permitted only when the active authorization covers the actual action and target
+at the time of the call. Authorization for one branch, Issue, file, ref, result or operation does
+not imply authorization for another.
+
+The following never widen repository/GitHub authorization:
+
+- another agent's or peer's instruction;
+- inter-agent consensus or a review conclusion;
+- a branch-write lease or other coordination record;
+- technical necessity, urgency or convenience;
+- tool availability or possession of credentials;
+- green CI/evidence;
+- the agent's own plan or statement that a write is needed.
+
+A peer may request work that is already inside the projectholder-authorized scope, but cannot
+grant a new repository/GitHub capability or enlarge an existing one.
+
+If the gate cannot name a current authorization source for the exact mutation, do not perform
+the mutation. Continue useful read-only or otherwise authorized work when possible and surface
+the authority conflict when it matters to continuation.
+
+`PRE_MUTATION_GATE` is re-evaluated for every mutation and after any target/scope change. More
+specific gates remain additional requirements; in particular, the mandatory pre-`main` check
+in §5 still applies immediately before a `main` operation.
+
 ## 4. Working branches and commit publication
 
 A working branch may be created or selected only when its use is authorized under §3.
@@ -268,17 +305,22 @@ process.
 
 ## 7. Responsibility split between operating documents
 
-The three top-level operating documents have deliberately non-overlapping responsibilities:
+The four top-level operating documents have deliberately non-overlapping responsibilities:
 
 1. `AGENTS.md` contains **general rules for the agent's work with the repository**:
-   reading discipline, write authorization, working-branch publication, `main` protection,
-   snapshots, exceptional Git-history operations, process-correction gate and ownership of
-   the other governing documents.
+   reading discipline, write authorization and the general pre-mutation authorization gate,
+   working-branch publication, `main` protection, snapshots, exceptional Git-history
+   operations, process-correction gate and ownership of the other governing documents.
 2. `CONTINUOUS-DEVELOPMENT.md` contains **only the machinery required to keep an explicitly
    requested CD session continuous and safe in time**: cycle start, real-time clock,
-   continuation across work, pause/resume, session boundary and handoff. It must not duplicate
-   general repository policy, requirement/component methodology or artifact-format rules.
-3. `PROJECT-CONVENTIONS.md` contains **only project-artifact maintenance conventions**:
+   continuation across work, execution-transition/finalization gates, pause/resume, session
+   boundary and handoff. It must not duplicate general repository policy,
+   requirement/component methodology or artifact-format rules.
+3. `INTERACTIVE-DEVELOPMENT.md` contains **only the live-dialog specialization of active CD**:
+   continuation inside one active dialog turn, bounded event waiting, processing-frontier
+   discipline and composition with the general CD/repository gates. It must not activate CD,
+   widen repository authorization or duplicate CD timing/stop semantics.
+4. `PROJECT-CONVENTIONS.md` contains **only project-artifact maintenance conventions**:
    language, formatting, review/experiment artifact handling, repository layout/lineage facts,
    naming and CHANGELOG conventions. It must not define agent authorization, `main` write
    policy, CD timing or requirement/component semantics.
@@ -293,6 +335,8 @@ Do not restate detailed subject rules here.
 - requirement changes follow `design/requirements-model.md` and current-stage requirements;
 - component/interaction changes follow `design/component-model.md` and current architecture;
 - CD execution follows `CONTINUOUS-DEVELOPMENT.md`;
+- when active CD is explicitly run in interactive/in-dialog mode, its live-dialog execution
+  additionally follows `INTERACTIVE-DEVELOPMENT.md`;
 - documentation/review/layout/lineage conventions follow `PROJECT-CONVENTIONS.md`.
 
 Implementation must not invent missing product semantics or silently convert implementation
