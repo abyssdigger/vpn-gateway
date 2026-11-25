@@ -411,3 +411,28 @@ The kernel run emitted `D003_WG_SPLIT_GROUP_OWNERSHIP=PASS` after fresh-confirmi
 state in which `10.77.0.0/24` belonged only to peer A and `10.88.0.0/24` belonged only to
 peer B. Both permanent peer probe /32s remained present, the old opposite group ownership was
 absent, and the common `wg0` ifindex remained unchanged.
+
+## EV-00200 — combined A.007 + D.002 probe-plane desired composition
+
+**Status:** accepted / pure C.001 full-union composition seam; runtime wiring remains partial  
+**Scope:** one deterministic collision-free probe allocation and one complete desired union
+covering A.007 Profile owners, D.002 WireGuard peer technical owners and stable recoverable-
+group owners; exact current-path binding; fail-closed Profile/path membership; duplicate-owner
+rejection; and input-order invariance without semantic evidence merging.  
+**Implementation:** `design/NG3/code/python/rou/probe_plane_desired.py`,
+`design/NG3/implementation-traceability.md`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_probe_plane_desired.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-probe-plane-union-composition-review.md`.  
+**Executable evidence:** GitHub Actions run `45582035756`, unit job
+`139094358081` — PASS on source
+`8d905151b2f13c356585504f66c0de1e1c46380f`.
+
+The seven focused tests prove one shared allocation/full desired union across Profile, peer and
+group owners; semantic separation when Profile and group use the same physical ICMP target;
+determinism under peer-input reordering; exact rejection of a stale same-path/different-ifindex
+D.002 binding; current Profile/path membership for both Profile and group owners; and duplicate
+semantic-owner rejection. The preceding run `45581842029` had all seven focused tests PASS but
+failed the exhaustive production-code trace guard only; commit
+`8d905151b2f13c356585504f66c0de1e1c46380f` added the required
+`A.007 + C.001 + D.002` edge and the complete unit suite passed.
+
