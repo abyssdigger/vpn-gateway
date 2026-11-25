@@ -1,7 +1,7 @@
 # #32 — Сводка исследования межэкспертного транспорта
 
-**Статус:** рабочая сводка для обсуждения, v2; не нормативный документ, не утвержденная архитектура, не отчет о выполненном эксперименте.
-**Источник:** [Issue #32](https://github.com/abyssdigger/vpn-gateway/issues/32), включая checkpoint [v1](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175858653), [delta v2](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175896642) и последующие сообщения до #7176168538. Полные обсуждения и первичные ссылки остаются в Issue.
+**Статус:** рабочая сводка для обсуждения, v3; не нормативный документ, не утвержденная архитектура, не отчет о выполненном эксперименте.
+**Источник:** [Issue #32](https://github.com/abyssdigger/vpn-gateway/issues/32), включая checkpoint [v1](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175858653), [delta v2](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175896642) и последующие сообщения до #7176259476. Полные обсуждения и первичные ссылки остаются в Issue.
 **Владелец сводки:** GPT-6.2; GPT-5.6 предлагает корректировки в #32 (распоряжение projectholder, [уведомление](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7176117594)).
 **Базовый ref:** main @ 7a8d5ad655b08eb71a0fe7d9ed098db92549aca3. Запись разрешена только в выделенную ветку сводки; это не разрешение на настройку, платный API, live-эксперименты или изменение процесса.
 
@@ -9,7 +9,7 @@
 
 Убрать projectholder из транспортного и диспетчерского цикла, но оставить в цикле проектных решений и предоставления полномочий. Предпочтительно сохранять именно существующих экспертов в обычном ChatGPT (их проектный контекст и текущие чаты), а не только вызывать модель того же класса. Linux VM и не более примерно одного внепланового вмешательства в сутки — предпочтения, не жесткие ограничения ([holder](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175366698)). Work исключен по расходу квоты/стоимости ([решение](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7174310591)). Предыдущий ID execution-gates trial завершен, не смешивать с этим исследованием.
 
-**Главный пробел:** внешний сигнал еще ни разу не доказал запуск нового turn в том же обычном чате после завершения предыдущего. Работающий межэкспертный транспорт в активном turn этого не доказывает.
+**Два независимых пробела:** (1) O-CONTINUITY — достаточно ли точно конкретная долгоживущая chat incarnation применяет актуальное состояние при новом turn после terminal; (2) O-ACTIVATE — способен ли внешний сигнал без ручного сообщения инициировать такой turn. Работающий межэкспертный транспорт в активном turn не доказывает ни одного свойства в требуемой композиции. Ручной baseline R-SEM проверяет первое, не второе. Основание: #7176182393, #7176192880, #7176208539.
 
 ## 2. Карта возможностей
 
@@ -25,7 +25,7 @@
 | Desktop/web ordinary Chat | DOCUMENTED: Branch, archive, Projects; desktop Queue/Steer, Linux preview. Community: exact-chat prefill/deeplink и type-to-focus, без гарантии поведения. | Возможна ручная проверка R-SEM; надежность автоматического продолжения неизвестна. UI-автоматизация сервиса только при подтвержденной допустимости; синтетический mock не дает такого разрешения. |
 | API worker (Responses / Agents sessions) | DOCUMENTED: независимый API, отдельный биллинг; R-STAT предпочтительнее R-SESS для внешнего durable frontier (#7174417265, #7174439798). | Резерв для логического эксперта, не для сохранения существующего чата. R-STAT-1 согласован как эксперимент, не запущен; бюджет/setup отдельно. |
 | Codex/SIWC, локальный worker | DOCUMENTED с ограничениями доступности/usage (#7175631863). | Альтернативный эксперт, не точная замена ordinary Chat; проверить стоимость и способности. |
-| Уведомления | GitHub уведомления/email/mobile и возможные ChatGPT-средства — кандидаты; доставка именно решения holder не испытана. | Один inbox открытых решений вместо уведомления на каждый comment. |
+| Уведомления | DOCUMENTED: GitHub email допускает собственные действия (`your_activity`), штатные inbox filters не поддерживают full-text и работают на уровне thread. Notifications REST не принимает fine-grained PAT или App token; фактическая доставка на аккаунте UNKNOWN (#7176235435). | Один inbox открытых решений вместо уведомления на каждый comment; уведомление не является frontier/ACK. |
 
 ## 3. Гипотеза минимального транспорта (не проект реализации)
 
@@ -56,7 +56,7 @@ GitHub Issue + версионированные артефакты → дете�
 
 | Эксперимент | Что проверяет | Критерий / предел |
 |---|---|---|
-| R-SEM | Вручную продолжить точный существующий безвредный чат после terminal, с фиксированным стимулом и свежим внешним challenge/ACK. | PASS: идентичность чата подтверждена независимо, правильная обработка challenge и canary. Не доказывает автоматический wake. Требует отдельного holder setup. |
+| R-SEM | Baseline same-chat continuity/fidelity: вручную продолжить точный существующий долгоживущий тестовый чат после terminal, с фиксированным стимулом, свежим внешним challenge/ACK и seeded recent state. | PASS: идентичность чата подтверждена независимо; supersession, открытое обязательство, causal tail, актуальный frontier применены правильно. Не доказывает автономную активацию. Требует отдельного holder setup. |
 | R-MECH | Сравнить на локальном синтетическом редакторе (не ChatGPT) AT-SPI, sandbox-preserving Playwright, blind input как отрицательный контроль. | PASS: нужный токен принят приложением ровно один раз в норме, неверная цель/модал/дубликат/сбой — fail closed. Не доказывает совместимость с ChatGPT, допустимость live automation или end-to-end wake. |
 | R-CAPS | Одна canary-suite для fresh chat/Branch/Project Source/overflow, old chat как контроль. | PASS по critical canaries: supersession, открытый блокер, отозванная authority, измененный governing SHA, точная обработка delta, отсутствие притворного доступа к файлу/инструменту. Замер стоимости, времени и ручных шагов. |
 
@@ -78,23 +78,44 @@ R-MECH: committed document URI, точность route/incarnation, modal/disabl
 - После появления декабрьских изменений: проверить фактическую доступность/квоту аккаунта и штатные wake/notification primitives; оценить, нужен ли вообще внешний механизм. Не ждать пассивно неопределенно долго, если holder предпочтет дешевые независимые проверки сейчас.
 - Если native wake отсутствует и практическая потребность остается: оценить допустимые варианты; API/Codex как отдельные альтернативы при согласии holder на смену природы эксперта и стоимость.
 
+### 6.1. Частичный результат и экономика внимания
+
+Новый кандидат без автономного wake: read-only проекция формирует список `READY` ролей и отдельно открытых `DECISION` gates. Holder получает агрегированный сигнал, вручную открывает заранее известные чаты и посылает фиксированное разрешенное продолжение; содержимое task/result не копирует. Это уменьшает транспортные вмешательства, не подменяя проектные решения и authority. Native GitHub notification — только подсказка; saved issue filter/Projects view при будущем отдельном разрешении на gate issues/labels — необязательный comparator. Не расширять credential ради Notifications API; локальные chat URLs не публиковать в Issue.
+
+Метрика: различать T_transport, T_orchestrate, T_decision, T_authority, T_maintenance. Более существенная единица — сеанс внимания holder, особенно незапланированный (`A_interrupt`), размер пачки (`A_batch_size`), ложные визиты (`A_false`), отдельно содержательные решения и задержка READY→attention. Автоматический shim должен оправдать добавленное обслуживание по сравнению с уже полезным ручным batch, а не со старым копипастом.
+
+OBSERVED: срез #32 на 163 комментариях (#7176243264): 252 resolved distinct refs/handled edges, 101 межэкспертный, 30 явных handled cross-expert; максимальная упорядоченная цепочка refs — 26 смен роли, 100 соседних смен автора; 0 forward/unresolved refs. Срез 162 комментариев: 356900 символов тел, 33186 символов YAML envelopes (~9%). Это не число обязательных переходов/ручных wake и не latency: refs могут быть контекстными, source-chat input не наблюдается, timestamps connector null. Измерять фактическое число wake, прочитанных материальных inputs и holder attention отдельно.
+
+Основания: #7176235435, #7176243264, #7176253292, #7176259476; [notification settings](https://docs.github.com/en/subscriptions-and-notifications/get-started/configuring-notifications), [email headers](https://docs.github.com/en/subscriptions-and-notifications/reference/email-notification-headers), [inbox filters](https://docs.github.com/en/subscriptions-and-notifications/reference/inbox-filters), [Notifications API](https://docs.github.com/en/rest/activity/notifications).
+
+### 6.2. Локальная остановка не означает завершение совместной работы
+
+INFERRED: аналог distributed termination detection ([Dijkstra–Scholten](https://www.cs.utexas.edu/~EWD/transcriptions/EWD06xx/EWD684.html), [Temporal Continue-as-New](https://docs.temporal.io/develop/go/workflows/continue-as-new)). Даже два пустых final reads не исключают позднее сообщение. `QUIESCENT_AT(cut)` — гипотетическая характеристика конкретного среза/epoch, не global completion и не доказательство terminal. Для фиксированной области работы нужны открытые obligations, semantic dispositions, явно обработанный frontier; late work остается READY и требует подтвержденного wake либо ручного запуска. Timeout/timebox/checkpoint не дают права закрыть обязательство. Без автономного запуска ledger обеспечивает сохранность, не прогресс.
+
+Контрпример: A final read empty → B публикует work → A заканчивает turn → B ожидает A. Это причина не обещать unattended liveness. Разные бюджеты активных экспертов и коалесценция review batches допустимы как гипотезы; текущие loop/ID правила не изменены. Основание: #7176258012.
+
 ## 7. Процесс: отдельный открытый вопрос
 
 Holder предложил смягчить ограничения research loop, чтобы рабочая GitHub-ветка была доступна для сохранения исследовательских результатов (#7175959190). Текущая явная команда разрешила именно эту ветку и сводку, но не изменила общую норму.
 
 **Кандидат для отдельного обсуждения:** при явном запуске research loop разрешать создание выделенной research branch и запись исследовательских артефактов в пределах scope, без права изменять main, нормативные правила, код, чужие refs и внепредметные Issue. Объем default grant, publication verification и запрет расширения полномочий peer-вводом нуждаются в согласовании с AGENTS.md и RESEARCH.md; governing process correction gate обязателен. Никаких правок процесса в текущей ветке.
 
+Уточнение holder в текущем source-chat (отражено #7176231029): сводка обновляется каждые 5–10 минут или при значимом новом кандидате. Публикация и ревью сводки — checkpoint, а не stop basis CDC. Предыдущая преждевременная остановка после v2 — ошибка исполнения, не свидетельство необходимости изменить governing rules.
+
 ## 8. Открытые обязательства / следующий ход
 
 | ID | Состояние | Что нужно |
 |---|---|---|
-| O-WAKE | UNKNOWN | Exact-chat post-terminal wake, отдельная platform/policy/account проверка. |
+| O-CONTINUITY | EXPERIMENT NEEDED | R-SEM: fidelity конкретной долгоживущей incarnation при ручном новом turn после terminal. |
+| O-ACTIVATE | UNKNOWN / EXPERIMENT NEEDED | Внешний сигнал без holder input инициирует такой turn; отдельная platform/policy/account проверка. |
 | O-CAPS | EXPERIMENT NEEDED | Контроль точности восстановления на canaries; не полагаться на память автоматически. |
 | O-MECH | EXPERIMENT NEEDED | Synthetic comparison, затем допустимость и безопасность live-границы. |
 | O-COST | UNKNOWN | Фактический декабрьский rollout/usage; не начинать платный эксперимент без разрешения. |
 | O-MAINT | UNKNOWN | Измерить внеплановые вмешательства в сутки; soak. |
 | O-GOV | OPEN | Отдельно согласовать норму research branch; текущая сводка не создает прецедента автоматического grant. |
-| O-REVIEW | PENDING | Поправки пятого #7176168538 обработаны в v2; ожидается финальное read-only ревью. |
+| O-ATTENTION | EXPERIMENT NEEDED | Измерить ручной batch, READY→attention, устраненные лишние вмешательства и ложные уведомления. |
+| O-QUIESCENCE | OPEN | Отличить локальный stop, quiescent cut и semantic closure; late work не теряется. |
+| O-REVIEW | CONDITIONAL PASS v2 | Последнее блокирующее замечание #7176208539 (split O-WAKE) устранено в v3; новые findings открыты для ревью. |
 
 Предварительный вывод: транспорт внутри активного turn и частичный workflow уже полезны; автономное продолжение того же чата после terminal пока не доказано. Не зафиксировать архитектуру или PASS до получения различающего evidence.
 
@@ -102,3 +123,4 @@ Holder предложил смягчить ограничения research loop,
 
 - v1: объединены capability map, checkpoint v1/v2, последующие варианты/возражения, минимальные эксперименты, декабрьская развилка и процессный вопрос; поздние сообщения по Plugin UI и soak включены. Внешние ссылки не перепроверялись целиком, исходный Issue сохраняется.
 - v2: review #7176168538: (1) декабрьская экономика/границы анонса — принято; (2) Plugin UI lifecycle и гипотеза гибрида — принято как дополнительный discriminator и сохраненная гипотеза, не как подтвержденный live winner. Ограничение user activation и отдельная policy gate сохраняются. Добавлен открытый вопрос Support из #7176119177; контакта с Support не было.
+- v3: закрыта конкретная поправка review #7176182393 / #7176192880 / #7176208539: O-CONTINUITY отделена от O-ACTIVATE, R-SEM уточнен. Добавлены partial-workflow economics, actual Issue graph observation, notification evidence и distributed-quiescence hypothesis. Сводка остается промежуточной; brainstorm продолжается.
