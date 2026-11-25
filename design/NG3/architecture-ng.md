@@ -1792,7 +1792,7 @@ policy.
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
 - `VPNG-M001-R2.R1.R2` — [`full`]
@@ -2894,7 +2894,7 @@ Manager изменяемой peer/group realization одного явно упр
 подтвержденное либо проблемное состояние.
 
 **Implements:**
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3` — [`full`]
