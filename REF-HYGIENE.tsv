@@ -74,3 +74,5 @@ ADD_TAG	ng3-snapshot-wireguard-r8r6-generation-ordering-source	88c031ffc0312b8e3
 DEL_BRANCH	ng3-wireguard-r8r6-evidence-generation-cdc-20261125
 ADD_TAG	ng3-snapshot-typed-trace-evidence-gates-source	7117a5372882c2be3a6928b60f347443425ae6a7	Typed R/C architecture traceability and stable EV-only evidence gates.
 DEL_BRANCH	ng3-trace-evidence-gates-cdc-20261125
+ADD_TAG	ng3-snapshot-release-methodology-dedup-source	287392037b8949c965dc948e5b4363a80c14f7a3	Release methodology ownership deduplication and frozen-record consistency.
+DEL_BRANCH	ng3-release-methodology-dedup-cdc-20261125
