@@ -266,9 +266,39 @@ warm_paths = 1
             assert not released
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
 
-            # Reconcile all path-dependent objects before releasing the old device.
+            # First reconcile with the exact retained reserve still admitted.
+            # Demand removal alone must not erase it before release permission.
+            reconcile_dependencies(recovery)
+            assert {b.path_id.device_id for b in prepared.last_bindings} == {
+                "wg-main",
+                "wg-reserve",
+            }
+            _, released = release_alpha_undemanded_devices(
+                prepared, domain, runner, manager, recovery, ownership,
+                dependencies_confirmed=True,
+            )
+            assert not released
+            allowed = run(
+                "ip", "netns", "exec", NS,
+                "wg", "show", "wg1", "allowed-ips",
+            )
+            assert "10.77.0.0/24" in allowed, allowed
+            print("A012_RUNTIME_PRE_RELEASE_PROJECTION_RETAINS_RESERVE=PASS")
+
+            # Model the already-authorized RU-F1 release projection explicitly:
+            # only the confirmed replacement remains admitted to dependent
+            # structural/A.004/D.002 state. Production orchestration of this
+            # projection is the next materialization step.
+            main_interface = next(
+                item.confirmed_interface
+                for item in recovery.realizations
+                if item.device_id == "wg-main"
+            )
+            assert main_interface is not None
+            prepared.confirmed_managed_interfaces = frozenset({main_interface})
             reconcile_dependencies(recovery)
             assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-main"}
+
             # A different observed generation is not evidence that the
             # already-applied replacement policy remains valid.
             original_binding = prepared.last_bindings[0]
