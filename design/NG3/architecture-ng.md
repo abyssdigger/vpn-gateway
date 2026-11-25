@@ -1985,7 +1985,7 @@ Agent, составляющий truthful current user-facing status из authori
 - `VPNG-D001-R1.R1.R5` — [`full`]
 - `VPNG-D001-R3.R1.R1` — [`full`]
 
-**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно.
+**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. **Evidence:** `EV-00220`.
 
 API
 
@@ -2957,9 +2957,10 @@ generation context, поэтому изменение target инвалидир�
 executors используют принятые C.001 scoped-readiness/C.008 seams.
 
 **Пробел материализации:** D.002 component-local group endpoint semantics закрыты; C.001
-pure full-union composer закрыт `EV-00200`, а его production alpha lower
-convergence/scoped-A.007 consumption — `EV-00210`. Общий R8 остается неполным до
-periodic/explicit production D.002 reconciliation trigger, truthful D.002 status publication и
+pure full-union composer закрыт `EV-00200`, production alpha lower convergence/scoped-A.007
+consumption — `EV-00210`, а A.008 уже способен хранить authoritative D.002 realization в
+semantic status snapshot (`EV-00220`). Общий R8 остается неполным до periodic/explicit
+production D.002 reconciliation trigger, передачи его результата в A.008 publication path и
 инвалидизации зависимого A.007 evidence после D.002 generation change. D.003 split-group
 kernel acceptance закрыт EV-00190.
 

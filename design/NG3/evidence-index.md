@@ -463,3 +463,22 @@ The runtime cycle converges the complete desired union and uses the previously a
 owner-scoped readiness verifier for exactly the A.007 owner subset. No D.002 peer/group probe
 is executed merely because its lower state is materialized.
 
+## EV-00220 — A.008 D.002 realization status projection
+
+**Status:** accepted / semantic status carrier for D.002 realization; production D.002 caller
+publication remains pending  
+**Scope:** current-only typed retention of authoritative `WireGuardPeerRealization` values in
+`RuntimeStatusSnapshot`, deterministic Device ordering, duplicate-Device rejection and JSON
+serialization of D.002 generation/group ownership without changing compact-text grammar.  
+**Implementation:** `design/NG3/code/python/rou/runtime_status.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_runtime_status.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d002-runtime-status-review.md`.  
+**Executable evidence:** GitHub Actions run `45584590216`, unit job
+`139102846576` — PASS on source
+`23f66a270e3b55832c2fd180583bb544bb1a29fa`.
+
+A.008 receives D.002's owner projection rather than reconstructing group ownership from
+configuration or kernel state. Equivalent snapshots remain subject to the existing
+change-driven publication contract. A.009 compact text remains unchanged: its normative
+Device/Profile grammar is not extended merely because a richer semantic snapshot exists.
+
