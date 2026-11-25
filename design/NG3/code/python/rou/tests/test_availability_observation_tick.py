@@ -10,7 +10,9 @@ from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.payload_profile import PayloadProfileRequest
+from rou.network_policy_layout import WireGuardPeerProbeOwner
 from rou.probe_desired import build_probe_desired_assembly
+from rou.probe_plane_desired import build_probe_plane_desired_assembly
 from rou.probe_local_observation import ProbeLocalComparison
 from rou.probe_policy import ProbeLocalPlatform
 from rou.probe_precondition import (
@@ -25,6 +27,7 @@ from rou.probe_runtime import (
 )
 from rou.release1_config import parse_release1_config
 from rou.route_priority_inventory import RoutePriorityPathRoute
+from rou.wireguard_peer_probe_policy import WireGuardPeerProbeIntent
 
 
 A = LogicalPathId("wg", 0, 0)
@@ -141,6 +144,61 @@ class AvailabilityObservationTickTests(unittest.TestCase):
         self.assertEqual(
             result.projection.effective_profiles[0].ordered_paths,
             (B, A),
+        )
+
+    def test_combined_plane_tick_executes_only_availability_owners(self):
+        config = cfg()
+        p = baseline()
+        legacy = build_probe_desired_assembly(
+            config,
+            (p,),
+            ROUTES,
+            NG3_LINUX_POLICY_PLATFORM,
+            LOCAL,
+        )
+        peer = WireGuardPeerProbeIntent(
+            WireGuardPeerProbeOwner("wg", "edge-a"),
+            IPv4Address("10.201.0.1"),
+            ROUTES[0],
+        )
+        assembly = build_probe_plane_desired_assembly(
+            (p,),
+            legacy.intents,
+            (peer,),
+            (),
+            ROUTES,
+            NG3_LINUX_POLICY_PLATFORM,
+            LOCAL,
+        )
+        runtime = AvailabilityProbeRuntime()
+        driver = Driver({
+            A: ProbeTechnicalOutcome.REPLY,
+            B: ProbeTechnicalOutcome.REPLY,
+        })
+
+        result = run_availability_observation_tick(
+            config,
+            (p,),
+            ROUTES,
+            assembly,
+            exact_precondition(assembly),
+            runtime,
+            AvailabilityManager(AvailabilityManagerPolicy(1, 1)),
+            driver,
+        )
+
+        self.assertTrue(result.attempts_enabled)
+        self.assertEqual(len(result.evidence), 2)
+        self.assertEqual(len(driver.contexts), 2)
+        self.assertTrue(
+            all(
+                hasattr(context.intent.owner, "path_id")
+                for context in driver.contexts
+            )
+        )
+        self.assertEqual(
+            {context.intent.owner for context in runtime.current_contexts},
+            {intent.owner for intent in assembly.availability_intents},
         )
 
     def test_unconfirmed_precondition_runs_no_probe_and_fabricates_no_failure(self):
