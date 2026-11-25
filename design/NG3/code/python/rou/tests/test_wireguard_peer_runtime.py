@@ -142,33 +142,47 @@ def base_realization(*, problem=None):
 
 
 class SnapshotObserver:
-    def __init__(self):
+    def __init__(self, events=None):
         self.calls = 0
+        self.events = events
 
     def observe_structural_snapshot(self):
         self.calls += 1
+        if self.events is not None:
+            self.events.append("snapshot")
         return object()
 
 
 class Driver:
-    def __init__(self, outcomes):
+    def __init__(self, outcomes, events=None):
         self.outcomes = {
             target: list(values)
             for target, values in outcomes.items()
         }
         self.calls = []
+        self.events = events
 
     def execute(self, context):
         self.calls.append(context)
+        if self.events is not None:
+            label = (
+                "group"
+                if context.target == GROUP_TARGET
+                else "peer"
+            )
+            self.events.append(f"probe:{label}")
         return self.outcomes[context.target].pop(0)
 
 
 class Ownership:
-    def __init__(self):
+    def __init__(self, events=None):
         self.calls = []
+        self.events = events
 
     def converge(self, desired):
         self.calls.append(desired)
+        if self.events is not None:
+            self.events.append("ownership")
         return WireGuardPeerOwnershipResult(
             True,
             True,
@@ -243,11 +257,15 @@ class WireGuardPeerRuntimeCoordinatorTests(unittest.TestCase):
         )
 
     def test_each_peer_and_group_attempt_gets_fresh_exact_owner_scope(self):
+        events = []
+        self.observer = SnapshotObserver(events)
+        self.ownership = Ownership(events)
         driver = Driver(
             {
                 PEER_A_TARGET: [reply()],
                 GROUP_TARGET: [reply()],
-            }
+            },
+            events,
         )
 
         result = self.reconcile(
@@ -274,6 +292,16 @@ class WireGuardPeerRuntimeCoordinatorTests(unittest.TestCase):
             [PEER_A_TARGET, GROUP_TARGET],
         )
         self.assertEqual(len(self.ownership.calls), 1)
+        self.assertEqual(
+            events,
+            [
+                "snapshot",
+                "probe:peer",
+                "ownership",
+                "snapshot",
+                "probe:group",
+            ],
+        )
 
     def test_manager_state_is_retained_across_periodic_triggers(self):
         coordinator = WireGuardPeerRuntimeCoordinator()
@@ -387,6 +415,72 @@ class WireGuardPeerRuntimeCoordinatorTests(unittest.TestCase):
                 probe_driver=driver,
                 ownership=self.ownership,
                 platform=NG3_LINUX_POLICY_PLATFORM,
+            )
+
+        self.assertEqual(driver.calls, [])
+        self.assertEqual(self.ownership.calls, [])
+        self.assertEqual(self.observer.calls, 0)
+
+    def test_mismatched_d001_generation_blocks_before_probe_or_mutation(self):
+        inconsistent = ManagedDeviceRealization(
+            device_id="wg",
+            desired_state=ManagedDeviceDesiredState.PRESENT,
+            desired_generation="base-b",
+            confirmed_state=ManagedWireGuardState.PRESENT,
+            confirmed_generation="base-a",
+        )
+        driver = Driver({})
+
+        with self.assertRaisesRegex(
+            WireGuardPeerRuntimeError,
+            "no confirmed current D.001 base generation",
+        ):
+            WireGuardPeerRuntimeCoordinator().reconcile(
+                self.config,
+                (inconsistent,),
+                (ROUTE,),
+                self.assembly,
+                snapshot_observer=self.observer,
+                probe_driver=driver,
+                ownership=self.ownership,
+                platform=NG3_LINUX_POLICY_PLATFORM,
+            )
+
+        self.assertEqual(driver.calls, [])
+        self.assertEqual(self.ownership.calls, [])
+        self.assertEqual(self.observer.calls, 0)
+
+    def test_stale_probe_path_binding_blocks_before_probe_or_mutation(self):
+        stale_route = RoutePriorityPathRoute(
+            PATH,
+            InterfaceIdentity("wg0", 99),
+        )
+        peer_intents = tuple(
+            type(intent)(
+                intent.owner,
+                intent.target,
+                stale_route,
+                intent.mechanism,
+            )
+            for intent in self.assembly.peer_intents
+        )
+        stale = ProbePlaneDesiredAssembly(
+            layout=self.assembly.layout,
+            probe=self.assembly.probe,
+            availability_intents=self.assembly.availability_intents,
+            peer_intents=peer_intents,
+            group_intents=self.assembly.group_intents,
+        )
+        driver = Driver({})
+
+        with self.assertRaisesRegex(
+            WireGuardPeerRuntimeError,
+            "peer probe path binding is stale",
+        ):
+            self.reconcile(
+                WireGuardPeerRuntimeCoordinator(),
+                driver,
+                current_assembly=stale,
             )
 
         self.assertEqual(driver.calls, [])

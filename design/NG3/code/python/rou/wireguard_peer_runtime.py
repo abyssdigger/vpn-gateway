@@ -221,6 +221,7 @@ class WireGuardPeerRuntimeCoordinator:
                 or base.desired_state is not ManagedDeviceDesiredState.PRESENT
                 or base.confirmed_state is not ManagedWireGuardState.PRESENT
                 or base.confirmed_generation is None
+                or base.desired_generation != base.confirmed_generation
                 or base.problem is not None
                 or base.waiting_for_dependencies
             ):
@@ -233,6 +234,7 @@ class WireGuardPeerRuntimeCoordinator:
             self._verify_probe_owner_union(
                 device_id,
                 groups,
+                path_route,
                 assembly,
             )
 
@@ -271,6 +273,7 @@ class WireGuardPeerRuntimeCoordinator:
     def _verify_probe_owner_union(
         device_id: str,
         groups: tuple[ManagedWireGuardGroupConfig, ...],
+        path_route: RoutePriorityPathRoute,
         assembly: ProbePlaneDesiredAssembly,
     ) -> None:
         expected_peer_owners = frozenset(
@@ -290,6 +293,14 @@ class WireGuardPeerRuntimeCoordinator:
             raise WireGuardPeerRuntimeError(
                 f"D.002 peer probe owner union is stale for Device {device_id!r}"
             )
+        if any(
+            intent.path_route != path_route
+            for intent in assembly.peer_intents
+            if intent.owner.device_id == device_id
+        ):
+            raise WireGuardPeerRuntimeError(
+                f"D.002 peer probe path binding is stale for Device {device_id!r}"
+            )
 
         expected_group_owners = frozenset(
             WireGuardGroupProbeOwner(
@@ -307,4 +318,12 @@ class WireGuardPeerRuntimeCoordinator:
         if actual_group_owners != expected_group_owners:
             raise WireGuardPeerRuntimeError(
                 f"D.002 group probe owner union is stale for Device {device_id!r}"
+            )
+        if any(
+            intent.path_route != path_route
+            for intent in assembly.group_intents
+            if intent.owner.device_id == device_id
+        ):
+            raise WireGuardPeerRuntimeError(
+                f"D.002 group probe path binding is stale for Device {device_id!r}"
             )
