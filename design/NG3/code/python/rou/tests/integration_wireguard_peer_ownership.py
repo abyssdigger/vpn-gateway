@@ -39,20 +39,23 @@ def keypair() -> tuple[str, str]:
     return private, public
 
 
-def desired_state(cfg, interface, owner_id):
+def desired_state(cfg, interface, group_owners):
     managed = cfg.managed_vpns["wg-main"]
-    shared = cfg.wireguard_groups[("corp", "wg-main")].prefixes
-    peers = []
-    for peer in managed.peers:
-        networks = [IPv4Network(f"{peer.probe_target}/32")]
-        if peer.peer_id == owner_id:
-            networks.extend(shared)
-        peers.append(
-            WireGuardPeerAllowedIPs(
-                peer.public_key,
-                tuple(sorted(networks)),
-            )
+    networks_by_peer = {
+        peer.peer_id: [IPv4Network(f"{peer.probe_target}/32")]
+        for peer in managed.peers
+    }
+    for profile_id, owner_id in group_owners.items():
+        networks_by_peer[owner_id].extend(
+            cfg.wireguard_groups[(profile_id, "wg-main")].prefixes
         )
+    peers = [
+        WireGuardPeerAllowedIPs(
+            peer.public_key,
+            tuple(sorted(networks_by_peer[peer.peer_id])),
+        )
+        for peer in managed.peers
+    ]
     return WireGuardPeerOwnershipDesired(
         "wg-main",
         interface,
@@ -96,6 +99,11 @@ enabled = true
 direction = "outbound"
 destinations = ["10.77.0.0/24"]
 device_order = ["wg-main"]
+[profile.storage]
+enabled = true
+direction = "outbound"
+destinations = ["10.88.0.0/24"]
+device_order = ["wg-main"]
 """
             )
             runner = SubprocessManagedWireGuardRunner()
@@ -108,7 +116,7 @@ device_order = ["wg-main"]
             enforcer = WireGuardPeerOwnershipEnforcer(runner, NS, adapter)
 
             first = enforcer.converge(
-                desired_state(cfg, base.interface, "edge-a")
+                desired_state(cfg, base.interface, {"corp": "edge-a", "storage": "edge-a"})
             )
             if not first.confirmed:
                 raise AssertionError(first.diagnostic)
@@ -118,7 +126,7 @@ device_order = ["wg-main"]
             print("D003_WG_OWNER_A_EXACT=PASS")
 
             second = enforcer.converge(
-                desired_state(cfg, base.interface, "edge-b")
+                desired_state(cfg, base.interface, {"corp": "edge-b", "storage": "edge-b"})
             )
             if not second.confirmed:
                 raise AssertionError(second.diagnostic)
@@ -138,6 +146,35 @@ device_order = ["wg-main"]
                 raise AssertionError("peer B probe prefix was lost")
             print("D003_WG_FULL_STATE_TRANSFER=PASS")
             print("D003_WG_NO_INTERFACE_RESTART=PASS")
+
+            split = enforcer.converge(
+                desired_state(
+                    cfg,
+                    base.interface,
+                    {"corp": "edge-a", "storage": "edge-b"},
+                )
+            )
+            if not split.confirmed:
+                raise AssertionError(split.diagnostic)
+            current = adapter.observe("wg-main")
+            assert current.interface is not None
+            if current.interface.ifindex != ifindex:
+                raise AssertionError("split ownership restarted wg0")
+            allowed = ns("wg", "show", "wg0", "allowed-ips")
+            rows = dict(line.split("\t", 1) for line in allowed.splitlines())
+            if "10.77.0.0/24" not in rows[peer_a]:
+                raise AssertionError("peer A lacks corp split group")
+            if "10.88.0.0/24" in rows[peer_a]:
+                raise AssertionError("peer A retained storage split group")
+            if "10.88.0.0/24" not in rows[peer_b]:
+                raise AssertionError("peer B lacks storage split group")
+            if "10.77.0.0/24" in rows[peer_b]:
+                raise AssertionError("peer B retained corp split group")
+            if "10.201.0.1/32" not in rows[peer_a]:
+                raise AssertionError("peer A probe prefix lost in split state")
+            if "10.201.0.2/32" not in rows[peer_b]:
+                raise AssertionError("peer B probe prefix lost in split state")
+            print("D003_WG_SPLIT_GROUP_OWNERSHIP=PASS")
             print("D003_WG_RESULT=PASS")
     finally:
         subprocess.run(("ip", "netns", "del", NS), check=False)
