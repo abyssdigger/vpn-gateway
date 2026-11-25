@@ -511,7 +511,7 @@ Lower Machinery переиспользуется только при совпа�
 
 ### 2.9.3. Target production-runtime language boundary
 
-**Covers:** `VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`.
+**Covers:** `VPNG-D001-R1.R1.R8`, `VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`, `VPNG-D001-R1.R1.R8.R3`.
 
 Rust является target implementation boundary, а не component role и не источником product
 semantics. Финальная stable production runtime boundary включает configuration normalization,
