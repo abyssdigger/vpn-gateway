@@ -46,3 +46,5 @@ ADD_TAG	ng3-snapshot-wireguard-recoverable-groups-source	ae33615f08b5ebd69e8c9e6
 DEL_BRANCH	ng3-wireguard-recoverable-groups-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-profile-group-config-source	99d6504df63e6adb6c697926f7c65dc1fd5a19a0	Profile-derived WireGuard recoverable-group configuration design.
 DEL_BRANCH	ng3-wireguard-group-config-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-group-normalization-source	8afb45ca779312c93b86e7cd32c09ae982a44b3b	Profile-derived WireGuard recoverable-group normalization.
+DEL_BRANCH	ng3-wireguard-group-normalization-cdc-20261125
