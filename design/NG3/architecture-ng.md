@@ -1633,7 +1633,12 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R5` — [`full`]
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R1` — [`full`]
+- `VPNG-U001-R1.R3.R8.R2` — [`none`]
+- `VPNG-U001-R1.R3.R8.R2.C1` — [`none`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
+- `VPNG-U001-R1.R3.R8.R4` — [`none`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R2` — [`full`]
@@ -1672,24 +1677,24 @@ Architectural decisions
 8. `Явное намерение управлять Device`
    *Нормализованное намерение управления VPN существует только при наличии канонической `[device.<id>.managed_vpn]`. Отсутствие таблицы означает прежнее внешнее управление. Для `kind = "wireguard"` Adapter получает намерение создать один точный интерфейс, базовый адрес, ссылки на секреты и упорядоченный набор пиров. `expected_interfaces` для такого Device выводится из `managed_vpn.interface`, а не задается повторно.*
 
-9. `Производные транспортные разрешения управляемого WireGuard`
-   *Для `kind = "wireguard"` намерения разрешить транспорт UDP выводятся из `endpoint` каждого пира; пользователь не повторяет их в `allow_vpn_client`. Одновременное задание этих двух источников отклоняется. Общие `AllowedIPs` полезного трафика выводятся из текущих `Profile.destinations` данного Device; `probe_target` каждого пира остается отдельным постоянным /32 и может быть более специфичным, чем общий префикс; этот точный адрес резервируется для технического наблюдения и не используется как самостоятельная бизнес-цель Profile.*
+9. `Производные транспортные разрешения и текущая one-group WireGuard normalization`
+   *Для `kind = "wireguard"` намерения разрешить транспорт UDP выводятся из `endpoint` каждого пира; пользователь не повторяет их в `allow_vpn_client`. Одновременное задание этих двух источников отклоняется. Permanent `probe_target` каждого peer нормализуется как отдельный технический /32. Текущий parser materializes только one-group R8 subset, выводя один mutable payload bundle из `Profile.destinations`; generalized recoverable-group identities, group-local ordered peer memberships/reserve roles и optional group endpoint еще не имеют принятого TOML spelling и не должны угадываться Adapter'ом.*
 
 10. `Секреты нормализуются как ссылки`
    *ConfigurationAdapter проверяет только каноническое написание абсолютных ссылок на файлы секретов и не читает значение секрета. Проверка типа файла, владельца, прав доступа и свежего содержимого принадлежит D.001 непосредственно перед изменением базовой реализации. Нормализованные контракты и отчет о состоянии не содержат значения секрета.*
 
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
-сохраняет прежний `parse_release1_config`, выводит точное условие привязки и разрешения UDP
-из одного источника, нормализует упорядоченный набор WireGuard-пиров и ссылки на секреты,
-а также выводит общие префиксы из действующих `Profile.destinations`.
-`AlphaPreparedPolicy.from_text` использует этот current-разбор как рабочую точку загрузки:
-внешняя конфигурация продолжает через совместимый базовый контракт, а явно управляемая
-конфигурация сохраняет `CurrentConfig` для A.012. Наличие `managed_vpn` больше не
-отклоняется на configuration boundary; A.012 материализует базовый lifecycle D.001, тогда как
-не реализованные еще D.002/D.003 остаются отдельным пробелом R8 и не присваиваются A.002.
-Таким образом A.002 полностью материализует собственную обязанность нормализации, не
-присваивая обязанности последующих компонентов.
+сохраняет внешний Device mode при отсутствии `managed_vpn`, выводит exact binding/UDP
+transport intent, нормализует ordered WireGuard peers, secret refs и permanent peer
+`probe_target /32`. Текущая R8 normalization реализует только один implicit payload group,
+выведенный из действующих `Profile.destinations`.
+
+**Пробел материализации:** generalized R8 config еще не умеет stable group identity,
+independent prefix bundles, group-local peer membership/order/reserve, optional group endpoint
+и rejection overlap между independently switchable groups. Поэтому A.002 contribution к R8
+понижен до [`partial`]; R8.R2/R8.R2.C1/R8.R3.R1/R8.R4 остаются [`none`] на configuration
+boundary до отдельного config-format review.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -2261,6 +2266,8 @@ lower network-policy domain Private network. Общая physical realization н�
 **Implements:**
 - `VPNG-U001-R1.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R1` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
 - `VPNG-U001-R1.R3.R6.R2` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
@@ -2318,11 +2325,11 @@ Architectural decisions
    *Проверка постоянного внутритуннельного /32 конкретного WireGuard-пира может использовать ту же нижнюю Machinery маршрутизации и локального допуска только при отдельной области владения и точном текущем `PathBinding`. Это состояние служит D.002 для выбора пира, не является свидетельством доступности Profile, не меняет политику Profile и не создает разрешений для полезного трафика.*
 
 12. `Общий physical probe plane не означает общий readiness verdict`
-   *A.007 и D.002 используют один collision-free allocation/physical convergence scope, поэтому lower desired state должен сходиться как полный union всех текущих probe owners и sibling-owner state нельзя считать stale только потому, что конкретный consumer его не запрашивал. Readiness при этом подтверждается отдельно для semantic owner subset из одного fresh physical snapshot. Scoped verification обязана знать полный accepted union: физические объекты другого принятого owner игнорируются как sibling state, физически совпадающий rule может удовлетворять нескольким owners, а неизвестный owned объект вне полного accepted union остается конфликтом и не маскируется как sibling. Таким образом missing/problem D.002 owner не обязан автоматически запрещать точный A.007 attempt, но неприписываемый конфликт общей probe ownership boundary остается fail-closed.*
+   *A.007 и D.002 используют один collision-free allocation/physical convergence scope, поэтому lower desired state должен сходиться как полный union всех текущих probe owners и sibling-owner state нельзя считать stale только потому, что конкретный consumer его не запрашивал. Readiness при этом подтверждается отдельно для semantic owner subset из одного fresh physical snapshot. Scoped verification обязана знать полный accepted union: физические объекты другого принятого owner игнорируются как sibling state, физически совпадающий rule может удовлетворять нескольким owners, а неизвестный owned объект вне полного accepted union остается конфликтом и не маскируется как sibling. Generalized R8 добавляет отдельный group-endpoint semantic owner рядом с A.007 Profile owner и WireGuard peer owner; group verdict не наследует peer/Profile verdict даже при совпадении physical target/rule. Таким образом missing/problem одного accepted semantic owner не обязан автоматически запрещать точный sibling attempt, но неприписываемый конфликт общей probe ownership boundary остается fail-closed.*
 
 **Материализация:** lower probe owner теперь различает A.007 `ProbePolicyOwner(profile_id, LogicalPathId)` и отдельный `WireGuardPeerProbeOwner(device_id, peer_id)`; общий resource layout сохраняет эти owner scopes раздельными. `wireguard_peer_probe_policy.py` проецирует permanent peer /32 через уже подтвержденный current path в ту же физическую route/RPDB/local-admission форму, что и A.007, не создавая нового `LogicalPathId`. Общий `ProbeExecutionPrecondition` и exact execution gate принимают этот отдельный semantic owner.
 
-**Пробел материализации:** peer-probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence. Production peer executor уже требует отдельный confirmed owner-subset precondition, но текущие `compare_probe_routing` / `compare_probe_local` считают все наблюдаемые probe-owned physical objects вне переданного desired subset stale. Поэтому простое объединение demand с последующей проверкой каждого subset существующим API некорректно: legitimate sibling-owner rows будут выглядеть drift. Нужна owner-scoped readiness comparison, принимающая одновременно полный accepted probe union и проверяемый semantic subset; только после этого alpha может сходить A.007+D.002 в общий lower convergence без ложной cross-owner блокировки. Поэтому component-local вклад C.001 в R8 остается [`partial`].
+**Пробел материализации:** peer-probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence. Production peer executor уже требует отдельный confirmed owner-subset precondition, но текущие `compare_probe_routing` / `compare_probe_local` считают все наблюдаемые probe-owned physical objects вне переданного desired subset stale. Поэтому простое объединение demand с последующей проверкой каждого subset существующим API некорректно: legitimate sibling-owner rows будут выглядеть drift. Нужна owner-scoped readiness comparison, принимающая одновременно полный accepted probe union и проверяемый semantic subset. Generalized R8 дополнительно требует `WireGuardGroupProbeOwner`-equivalent desired/projection for optional group endpoints; его пока нет. Поэтому R8/R8.R1 остаются [`partial`], а R8.R3.R1 contribution C.001 — [`none`].
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2617,6 +2624,8 @@ remote availability semantics.
 **Implements:**
 - `VPNG-U003-R3.R6` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R8.R1` — [`full`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`full`]
 - `VPNG-U003-R3.R6.R1` — [`full`]
 - `VPNG-U003-R3.R6.R3` — [`full`]
 - `VPNG-U003-R3.R6.R3.R1` — [`full`]
@@ -2649,7 +2658,7 @@ Architectural decisions
    *Driver отправляет/принимает probe IP через VPN-side IP portal; remote target и VPN endpoint остаются предметностью соседнего VPN external ends / local endpoint inventory, а не становятся child artifacts Driver.*
 
 7. `Повторное использование точного контракта одной проверки`
-   *D.002 вправе использовать этот Driver для проверки конкретного WireGuard-пира только после материализации отдельного предусловия с собственным владельцем. Совпадает полный технический контракт: одна точная цель через один точный текущий endpoint, ограниченный срок выполнения и технический результат `reply/no_reply/local_error`. Смысл результата как признака пригодности WireGuard-пира определяет D.002, а не A.007.*
+   *D.002 вправе использовать этот Driver для peer probe и optional recoverable-group endpoint probe только после materialization отдельного semantic owner/precondition для каждого смысла. Совпадает полный технический контракт: одна exact IPv4 target через один exact current endpoint, bounded attempt и `reply/no_reply/local_error`. Смысл результата как peer health, group end-to-end health или Profile availability определяется upper owner, а не C.008.*
 
 **Материализация:** `LinuxIcmpProbeDriver.execute(IcmpProbePhysicalContext)` принимает только exact current `InterfaceIdentity` и IPv4 target и возвращает тот же bounded `reply/no_reply/local_error` technical result без Profile/path semantic identity. Существующий A.007 `check(ProbeObservationContext)` сохранен как совместимый wrapper и unit-equivalence подтверждает идентичную physical command shape. D.002 сможет вызывать тот же Driver после отдельного C.001 peer-probe precondition; выбор пира и смысл результата в C.008 не перенесены.
 
@@ -2816,6 +2825,14 @@ Manager изменяемой peer/group realization одного явно упр
 
 **Implements / supports:**
 - `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R5` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R1` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R2` — [`none`]
+- `VPNG-U001-R1.R3.R8.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
+- `VPNG-U001-R1.R3.R8.R4` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R5` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R6` — [`partial`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
 **Evidence:** `EV-00050`, `EV-00120`, `EV-00130`
