@@ -556,3 +556,25 @@ The strengthened gate itself exposed a previously hidden structured-coverage gap
 `Constrained by` edges were removed. Their actual owner, architecture §2.9.3, now carries
 the explicit direct coverage.
 
+## EV-00260 — release methodology ownership and frozen-record consistency
+
+**Status:** accepted  
+**Scope:** technology-neutral documentation-driven release methodology; release-specific
+walkthrough ownership through approved scope + published documentation; explicit
+candidate-bound immutability of frozen release records; removal of stale cycle/version identity
+from current requirements/stable architecture; canonical projectholder terminology; and
+regression checks for these document-owner boundaries.  
+**Requirements:** `VPNG-D001-R3*`; current project documentation/release conventions.  
+**Review:** `design/reviews/NG3-2026-11-25-release-methodology-dedup-review.md`.  
+**Executable evidence:** corrected GitHub Actions run `45595690581`, unit job
+`139141146853` — PASS and release-0.1.0 deployment job `139141147878` — PASS on source
+`9a342df0f43dc0728a7490d37e93fca9bacde58f`; final docs-only source
+`db788897bacedb43c521595a182d133be9751db3` has actual-main lineage run
+`45595865021` — PASS.
+
+A preceding draft run deliberately remains recorded because its release job
+`139139903264` failed when a proposed cleanup touched the frozen 0.1.0 RELEASE-SCOPE and
+thereby exposed a stale-project-snapshot condition. The final accepted tree restores that
+release record exactly and instead makes the ownership/freeze rule explicit in the general
+methodology.
+

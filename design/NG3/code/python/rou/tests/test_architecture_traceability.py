@@ -8,6 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[6]
 ARCHITECTURE = ROOT / "design/NG3/architecture-ng.md"
 REQUIREMENTS = ROOT / "design/NG3/requirements.md"
+PROJECT_CONVENTIONS = ROOT / "PROJECT-CONVENTIONS.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
 EVIDENCE_INDEX = ROOT / "design/NG3/evidence-index.md"
 REFERENCE_IMPLEMENTATION = ROOT / "design/NG3/code/python/rou"
@@ -304,6 +305,43 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                     len(node["statuses"]),
                     f"requirement must have exactly one status, found {node['statuses']}",
                 )
+
+    def test_current_governing_docs_have_no_stale_cycle_or_release_identity(self):
+        requirements = REQUIREMENTS.read_text(encoding="utf-8")
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
+        self.assertNotIn("**Cycle:**", requirements)
+        self.assertNotIn("design-cycle draft", requirements)
+        self.assertIsNone(
+            re.search(
+                r"\bRelease-\d+\s*/\s*\d+\.\d+\.\d+\b",
+                architecture,
+            )
+        )
+        self.assertIsNone(
+            re.search(r"\brelease/\d+\.\d+\.\d+/", architecture)
+        )
+
+    def test_release_methodology_is_scope_driven_not_technology_specific(self):
+        conventions = PROJECT_CONVENTIONS.read_text(encoding="utf-8")
+        start = conventions.index(
+            "### 10.4. QA и предрелизная проверка фактического исполнения"
+        )
+        end = conventions.index("\n### 10.5.", start)
+        methodology = conventions[start:end]
+        for technology in ("WireGuard", "OpenConnect", "L2TP"):
+            with self.subTest(technology=technology):
+                self.assertNotIn(technology, methodology)
+        self.assertIn("release/<version>/RELEASE-SCOPE.md", methodology)
+
+    def test_projectholder_term_is_canonical_in_current_governing_docs(self):
+        text = (
+            PROJECT_CONVENTIONS.read_text(encoding="utf-8")
+            + "\n"
+            + REQUIREMENTS.read_text(encoding="utf-8")
+        )
+        self.assertIsNone(re.search(r"\bproject holder\b", text, re.IGNORECASE))
+        self.assertIsNone(re.search(r"\bproject-holder\b", text, re.IGNORECASE))
+        self.assertNotIn("владелец разработки", text.lower())
 
     def test_stable_architecture_uses_only_stable_evidence_addresses(self):
         architecture = ARCHITECTURE.read_text(encoding="utf-8")
