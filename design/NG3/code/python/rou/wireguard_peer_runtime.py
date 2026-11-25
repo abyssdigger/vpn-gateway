@@ -238,6 +238,14 @@ class WireGuardPeerRuntimeCoordinator:
                     f"managed WireGuard Device {device_id!r} has no "
                     "confirmed current D.001 base generation"
                 )
+            if (
+                base.confirmed_interface is None
+                or base.confirmed_interface != path_route.endpoint
+            ):
+                raise WireGuardPeerRuntimeError(
+                    f"managed WireGuard Device {device_id!r} D.001 interface "
+                    "identity is stale for the current logical path"
+                )
 
             groups = tuple(groups_by_device[device_id])
             self._verify_probe_owner_union(
