@@ -216,15 +216,24 @@ class WireGuardPeerRuntimeCoordinator:
                 )
 
             base = base_by_device.get(device_id)
-            if (
-                base is None
-                or base.desired_state is not ManagedDeviceDesiredState.PRESENT
-                or base.confirmed_state is not ManagedWireGuardState.PRESENT
-                or base.confirmed_generation is None
-                or base.desired_generation != base.confirmed_generation
-                or base.problem is not None
-                or base.waiting_for_dependencies
-            ):
+            demanded_current = (
+                base is not None
+                and base.desired_state is ManagedDeviceDesiredState.PRESENT
+                and base.confirmed_state is ManagedWireGuardState.PRESENT
+                and base.confirmed_generation is not None
+                and base.desired_generation == base.confirmed_generation
+                and base.problem is None
+                and not base.waiting_for_dependencies
+            )
+            retained_current = (
+                base is not None
+                and base.desired_state is ManagedDeviceDesiredState.ABSENT
+                and base.confirmed_state is ManagedWireGuardState.PRESENT
+                and base.confirmed_generation is not None
+                and base.problem is None
+                and base.waiting_for_dependencies
+            )
+            if not demanded_current and not retained_current:
                 raise WireGuardPeerRuntimeError(
                     f"managed WireGuard Device {device_id!r} has no "
                     "confirmed current D.001 base generation"
