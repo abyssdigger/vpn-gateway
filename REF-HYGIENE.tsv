@@ -84,3 +84,5 @@ ADD_TAG	ng3-snapshot-wireguard-r8-materialization-closure-source	844cb821db0a5d5
 DEL_BRANCH	ng3-wireguard-r8-materialization-closure-cdc-20261125
 ADD_TAG	ng3-snapshot-trace-model-hygiene-source	79bc3b4cd25b2804d6bc7147e20f853205948d79	Trace/model hygiene: canonical typed-edge grammar, coverage/evidence semantics, projectholder role identifier and stale-EV disposition.
 DEL_BRANCH	ng3-trace-model-hygiene-cdc-20261125
+ADD_TAG	ng3-snapshot-managed-device-r7-closure-source	944ef02d847c3b34e93ec60c5e8f46dbcd787886	Managed Device R7 base-lifecycle requirement branch accepted closed.
+DEL_BRANCH	ng3-managed-device-r7-closure-cdc-20261125
