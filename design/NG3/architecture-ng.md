@@ -1605,12 +1605,16 @@ Implementation
     design/NG3/code/python/rou/controller_restart.py — stop-then-start composition without hidden resume state.
     design/NG3/code/python/rou/alpha_runtime.py — daemon/bootstrap composition, host helpers/publication and final systemd readiness/termination boundary.
 
-Current alpha normal reconciliation also orders D.001 base confirmation -> payload/full probe-plane
-convergence -> D.002 peer/group reconciliation before current-status publication. The same normal
-reconciliation path is used by the periodic audit and the protective-mode explicit normal-release
-precondition; startup performs the initial D.002 trigger before READY publication.
+Current alpha normal reconciliation orders fresh C.004 presence -> A.013/A.012 ordinary
+and reserve convergence -> fresh normal binding -> payload/full probe-plane convergence ->
+D.002 peer/group reconciliation. Undemanded managed instances are released only after
+the lower dependencies are confirmed removed, including D.003 dynamic ownership; a
+release attempt is followed by another fresh normal observation/convergence before status
+publication. The same normal reconciliation path is used by periodic audit and the
+protective-mode explicit normal-release precondition; startup performs initial presence,
+normal policy and D.002 convergence before READY publication.
 
-**Evidence:** `EV-00000`, `EV-00240`
+**Evidence:** `EV-00000`, `EV-00240`, `EV-00300`
 
 API
 
@@ -2032,7 +2036,7 @@ Agent, составляющий truthful current user-facing status из authori
 - `VPNG-D001-R1.R1.R5` — [`full`]
 - `VPNG-D001-R3.R1.R1` — [`full`]
 
-**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. Alpha теперь подает результат каждого состоявшегося D.002 trigger в A.008; если новый D.002 trigger не состоялся из-за broader D.001/C.001 failure, прежняя projection удаляется и поле помечается unknown. Локальная D.002 problem переводит runtime в DEGRADED, сохраняя уже подтвержденные unrelated effective/availability projections. **Evidence:** `EV-00220`, `EV-00240`.
+**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. Alpha теперь подает результат каждого состоявшегося D.002 trigger в A.008; если новый D.002 trigger не состоялся из-за broader D.001/C.001 failure, прежняя projection удаляется и поле помечается unknown. Локальная D.002 problem переводит runtime в DEGRADED, сохраняя уже подтвержденные unrelated effective/availability projections. Current configured intent дополнительно сохраняет normalized `warm_paths`; `managed_profile_demands` — отдельная диагностическая A.013 projection из последнего подтвержденного normal binding (повторно вычисляется после selective release, unknown/null при неподтвержденном normal binding). A.008 не выводит из нее фактический actuation: последний принятый A.012 desired set и его подтвержденные реализации остаются в `managed_device_realizations`. Managed lifecycle problem также сохраняет независимую подтвержденную effective policy в DEGRADED. **Evidence:** `EV-00220`, `EV-00240`, `EV-00300`.
 
 API
 
@@ -2240,7 +2244,7 @@ API
 Implementation
 
     design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
-    design/NG3/code/python/rou/alpha_runtime.py — Release-1 composition: startup/reconciliation до fresh C.004 observation, подтвержденное снятие product-owned policy dependencies при stop и передача current `ManagedDeviceRealization` в A.008.
+    design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, selective dependency release при снятии demand, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
 
@@ -2277,15 +2281,17 @@ Architectural decisions
 11. `Независимый отказ кандидата не запрещает reserve fallback`
    *Problem одного ordinary managed candidate остается диагностикой этого Device и не превращается в глобальный запрет продолжить fresh reconciliation для остальных candidates и reserve exception. Успех каждого D.001 действия по-прежнему требует собственного подтвержденного postcondition.*
 
-**Evidence:** `EV-00080`, `EV-00090`.
+**Evidence:** `EV-00080`, `EV-00090`, `EV-00300`.
 
 **Материализация:** `ManagedDeviceManager` принимает явный `desired_device_ids`.
 `converge_managed_device_presence` связывает A.013 с bounded D.001 attempts и fresh
 наблюдением через переданную функцию; failed candidate не считается подтвержденной
 managed capacity, а следующий candidate может быть рассмотрен в том же trigger.
-Промежуточные фазы не снимают зависимости и не останавливают Devices. Alpha пока
-передает прежний набор referenced managed Devices явно и не использует новую
-двухфазную композицию, поэтому вклад A.012 в R7.R3 остается [`partial`].
+Промежуточные фазы не снимают зависимости и не останавливают Devices. Alpha использует
+эту композицию при startup и normal reconciliation; прежнее правило referenced managed
+Devices больше не является источником lifecycle demand. Вклад A.012 в составное R7.R3
+остается [`partial`] по распределению ответственности между A.002/A.013/C.004/D.001,
+а не из-за отсутствия этой композиции.
 
 В уже реализованной части A.012 получает `desired_generation` через D.001 до мутации,
 принимает только совпадающее подтвержденное поколение D.001, переводит ошибки lifecycle в
@@ -2295,13 +2301,25 @@ problem-state и не вызывает `converge_absent`, пока caller не �
 отсутствия.
 
 Текущая alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
-portal, но до первого fresh C.004/VPN-path observation; каждый normal reconciliation снова
-начинается с A.012 fresh convergence до зависимой path/policy observation. Для current `warm_paths`
-принята двухфазная последовательность: fresh C.004 endpoint observation без commit binding
-state → A.013 ordinary-demand projection → ordinary A.012/D.001 convergence с удержанием
-существующего reserve → повторное fresh C.004 observation → A.013 final reserve-exception
-projection → final A.012/D.001 convergence → еще одно fresh C.004 observation и обычная
-binding projection. При общей остановке
+portal. Startup и normal reconciliation используют двухфазную последовательность:
+fresh C.004 endpoint observation с tentative projection без commit binding state →
+A.013 ordinary-demand projection → bounded ordinary A.012/D.001 convergence с удержанием
+существующего reserve → fresh C.004 observation → A.013 final reserve-exception
+projection → bounded reserve A.012/D.001 convergence → еще одно fresh C.004 observation и
+обычная binding projection. Каждому managed candidate предоставляется не более одной
+попытки за trigger; ошибка не прерывает попытки независимых candidates. В normal binding
+принимается exact interface identity подтвержденной D.001 present realization для
+demanded managed Device; external endpoints сохраняют прежний contract.
+
+При selective release normal C.001 payload/probe policy и D.002 reconciliation сначала
+исключают retiring Device. D.003 затем подтверждает отсутствие dynamic payload ownership
+при сохранении permanent peer-probe /32. Перед разрешением D.001 stop свежо сверяются
+desired set и exact binding generations, для которых подтверждена replacement policy.
+Отказ любого из этих release prerequisites оставляет Device поднятым. После попытки stop
+normal binding/policy/probe convergence снова получают fresh observation. Managed lifecycle
+problem публикуется отдельно и не отменяет подтвержденную unrelated policy.
+
+При общей остановке
 A.001 сначала закрывает forwarding и подтвержденно снимает product-owned payload policy и
 return-affinity dependencies, затем передает все управляемые Devices как
 `dependency_free_device_ids`, требует confirmed A.012 absence и только после этого начинает
@@ -2309,8 +2327,8 @@ return-affinity dependencies, затем передает все управля�
 teardown Private network не начинается и stop остается failed/unconfirmed. Текущая alpha не
 имеет hot config reload: изменение конфигурации применяется через product restart, поэтому
 тот же stop/start path является текущей materialization restart semantics. Current
-`ManagedDeviceRealization` передается A.008. Kernel integration EV-00090 подтверждает этот
-порядок на production D.001 WireGuard Adapter.
+`ManagedDeviceRealization` передается A.008. Kernel integration EV-00090 подтверждает global stop/start порядок; EV-00300 подтверждает
+selective ordinary/reserve lifecycle на production D.001 WireGuard Adapter.
 
 ## [A.013] ManagedDeviceDemandCalculator
 
@@ -2365,10 +2383,13 @@ Implementation
 
     design/NG3/code/python/rou/managed_device_demand.py — чистые проекции ordinary demand и final reserve exception.
 
+**Evidence:** `EV-00300`
+
 **Материализация:** Calculator и current-surface нормализация реализованы; direct unit
-tests проверяют их отдельно от Linux. A.012 пока использует прежний
-always-demanded referenced-Device subcase. Двухфазная композиция и безопасное
-освобождение reserve во время исполнения остаются за пределами этой материализации.
+tests проверяют их отдельно от Linux. A.012 использует обе проекции при bounded
+ordinary/reserve convergence, подтвержденной kernel integration. A.013 не выполняет
+actuation либо dependency release: этим объясняются partial edges к составному R7.R3
+и R7.R3.R3; computation не является незавершенной частью lifecycle Manager.
 
 # Annex B. Ordinary-side transition components
 
@@ -2689,10 +2710,14 @@ Architectural decisions
 11. `Fresh presence observation может предшествовать lifecycle demand`
    *`observe_device_endpoints(...)` может использоваться как свежий read-only вход для расчета числа уже присутствующих Profile-eligible endpoints до A.012. Такое наблюдение не создает `PathBinding`, не меняет retained binding state и не становится lifecycle owner; после возможной D.001 mutation обычный binding postcondition подтверждается новым observation.*
 
-**Материализация:** C.004 уже получает свежий inventory и подтверждает обычный
-binding. Вклад в R7.R3 и его R2/R3 остается [`partial`]: отдельное read-only
-наблюдение до A.012 и повторное наблюдение между ordinary и reserve convergence
-еще не включены в alpha composition.
+**Evidence:** `EV-00300`
+
+**Материализация:** C.004 получает fresh inventory как для обычного binding, так и для
+read-only demand observation до A.012 и между ordinary/reserve attempts. Alpha использует
+tentative binding projection, не сохраняя ее next state; normal binding после lifecycle
+mutation выполняется заново. Release guard сверяет exact current binding generations с
+подтвержденной replacement policy. Вклад C.004 в R7.R3 и его R2/R3 остается [`partial`],
+поскольку C.004 подтверждает observation/binding, но не выбирает и не актуирует demand.
 
 ## [C.005] ForwardingGate
 
@@ -3127,8 +3152,9 @@ generation смысловой realization.
 
 **Implements:**
 - `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00100`, `EV-00190`
+**Evidence:** `EV-00050`, `EV-00100`, `EV-00190`, `EV-00300`
 
 API
 
@@ -3157,7 +3183,11 @@ unexpected/incomplete peer set, применяет один полный `wg set
 postcondition. Kernel acceptance EV-00190 подтверждает эту форму не только для transfer одного
 bundle, но и для simultaneous exact split двух independent group bundles между разными peers
 при сохранении permanent peer-probe /32 и неизменного ifindex общего `wg0`. Поэтому lower
-D.003 contribution к generalized R8 materialized [`full`].
+D.003 contribution к generalized R8 materialized [`full`]. Для selective release
+managed Device тот же exact Enforcer подтверждает probe-only projection без dynamic payload
+ownership до D.001 stop; EV-00300 проверяет failure gate и фактические AllowedIPs перед
+удалением. Вклад в R7.R3.R3 [`partial`]: D.003 снимает свою нижнюю зависимость, но не
+определяет reserve demand или полную готовность к lifecycle release.
 
 # Annex E. VPN-GATE-managed host state components
 
