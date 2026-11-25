@@ -90,3 +90,5 @@ ADD_TAG	ng3-snapshot-generalized-r8-requirement-closure-source	b371ca8e65cdd121f
 DEL_BRANCH	ng3-wireguard-r8-requirement-closure-cdc-20261125
 ADD_TAG	ng3-snapshot-managed-device-traffic-demand-research-source	90010833aca55499741b64948da49734397ed951	Managed Device traffic-driven presence research and product-decision boundary.
 DEL_BRANCH	ng3-managed-device-traffic-demand-research-cdc-20261125
+ADD_TAG	ng3-snapshot-future-possibilities-project-memory-source	8e7e871fdb954f43f5d05c80dbb0544f6595ae69	Project-level future-possibilities memory index and traffic-demand reclassification.
+DEL_BRANCH	ng3-future-possibilities-config-demand-cdc-20261125
