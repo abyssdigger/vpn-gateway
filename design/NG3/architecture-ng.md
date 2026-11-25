@@ -1982,7 +1982,7 @@ dependency синхронизирует новый current context, но бло�
 A.007 observation сходится A.004 route-priority state; ordinary/reserve stickiness остаётся
 отдельным Manager state и не превращается в старое evidence.
 
-**Evidence:** `EV-00210`.
+**Evidence:** `EV-00210`, `EV-00280`.
 
 ## [A.008] RuntimeStatusAgent
 
@@ -2908,7 +2908,7 @@ Manager изменяемой peer/group realization одного явно упр
 - `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`, `EV-00240`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`, `EV-00240`, `EV-00280`
 
 API
 
