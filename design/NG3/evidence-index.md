@@ -578,3 +578,17 @@ thereby exposed a stale-project-snapshot condition. The final accepted tree rest
 release record exactly and instead makes the ownership/freeze rule explicit in the general
 methodology.
 
+## EV-00270 — architecture coverage-index vocabulary normalization
+
+**Status:** accepted  
+**Scope:** canonical component-edge vocabulary (`Implements` / `Constrained by`) plus a
+neutral `Coverage nodes` label for the non-component closed requirement/constraint coverage
+index; preservation of explicit Rust-boundary coverage after removal of the standalone
+`Covers` marker.  
+**Model:** `design/requirements-model.md` §14.  
+**Review:** `design/reviews/NG3-2026-11-25-coverage-label-cleanup-review.md`.  
+**Executable evidence:** GitHub Actions run `45596378111`, unit job
+`139143419624` — PASS on source
+`16e62c5cc43f79fe31729aad34908821f09db747`; actual-main lineage run
+`45596377672` — PASS.
+
