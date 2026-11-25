@@ -30,3 +30,5 @@ ADD_TAG	ng3-snapshot-managed-device-runtime-composition-source	38e7fbf935ce331d3
 DEL_BRANCH	ng3-managed-device-runtime-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-peer-probe-reuse-boundary-source	5ece4aba50830a6b98e993253597d820df32ffb2	WireGuard D.002 peer-probe reuse boundary.
 DEL_BRANCH	ng3-wireguard-d002-cdc-20261125
+ADD_TAG	ng3-snapshot-production-d003-wireguard-ownership-source	534d8d4f14bc50ea7b6a1fa162699f98f1c8de66	Production D.003 WireGuard peer ownership.
+DEL_BRANCH	ng3-wireguard-d003-cdc-20261125
