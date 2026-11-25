@@ -75,6 +75,7 @@ def main() -> None:
                 f"""
 [device.wg-main]
 enabled = true
+use_outbound_nat = true
 [device.wg-main.managed_vpn]
 kind = "wireguard"
 interface = "wg0"
