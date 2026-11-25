@@ -5,6 +5,21 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-25 — Explicitly managed Device base lifecycle materialized
+
+Release-1 runtime now accepts canonical `managed_vpn` intent and composes A.012 over the
+production D.001 WireGuard Adapter. Managed base realization is converged after creation of the
+Private network and before fresh VPN-path observation, is rechecked before normal dependent
+reconciliation, and publishes desired/confirmed generation truth into A.008.
+
+Shutdown now has an explicit ownership order: forwarding is contained, product-owned
+payload/return-affinity dependencies are confirmed removed, A.012 confirms managed Device
+absence, and only then may A.001 destroy the Private network. Failure to prove dependency
+release or managed absence leaves teardown unstarted rather than manufacturing lifecycle
+success. Kernel evidence is recorded as EV-00090. WireGuard peer selection/shared-prefix
+ownership remains the separate R8 D.002/D.003 frontier.
+
+
 ## 2026-11-24 — Release scope gate corrected; full Protective mode materialized
 
 The first 0.1.0 publication-preparation attempt is explicitly failed because it had no prior

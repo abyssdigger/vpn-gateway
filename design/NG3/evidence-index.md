@@ -159,3 +159,27 @@ failures become problem state rather than false confirmation.
 This evidence does not claim runtime materialization. Alpha startup/reload/stop wiring,
 dependency-release confirmation from current product policy, and A.008 publication remain
 explicit follow-up work.
+
+## EV-00090 — A.012 managed Device runtime composition
+
+**Status:** accepted / full A.012 materialization  
+**Scope:** Release-1 runtime composition of explicit managed-Device base lifecycle over D.001:
+startup after Private-network creation and before fresh path observation; current
+desired/confirmed generation projection into A.008; product-owned dependency release before
+managed absence; and confirmed managed absence before Private-network teardown.  
+**Implementation:** `design/NG3/code/python/rou/alpha_runtime.py`,
+`design/NG3/code/python/rou/controller_startup.py`,
+`design/NG3/code/python/rou/runtime_status.py`.  
+**Integration evidence:** `design/NG3/code/python/rou/tests/integration_managed_device_runtime.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-managed-device-runtime-composition-review.md`.  
+**Executable evidence:** GitHub Actions run `45519755877`: `unit` job
+`138888449127` — PASS; `linux-alpha-smoke` job `138888449063` — PASS;
+`linux-managed-device-runtime` job `138888449316` — PASS on source
+`1fd69c02f3d8e3e520076dc0cdaf06343dca5fff`.
+
+The kernel integration confirms that the A.012-created WireGuard interface is part of the first
+fresh startup path observation, that A.008 receives the exact current base generation, that
+owned payload/return-affinity dependencies are removed before A.012 is allowed to converge
+absent, and that the managed namespace is destroyed only after confirmed managed-Device
+absence. The runtime stop path deliberately does not invoke Private-network teardown when
+dependency release or A.012 absence is unconfirmed.
