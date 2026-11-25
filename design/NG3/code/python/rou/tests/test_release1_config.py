@@ -938,7 +938,7 @@ device_order = ["wg-main"]
             ("edge-a", "edge-b"),
         )
         self.assertEqual(
-            managed.shared_prefixes,
+            cfg.wireguard_groups[("corp", "wg-main")].prefixes,
             (ipaddress.IPv4Network("0.0.0.0/0"),),
         )
         selector = cfg.structural.devices["wg-main"].expected_interfaces[0]
@@ -1106,7 +1106,7 @@ destinations = ["0.0.0.0/0"]
 device_order = ["wg"]
 """)
         self.assertEqual(
-            broad.managed_vpns["wg"].shared_prefixes,
+            broad.wireguard_groups[("all", "wg")].prefixes,
             (ipaddress.IPv4Network("0.0.0.0/0"),),
         )
 

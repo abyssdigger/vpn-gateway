@@ -41,7 +41,7 @@ def keypair() -> tuple[str, str]:
 
 def desired_state(cfg, interface, owner_id):
     managed = cfg.managed_vpns["wg-main"]
-    shared = managed.shared_prefixes
+    shared = cfg.wireguard_groups[("corp", "wg-main")].prefixes
     peers = []
     for peer in managed.peers:
         networks = [IPv4Network(f"{peer.probe_target}/32")]
