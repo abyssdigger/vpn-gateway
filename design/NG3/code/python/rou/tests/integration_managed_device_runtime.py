@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from ipaddress import IPv4Address, IPv4Interface
+from ipaddress import IPv4Address, IPv4Interface, IPv4Network
 import os
 from pathlib import Path
 import subprocess
@@ -19,6 +19,8 @@ from rou.alpha_runtime import (
     reconcile_alpha_availability_wireguard_once,
     release_alpha_undemanded_devices,
 )
+from rou.binding import PathBinding
+from rou.interface_identity import InterfaceIdentity
 from rou.controller_startup import ControllerStartupStatus, start_controller_once
 from rou.controller_stop import ControllerStopStatus, stop_controller_once
 from rou.icmp_probe_driver import (
@@ -39,7 +41,12 @@ from rou.managed_wireguard_adapter import (
     LinuxManagedWireGuardAdapter,
     ManagedWireGuardState,
 )
-from rou.wireguard_peer_ownership import WireGuardPeerOwnershipEnforcer
+from rou.wireguard_peer_ownership import (
+    WireGuardPeerAllowedIPs,
+    WireGuardPeerOwnershipDesired,
+    WireGuardPeerOwnershipEnforcer,
+    WireGuardPeerOwnershipResult,
+)
 from rou.wireguard_peer_runtime import WireGuardPeerRuntimeCoordinator
 from rou.release1_config import CurrentConfig
 from rou.runtime_status import RuntimeStatusAgent, build_configured_intent_status
@@ -228,6 +235,20 @@ warm_paths = 1
             assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-reserve"}
             print("A012_RUNTIME_RESERVE_AFTER_FAILED_ORDINARY=PASS")
 
+            # Independently seed a valid old dynamic D.003 payload ownership
+            # state, even though the isolated test has no responsive remote peer.
+            reserve = adapter.observe("wg-reserve")
+            old_owner = WireGuardPeerOwnershipDesired(
+                "wg-reserve", reserve.interface,
+                (WireGuardPeerAllowedIPs(
+                    peer_public, tuple(sorted((
+                        IPv4Network("10.201.0.2/32"),
+                        IPv4Network("10.77.0.0/24"),
+                    )))
+                ),),
+            )
+            assert ownership.converge(old_owner).confirmed
+
             # Recover ordinary presence with reserve still physically present.
             key_path.chmod(0o600)
             recovery = converge_alpha_managed_device_presence(prepared, domain, runner, manager)
@@ -249,7 +270,15 @@ warm_paths = 1
             assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-main"}
             # A different observed generation is not evidence that the
             # already-applied replacement policy remains valid.
-            with patch("rou.alpha_runtime._observe_presence_bindings", return_value=()):
+            original_binding = prepared.last_bindings[0]
+            changed = PathBinding(
+                original_binding.path_id,
+                InterfaceIdentity(
+                    original_binding.endpoint.ifname,
+                    original_binding.endpoint.ifindex + 10000,
+                ),
+            )
+            with patch("rou.alpha_runtime._observe_presence_bindings", return_value=(changed,)):
                 _, released = release_alpha_undemanded_devices(
                     prepared, domain, runner, manager, recovery, ownership,
                     dependencies_confirmed=True,
@@ -257,11 +286,37 @@ warm_paths = 1
             assert not released
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
             print("A012_RUNTIME_STALE_REPLACEMENT_BLOCKS_RELEASE=PASS")
-            released_realizations, released = release_alpha_undemanded_devices(
-                prepared, domain, runner, manager, recovery, ownership,
-                dependencies_confirmed=True,
-            )
+            with patch.object(
+                WireGuardPeerOwnershipEnforcer, "converge",
+                return_value=WireGuardPeerOwnershipResult(False, False, None, "test failure"),
+            ):
+                failed_realizations, released = release_alpha_undemanded_devices(
+                    prepared, domain, runner, manager, recovery, ownership,
+                    dependencies_confirmed=True,
+                )
+            assert not released
+            assert _managed_device_problem(failed_realizations) is not None
+            assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
+            print("A012_RUNTIME_PEER_RELEASE_FAILURE_BLOCKS_STOP=PASS")
+
+            # Observe exact kernel AllowedIPs immediately before the real D.001
+            # delete. Do not substitute an assertion on the desired projection.
+            original_stop = LinuxManagedWireGuardAdapter.converge_absent
+
+            def checked_stop(instance, device_id):
+                if device_id == "wg-reserve":
+                    allowed = run("ip", "netns", "exec", NS, "wg", "show", "wg1", "allowed-ips")
+                    assert "10.77.0.0/24" not in allowed, allowed
+                    assert "10.201.0.2/32" in allowed, allowed
+                return original_stop(instance, device_id)
+
+            with patch.object(LinuxManagedWireGuardAdapter, "converge_absent", checked_stop):
+                released_realizations, released = release_alpha_undemanded_devices(
+                    prepared, domain, runner, manager, recovery, ownership,
+                    dependencies_confirmed=True,
+                )
             assert released
+            print("A012_RUNTIME_DYNAMIC_PEER_DEPENDENCY_REMOVED_BEFORE_STOP=PASS")
             assert _managed_device_problem(released_realizations) is None
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.ABSENT
             final_payload = reconcile_alpha_payload_once(prepared, domain, runner)
