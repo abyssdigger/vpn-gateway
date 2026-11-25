@@ -7,7 +7,10 @@ import unittest
 from rou.binding import LogicalPathId
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
-from rou.network_policy_layout import ProbePolicyOwner
+from rou.network_policy_layout import (
+    ProbePolicyOwner,
+    WireGuardPeerProbeOwner,
+)
 from rou.nft_namespace_inventory import (
     NG3_NFT_OWNER_COMMENT,
     NftNamespaceObject,
@@ -22,7 +25,12 @@ from rou.probe_policy import (
     ProbeNetworkPolicyDesiredState,
     ProbeRuleSpec,
 )
-from rou.probe_precondition import verify_probe_execution_precondition
+from rou.probe_precondition import (
+    ProbeExecutionContextKey,
+    ProbeExecutionPrecondition,
+    require_probe_execution_context,
+    verify_probe_execution_precondition,
+)
 from rou.structural_policy_mutation import StructuralPolicyPhysicalSnapshot
 from rou.structural_routing_inventory import (
     ObservedManagedRule,
@@ -152,6 +160,39 @@ class ProbeExecutionPreconditionTests(unittest.TestCase):
         )
         self.assertTrue(result.confirmed)
         self.assertEqual(result.interfaces_stable_snapshot, (EP,))
+
+    def test_generic_execution_gate_accepts_distinct_peer_owner(self):
+        peer_owner = WireGuardPeerProbeOwner("device", "edge-a")
+        context = ProbeExecutionContextKey(
+            peer_owner,
+            ProbeRuleSpec(
+                owner=peer_owner,
+                priority=0x2000,
+                process_uid=4242,
+                endpoint=EP,
+                target=TARGET,
+                table=0xC0000000,
+            ).mechanism,
+            TARGET,
+            EP,
+        )
+        precondition = ProbeExecutionPrecondition(
+            routing=type("Routing", (), {"confirmed": True})(),
+            local=type("Local", (), {"desired_confirmed": True})(),
+            interfaces_stable_snapshot=(EP,),
+            contexts=frozenset({context}),
+        )
+        require_probe_execution_context(precondition, context)
+        with self.assertRaisesRegex(RuntimeError, "differs"):
+            require_probe_execution_context(
+                precondition,
+                ProbeExecutionContextKey(
+                    peer_owner,
+                    context.mechanism,
+                    IPv4Address("198.51.100.8"),
+                    EP,
+                ),
+            )
 
     def test_routing_and_local_owner_sets_must_match(self):
         desired = ProbeNetworkPolicyDesiredState(

@@ -2258,7 +2258,7 @@ lower network-policy domain Private network. Общая physical realization н�
 
 **Implements:**
 - `VPNG-U001-R1.R1` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`none`]
+- `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-U001-R1.R3.R6.R2` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
@@ -2315,7 +2315,9 @@ Architectural decisions
 11. `Проверка WireGuard-пира имеет отдельного смыслового владельца`
    *Проверка постоянного внутритуннельного /32 конкретного WireGuard-пира может использовать ту же нижнюю Machinery маршрутизации и локального допуска только при отдельной области владения и точном текущем `PathBinding`. Это состояние служит D.002 для выбора пира, не является свидетельством доступности Profile, не меняет политику Profile и не создает разрешений для полезного трафика.*
 
-**Пробел материализации:** Отдельная owner-scoped политика маршрутизации и локального допуска для проверки WireGuard-пиров еще не материализована.
+**Материализация:** lower probe owner теперь различает A.007 `ProbePolicyOwner(profile_id, LogicalPathId)` и отдельный `WireGuardPeerProbeOwner(device_id, peer_id)`; общий resource layout сохраняет эти owner scopes раздельными. `wireguard_peer_probe_policy.py` проецирует permanent peer /32 через уже подтвержденный current path в ту же физическую route/RPDB/local-admission форму, что и A.007, не создавая нового `LogicalPathId`. Общий `ProbeExecutionPrecondition` и exact execution gate принимают этот отдельный semantic owner.
+
+**Пробел материализации:** peer-probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence, потому что D.002 Manager пока не создает current peer-probe demand. Поэтому component-local вклад C.001 в R8 остается [`partial`], несмотря на готовую owner/projection/precondition seam.
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2609,7 +2611,7 @@ remote availability semantics.
 
 **Implements:**
 - `VPNG-U003-R3.R6` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`none`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U003-R3.R6.R1` — [`full`]
 - `VPNG-U003-R3.R6.R3` — [`full`]
 - `VPNG-U003-R3.R6.R3.R1` — [`full`]
@@ -2644,7 +2646,7 @@ Architectural decisions
 7. `Повторное использование точного контракта одной проверки`
    *D.002 вправе использовать этот Driver для проверки конкретного WireGuard-пира только после материализации отдельного предусловия с собственным владельцем. Совпадает полный технический контракт: одна точная цель через один точный текущий endpoint, ограниченный срок выполнения и технический результат `reply/no_reply/local_error`. Смысл результата как признака пригодности WireGuard-пира определяет D.002, а не A.007.*
 
-**Пробел материализации:** Driver еще не подключен к D.002 и не получает отдельное подтвержденное предусловие проверки WireGuard-пира.
+**Материализация:** `LinuxIcmpProbeDriver.execute(IcmpProbePhysicalContext)` принимает только exact current `InterfaceIdentity` и IPv4 target и возвращает тот же bounded `reply/no_reply/local_error` technical result без Profile/path semantic identity. Существующий A.007 `check(ProbeObservationContext)` сохранен как совместимый wrapper и unit-equivalence подтверждает идентичную physical command shape. D.002 сможет вызывать тот же Driver после отдельного C.001 peer-probe precondition; выбор пира и смысл результата в C.008 не перенесены.
 
 ## [C.009] OrdinarySidePortalLifecycle
 

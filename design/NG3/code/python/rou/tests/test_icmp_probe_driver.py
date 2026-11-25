@@ -6,6 +6,7 @@ import unittest
 from rou.binding import LogicalPathId
 from rou.icmp_probe_driver import (
     IcmpProbeExecutionPolicy,
+    IcmpProbePhysicalContext,
     LinuxIcmpProbeDriver,
     ProbeCommandError,
     ProbeCommandResult,
@@ -48,6 +49,10 @@ def context():
     )
 
 
+def physical_context():
+    return IcmpProbePhysicalContext(EP, TARGET)
+
+
 def driver(runner):
     return LinuxIcmpProbeDriver(
         runner,
@@ -86,6 +91,38 @@ class IcmpProbeDriverTests(unittest.TestCase):
                 )
             ],
         )
+
+    def test_physical_execution_context_uses_identical_command_shape(self):
+        runner = FakeRunner(ProbeCommandResult(0, "ok", ""))
+        result = driver(runner).execute(physical_context())
+        self.assertIs(result.outcome, ProbeTechnicalOutcome.REPLY)
+        self.assertEqual(
+            runner.calls,
+            [
+                (
+                    (
+                        "ip", "netns", "exec", "managed",
+                        "setpriv",
+                        "--reuid", "4242",
+                        "--regid", "4242",
+                        "--clear-groups",
+                        "ping",
+                        "-n",
+                        "-I", "vpn0",
+                        "-c", "1",
+                        "-W", "3",
+                        "198.51.100.7",
+                    ),
+                    5,
+                )
+            ],
+        )
+
+    def test_physical_execution_context_validates_endpoint_and_target(self):
+        with self.assertRaises(ValueError):
+            IcmpProbePhysicalContext("vpn0", TARGET)
+        with self.assertRaises(ValueError):
+            IcmpProbePhysicalContext(EP, "198.51.100.7")
 
     def test_exit_zero_maps_to_reply(self):
         value = driver(

@@ -213,9 +213,42 @@ class ProbePolicyOwner:
             )
 
 
+@dataclass(frozen=True, order=True, slots=True)
+class WireGuardPeerProbeOwner:
+    device_id: str
+    peer_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.device_id, str) or not self.device_id:
+            raise NetworkPolicyLayoutError(
+                "WireGuardPeerProbeOwner.device_id must be non-empty"
+            )
+        if not isinstance(self.peer_id, str) or not self.peer_id:
+            raise NetworkPolicyLayoutError(
+                "WireGuardPeerProbeOwner.peer_id must be non-empty"
+            )
+
+
+ProbeSemanticOwner = ProbePolicyOwner | WireGuardPeerProbeOwner
+
+
+def is_probe_semantic_owner(value: object) -> bool:
+    return isinstance(value, (ProbePolicyOwner, WireGuardPeerProbeOwner))
+
+
+def probe_owner_sort_key(owner: ProbeSemanticOwner) -> tuple[object, ...]:
+    if isinstance(owner, ProbePolicyOwner):
+        return (0, owner.profile_id, owner.path_id)
+    if isinstance(owner, WireGuardPeerProbeOwner):
+        return (1, owner.device_id, owner.peer_id)
+    raise NetworkPolicyLayoutError(
+        "probe owner must be ProbePolicyOwner or WireGuardPeerProbeOwner"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ProbeRoutingDemand:
-    owner: ProbePolicyOwner
+    owner: ProbeSemanticOwner
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,7 +271,7 @@ class PayloadPolicyAllocation:
 
 @dataclass(frozen=True, slots=True)
 class ProbePolicyAllocation:
-    owner: ProbePolicyOwner
+    owner: ProbeSemanticOwner
     table: int
     rule_priority: int
 
@@ -266,7 +299,7 @@ def allocate_network_policy_layout(
     probes = tuple(
         sorted(
             probe_routing_demands,
-            key=lambda demand: demand.owner,
+            key=lambda demand: probe_owner_sort_key(demand.owner),
         )
     )
     _validate_semantic_inputs(profiles, probes)
@@ -380,11 +413,15 @@ def _validate_semantic_inputs(
                 )
             destinations.add(destination)
 
-    seen_probe_owners: set[ProbePolicyOwner] = set()
+    seen_probe_owners: set[ProbeSemanticOwner] = set()
     for demand in probes:
         if not isinstance(demand, ProbeRoutingDemand):
             raise NetworkPolicyLayoutError(
                 "probe_routing_demands must contain ProbeRoutingDemand"
+            )
+        if not is_probe_semantic_owner(demand.owner):
+            raise NetworkPolicyLayoutError(
+                "probe routing demand has unsupported semantic owner"
             )
         if demand.owner in seen_probe_owners:
             raise NetworkPolicyLayoutError(

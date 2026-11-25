@@ -11,6 +11,7 @@ from rou.network_policy_layout import (
     NumericResourcePool,
     ProbePolicyOwner,
     ProbeRoutingDemand,
+    WireGuardPeerProbeOwner,
     RouteMetricPlatformSpace,
     allocate_network_policy_layout,
 )
@@ -154,6 +155,26 @@ class NetworkPolicyLayoutTests(unittest.TestCase):
         )
         self.assertTrue(
             all(item.table < 2000 for item in layout.payload)
+        )
+
+    def test_probe_resources_support_distinct_peer_owner_without_path_identity(self):
+        availability = ProbePolicyOwner("corp", A)
+        peer = WireGuardPeerProbeOwner("wg", "edge-a")
+        layout = allocate_network_policy_layout(
+            (),
+            (
+                ProbeRoutingDemand(peer),
+                ProbeRoutingDemand(availability),
+            ),
+            platform(),
+        )
+        self.assertEqual(
+            [item.owner for item in layout.probe],
+            [availability, peer],
+        )
+        self.assertEqual(
+            [(item.table, item.rule_priority) for item in layout.probe],
+            [(2000, 100), (2001, 101)],
         )
 
     def test_payload_capacity_failure_happens_before_partial_result(self):

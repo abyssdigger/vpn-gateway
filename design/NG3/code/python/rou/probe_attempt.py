@@ -8,6 +8,7 @@ from .network_policy_layout import ProbePolicyOwner
 from .probe_precondition import (
     ProbeExecutionContextKey,
     ProbeExecutionPrecondition,
+    require_probe_execution_context,
 )
 from .probe_runtime import (
     AvailabilityProbeRuntime,
@@ -60,14 +61,10 @@ def execute_probe_attempt_once(
         target=context.intent.target,
         endpoint=context.endpoint,
     )
-    if context_key not in precondition.contexts:
-        raise ProbeAttemptError(
-            "current probe context differs from confirmed execution precondition"
-        )
-    if context.endpoint not in precondition.interfaces_stable_snapshot:
-        raise ProbeAttemptError(
-            "probe context endpoint is absent from readiness interface snapshot"
-        )
+    try:
+        require_probe_execution_context(precondition, context_key)
+    except RuntimeError as exc:
+        raise ProbeAttemptError(str(exc)) from exc
 
     observation = driver.check(context)
     return runtime.accept_result(
