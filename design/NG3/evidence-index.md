@@ -183,3 +183,24 @@ owned payload/return-affinity dependencies are removed before A.012 is allowed t
 absent, and that the managed namespace is destroyed only after confirmed managed-Device
 absence. The runtime stop path deliberately does not invoke Private-network teardown when
 dependency release or A.012 absence is unconfirmed.
+
+## EV-00100 — production D.003 WireGuard peer ownership Enforcer
+
+**Status:** accepted / full D.003 materialization  
+**Scope:** exact full-state `AllowedIPs` observation and convergence for one current D.001-owned
+WireGuard interface; rejection of stale interface generation or unexpected/incomplete peer set;
+single complete runtime owner-state application; and fresh exact postcondition confirmation.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_ownership.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_peer_ownership.py`.  
+**Integration evidence:** `design/NG3/code/python/rou/tests/integration_wireguard_peer_ownership.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d003-peer-ownership-review.md`.  
+**Executable evidence:** GitHub Actions run `45552662807`: `unit` job
+`138997218110` — PASS; dedicated `linux-wireguard-peer-ownership` job
+`138997218400` — PASS on source
+`dbb0d80381e875b7092684eebecba5dafd69c4f3`.
+
+The kernel integration confirms exact initial ownership by peer A, full owner-state transfer to
+peer B, preservation of both permanent peer-specific probe /32 prefixes, and unchanged current
+WireGuard interface identity across the transfer. D.003 does not choose a peer, publish a
+peer-realization generation, or claim Profile availability; those remain D.002/downstream
+responsibilities.
