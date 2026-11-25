@@ -82,6 +82,23 @@ class FakeLifecycle:
             ),
         )
 
+    def confirm_present(self, device_id, desired):
+        self.calls.append(("confirm", device_id))
+        current = self.state.get(device_id)
+        if current is None or current.state is ManagedWireGuardState.ABSENT:
+            return ManagedWireGuardObservation(
+                device_id,
+                ManagedWireGuardState.ABSENT,
+            )
+        if current.interface is None:
+            raise RuntimeError("current interface is unconfirmed")
+        return ManagedWireGuardObservation(
+            device_id,
+            ManagedWireGuardState.PRESENT,
+            interface=current.interface,
+            confirmed_generation=self.generation,
+        )
+
     def converge_present(self, device_id, desired):
         self.calls.append(("present", device_id))
         if self.fail_present:
@@ -135,7 +152,7 @@ class ManagedDeviceManagerTests(unittest.TestCase):
             managed_config(), desired_device_ids=frozenset()
         )
         self.assertIs(result[0].desired_state, ManagedDeviceDesiredState.ABSENT)
-        self.assertEqual(lifecycle.calls, [("observe", "wg-main")])
+        self.assertEqual(lifecycle.calls, [("confirm", "wg-main")])
 
     def test_external_device_cannot_enter_explicit_demand(self):
         lifecycle = FakeLifecycle()
@@ -157,7 +174,31 @@ class ManagedDeviceManagerTests(unittest.TestCase):
         item = manager.reconcile(managed_config(referenced=False), desired_device_ids=frozenset())[0]
         self.assertIs(item.desired_state, ManagedDeviceDesiredState.ABSENT)
         self.assertTrue(item.waiting_for_dependencies)
-        self.assertEqual(lifecycle.calls, [("observe", "wg-main")])
+        self.assertEqual(item.confirmed_generation, "gen-a")
+        self.assertEqual(item.confirmed_interface, InterfaceIdentity("wg0", 7))
+        self.assertEqual(lifecycle.calls, [("confirm", "wg-main")])
+
+    def test_undemanded_present_device_requires_exact_read_only_confirmation(self):
+        lifecycle = FakeLifecycle()
+        lifecycle.state["wg-main"] = ManagedWireGuardObservation(
+            "wg-main",
+            ManagedWireGuardState.PRESENT,
+            interface=InterfaceIdentity("wg0", 7),
+        )
+
+        def rejected(device_id, desired):
+            lifecycle.calls.append(("confirm", device_id))
+            raise RuntimeError("generation mismatch")
+
+        lifecycle.confirm_present = rejected
+        item = ManagedDeviceManager(lifecycle).reconcile(
+            managed_config(referenced=False),
+            desired_device_ids=frozenset(),
+        )[0]
+        self.assertIsNone(item.confirmed_state)
+        self.assertIsNone(item.confirmed_interface)
+        self.assertIn("generation mismatch", item.problem or "")
+        self.assertEqual(lifecycle.calls, [("confirm", "wg-main")])
 
     def test_dependency_release_allows_confirmed_absence(self):
         lifecycle = FakeLifecycle()
