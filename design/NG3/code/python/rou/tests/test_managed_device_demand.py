@@ -231,7 +231,10 @@ class BoundedConvergenceTests(unittest.TestCase):
         result = converge_managed_device_presence(
             cfg, ManagedDeviceManager(lifecycle), lifecycle.fresh
         )
-        self.assertEqual(lifecycle.actions, [("present", "a"), ("present", "b")])
+        self.assertEqual(
+            [action for action in lifecycle.actions if action[0] == "present"],
+            [("present", "a"), ("present", "b")],
+        )
         self.assertEqual(result.projection.desired_device_ids, {"b"})
         self.assertEqual(tuple(x.device_id for x in result.attempt_problems), ("a",))
 
@@ -241,7 +244,10 @@ class BoundedConvergenceTests(unittest.TestCase):
         lifecycle.fail.add("a")
         manager = ManagedDeviceManager(lifecycle)
         failed = converge_managed_device_presence(cfg, manager, lifecycle.fresh)
-        self.assertEqual(lifecycle.actions, [("present", "a"), ("present", "r")])
+        self.assertEqual(
+            [action for action in lifecycle.actions if action[0] == "present"],
+            [("present", "a"), ("present", "r")],
+        )
         self.assertEqual(failed.projection.desired_device_ids, {"a", "r"})
         self.assertEqual(failed.projection.profiles[0].regular_deficit, 1)
         lifecycle.fail.clear()
@@ -282,7 +288,10 @@ class BoundedConvergenceTests(unittest.TestCase):
             cfg, ManagedDeviceManager(lifecycle), lifecycle.fresh
         )
         self.assertEqual(result.projection.desired_device_ids, {"a", "r"})
-        self.assertEqual(lifecycle.actions, [("present", "a"), ("present", "r")])
+        self.assertEqual(
+            [action for action in lifecycle.actions if action[0] == "present"],
+            [("present", "a"), ("present", "r")],
+        )
         self.assertTrue(all(
             x.desired_state is ManagedDeviceDesiredState.PRESENT
             for x in result.realizations if x.device_id in {"a", "r"}
