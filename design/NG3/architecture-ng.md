@@ -1950,7 +1950,7 @@ Architectural decisions
    *Agent не может сделать remote path healthy/unhealthy; он только организует observation и публикует evidence.*
 
 2. `Контекст привязан к поколениям реализации`
-   *Контекст наблюдения включает точный текущий логический путь, поколение endpoint и, когда интеграция меняет фактическую транспортную реализацию за тем же endpoint, поколение этой реализации. Для управляемого WireGuard смена выбранного пира делает прежнее свидетельство доступности Profile устаревшим, даже если `LogicalPathId` и `wg0` остались прежними.*
+   *Контекст наблюдения включает точный текущий логический путь, поколение endpoint и, когда интеграция меняет фактическую транспортную реализацию за тем же endpoint, поколение этой реализации. Для управляемого WireGuard применимый confirmed Device-wide D.002 generation является частью currentness identity A.007 context: его смена делает прежнее свидетельство доступности Profile устаревшим, даже если `LogicalPathId`, `wg0` и ifindex остались прежними. Отсутствие D.002 dependency для обычного/non-D.002 path и наличие применимой, но неподтвержденной D.002 generation являются разными состояниями; во втором случае A.007 не может принять remote evidence как current.*
 
 3. `No local-failure fabrication`
    *Local execution/precondition failure возвращает `no_evidence`, если он сам не доказывает remote path failure.*
@@ -1961,6 +1961,9 @@ Architectural decisions
 5. `Bounded scheduling state`
    *Timers, current generation tokens и bounded in-flight diagnostics допустимы; unbounded observation history и durable retry journal не требуются.*
 
+6. `Ownership generation precedes evidence acceptance`
+   *Для A.007 subject, зависящего от recoverable WireGuard group, один normal reconciliation обязан сначала подтвердить полный C.001 probe-routing lower state, затем выполнить D.002 reconciliation и получить applicable confirmed D.002 generation, и только после этого синхронизировать A.007 context, принимать fresh A.007 evidence и сходить основанный на нем route-priority state. Недопустимо сначала применить A.007 verdict к effective order, затем подтвердить смену D.002 owner и оставить этот verdict действующим до следующего timer tick. Эквивалентная реализация через немедленную invalidate+fresh re-observe допустима только если между D.002 confirmation и повторным A.007 postcondition продукт не публикует и не использует state, опирающийся на старое evidence.*
+
 **Материализация:** production alpha теперь получает A.007 intents как semantic subset одного
 полного A.007+D.002 probe-plane desired union. Нижний runtime сначала materializes полный
 accepted union, а A.007 observation запрашивает scoped readiness только своих
@@ -1970,8 +1973,12 @@ owners поэтому не превращаются в A.007 evidence даже �
 **Evidence:** `EV-00210`.
 
 **Пробел материализации:** Текущий A.007 context generation ещё не включает применимое
-D.002 realization generation. Поэтому после смены group -> peer ownership прежнее Profile
-availability evidence пока не обязано стать stale автоматически.
+D.002 realization generation, а `linux_availability_cycle.py` пока выполняет A.007
+observation/priority до D.002 trigger alpha runtime. Для R8.R6 implementation должна разделить
+full probe-routing preparation от A.007 observation: accepted ordering —
+`C.001 probe-routing prepare -> D.002 reconcile/generation -> A.007 context sync + fresh
+observation -> A.004 priority convergence`. Поэтому прежнее Profile evidence пока ещё не
+обязано стать stale атомарно относительно подтвержденной смены group owner.
 
 ## [A.008] RuntimeStatusAgent
 
@@ -2980,9 +2987,11 @@ failure; D.002 problem дает DEGRADED, сохраняя подтвержде�
 
 **Пробел материализации:** runtime trigger/status composition закрыта `EV-00240`. Общий R8
 остается [`partial`] только из-за `VPNG-U001-R1.R3.R8.R6`: A.007 availability evidence
-еще не включает применимое D.002 generation в currentness identity и потому требует отдельной
-инвалидации после подтвержденной смены group ownership. D.003 split-group kernel acceptance
-закрыт EV-00190.
+еще не включает применимое D.002 generation в currentness identity. Для закрытия принят
+ordering `C.001 probe-routing prepare -> D.002 reconcile/generation -> A.007 context sync +
+fresh observation -> A.004 priority convergence`; неподтвержденная применимая D.002
+generation должна блокировать принятие A.007 evidence, а отсутствие D.002 dependency является
+отдельным нормальным случаем. D.003 split-group kernel acceptance закрыт EV-00190.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
