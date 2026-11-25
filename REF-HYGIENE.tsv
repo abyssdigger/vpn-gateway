@@ -88,3 +88,5 @@ ADD_TAG	ng3-snapshot-managed-device-r7-closure-source	944ef02d847c3b34e93ec60c5e
 DEL_BRANCH	ng3-managed-device-r7-closure-cdc-20261125
 ADD_TAG	ng3-snapshot-generalized-r8-requirement-closure-source	b371ca8e65cdd121f1ea3a16fdbd6d0af7621f7c	Generalized managed WireGuard R8 requirement family accepted closed.
 DEL_BRANCH	ng3-wireguard-r8-requirement-closure-cdc-20261125
+ADD_TAG	ng3-snapshot-managed-device-traffic-demand-research-source	90010833aca55499741b64948da49734397ed951	Managed Device traffic-driven presence research and product-decision boundary.
+DEL_BRANCH	ng3-managed-device-traffic-demand-research-cdc-20261125
