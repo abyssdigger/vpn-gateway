@@ -696,7 +696,7 @@ returned to administrator control.
 `VPNG-D001-R1.R1.R7.R1`, `VPNG-D001-R1.R1.R8.R1`,
 `VPNG-D001-R1.R1.R8.R2`, `VPNG-D001-R3`, `VPNG-D001-R3.R1`,
 `VPNG-D001-R3.R1.R1`, `VPNG-D001-R3.R2`, `VPNG-D001-R3.R3`,
-`VPNG-D001-R3.C1`.
+`VPNG-D001-R3.C1`, `VPNG-M001-R4.C1`, `VPNG-M001-R4.C2`.
 
 **Architecture coverage:** the Space/component decomposition and `design/component-model.md`
 localize responsibilities and lower mechanism boundaries; §2.9 implementation trace,
@@ -706,8 +706,10 @@ supported VPN applicability gates live in `VPN external ends`; §2.9.2 defines e
 lower reuse rather than generic frameworks; §2.9.3 defines the production-language boundary.
 Requirement semantic changes therefore require re-review of their indexed architecture
 coverage before implementation proceeds. Release-model process obligations
-`VPNG-D001-R3`, `.R1`, `.R2`, `.R3` and `.C1` are materialized by
-`PROJECT-CONVENTIONS.md` §10; runtime observability for `VPNG-D001-R3.R1.R1` belongs to
+`VPNG-D001-R3`, `.R1`, `.R2`, `.R3`, `.C1`, `VPNG-M001-R4.C1` and
+`VPNG-M001-R4.C2` are materialized by `PROJECT-CONVENTIONS.md` §10; the M-class constraints
+classify the operator/maintenance beneficiary of the compatibility lifecycle rather than the
+actor implementing the release rule; runtime observability for `VPNG-D001-R3.R1.R1` belongs to
 A.008 and is [`full`] for Release-1 / 0.1.0: the canonical root `VERSION` value is
 published by the supported JSON and compact-text current-status presentations.
 
