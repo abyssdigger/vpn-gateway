@@ -1748,8 +1748,9 @@ typed `CurrentConfig.wireguard_groups` напрямую, поэтому преж
 По `VPNG-U001-R1.R3.R7.R3` вклад A.002 остается [`partial`], а архитектурный контракт
 `VPNG-U001-R1.R3.R7.R3.R1` закрыт полностью: current surface использует `warm_paths = 0 | N | "all"`,
 при этом frozen Release-1 parser не обязан приобретать новое поле. Current ConfigurationAdapter
-должен снять `warm_paths` до вызова historical Release-1 normalization и опубликовать отдельный
-typed warm-target contract.
+снимает `warm_paths` до вызова historical Release-1 normalization и публикует
+нормализованный `CurrentConfig.warm_paths` с проверкой ordinary capacity и
+вычисляемым `CurrentConfig.warm_target(profile_id)`.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -2281,9 +2282,10 @@ Architectural decisions
 **Материализация:** Текущий `ManagedDeviceManager` использует
 `CurrentConfig.structural.active_device_ids`: каждый enabled managed Device, упомянутый хотя
 бы одним enabled Profile, считается требуемым. Это точно материализует только новый случай
-`all`, поэтому вклад A.012 в `VPNG-U001-R1.R3.R7.R3` теперь [`partial`]. Нормализация
-`0 | N | all`, свежий pre-A.012 учет уже присутствующих endpoints, агрегация per-Profile
-demand и последовательное расширение demand после неудачи кандидата еще отсутствуют.
+`all`, поэтому вклад A.012 в `VPNG-U001-R1.R3.R7.R3` теперь [`partial`]. Нормализация `0 | N | all` и чистый расчет per-Profile demand реализованы отдельно
+в A.002/A.013; свежий pre-A.012 учет уже присутствующих endpoints, передача
+агрегированного demand и последовательное расширение demand после неудачи кандидата
+еще отсутствуют в runtime composition.
 
 В уже реализованной части A.012 получает `desired_generation` через D.001 до мутации,
 принимает только совпадающее подтвержденное поколение D.001, переводит ошибки lifecycle в
@@ -2361,12 +2363,12 @@ Architectural decisions
 
 Implementation
 
-    Current reference implementation pending in design/NG3/code/python/rou/managed_device_demand.py.
+    design/NG3/code/python/rou/managed_device_demand.py — чистые проекции ordinary demand и final reserve exception.
 
-**Материализация:** none на момент принятия архитектуры. Current A.012 по-прежнему
-материализует только прежний always-demanded referenced-Device subcase; отдельный Calculator,
-current-surface `warm_paths` normalization и двухфазная alpha composition являются
-следующим implementation block.
+**Материализация:** Calculator и current-surface нормализация реализованы; direct unit
+tests проверяют их отдельно от Linux. A.012 пока использует прежний
+always-demanded referenced-Device subcase. Двухфазная композиция и безопасное
+освобождение reserve во время исполнения остаются за пределами этой материализации.
 
 # Annex B. Ordinary-side transition components
 
@@ -2686,6 +2688,11 @@ Architectural decisions
 
 11. `Fresh presence observation может предшествовать lifecycle demand`
    *`observe_device_endpoints(...)` может использоваться как свежий read-only вход для расчета числа уже присутствующих Profile-eligible endpoints до A.012. Такое наблюдение не создает `PathBinding`, не меняет retained binding state и не становится lifecycle owner; после возможной D.001 mutation обычный binding postcondition подтверждается новым observation.*
+
+**Материализация:** C.004 уже получает свежий inventory и подтверждает обычный
+binding. Вклад в R7.R3 и его R2/R3 остается [`partial`]: отдельное read-only
+наблюдение до A.012 и повторное наблюдение между ordinary и reserve convergence
+еще не включены в alpha composition.
 
 ## [C.005] ForwardingGate
 
