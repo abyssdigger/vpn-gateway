@@ -40,6 +40,13 @@ recoverable group for that Device. A Profile with several destinations moves tho
 as one peer-ownership bundle. Two Profiles using the same `wg0` are independent groups and may
 simultaneously resolve to different peers.
 
+The existing Profile overlap contract also closes the ambiguity constraint without a second
+validator: exact destination-prefix duplication between enabled Profiles is rejected, while
+different-length overlap has deterministic most-specific classification. The derived
+WireGuard groups inherit that same nesting, which matches WireGuard's longest-prefix
+`AllowedIPs` selection. Thus no second user-declared prefix ownership graph exists that could
+contradict Profile classification.
+
 If the user needs two destination sets to recover independently, they are separate Profiles.
 A future requirement may justify binding different Profile policy domains into one atomic
 WireGuard recovery group, but no accepted requirement currently requires that extra entity or

@@ -677,6 +677,12 @@ Profile переключаются как одна группа, а разные
 принадлежать разным peers. Если наборы сетей должны переключаться независимо, они выражаются
 разными Profiles; отдельное cross-Profile group coupling не вводится без нового требования.
 
+Overlap не получает второй набор правил: уже каноническая Profile semantics запрещает один и
+тот же exact prefix в двух enabled Profiles и допускает different-length overlap только через
+deterministic most-specific classification. Для derived WireGuard groups это одновременно
+дает однозначный effective ownership: более специфичный `AllowedIPs` bundle имеет тот же
+most-specific смысл; дополнительная неоднозначная group-prefix декларация отсутствует.
+
 По умолчанию все peers из `managed_vpn.peers` являются разрешенными кандидатами группы в
 порядке их объявления и имеют ordinary role. Profile может уточнить policy конкретного
 Device membership:

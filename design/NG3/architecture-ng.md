@@ -1636,7 +1636,7 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`none`]
-- `VPNG-U001-R1.R3.R8.R2.C1` — [`none`]
+- `VPNG-U001-R1.R3.R8.R2.C1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
 - `VPNG-U001-R1.R3.R8.R4` — [`none`]
 - `VPNG-U004-R4.R1` — [`full`]
@@ -1695,8 +1695,10 @@ transport intent, нормализует ordered WireGuard peers, secret refs и
 `profile.<id>.device_membership.<device>.peer_order` с group-local `:reserve`. Текущий
 parser еще не normalizes эту membership detail, не строит typed per-Profile WireGuard groups и
 не reuses qualifying Profile availability description как optional group endpoint. Поэтому
-A.002 contribution к R8 остается [`partial`]; R8.R2/R8.R2.C1/R8.R3.R1/R8.R4 остаются
-нематериализованными до parser/runtime normalization implementation.
+A.002 contribution к R8 остается [`partial`]; R8.R2/R8.R3.R1/R8.R4 остаются
+нематериализованными до parser/runtime normalization implementation. R8.R2.C1 уже [`full`]:
+existing Profile normalization rejects exact-prefix duplication and gives different-length
+overlap one deterministic most-specific interpretation, which derived groups inherit.
 
 ## [A.003] AvailabilityDescriptionResolver
 
