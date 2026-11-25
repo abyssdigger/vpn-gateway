@@ -585,6 +585,19 @@ def release_alpha_undemanded_devices(
     )
     if not dependencies_confirmed or not pending:
         return convergence.realizations, False
+
+    pending_ids = frozenset(item.device_id for item in pending)
+    if any(
+        binding.path_id.device_id in pending_ids
+        for binding in prepared.last_bindings
+    ):
+        # RU-F1: demand removal alone is not release permission. A retiring
+        # Device must remain in the current structural/effective projection
+        # until an explicit pre-retirement projection has excluded it after
+        # all current owners permit release. Never use cleanup-created absence
+        # as proof that cleanup was allowed.
+        return convergence.realizations, False
+
     desired = convergence.projection.desired_device_ids
 
     def replacement_still_current() -> bool:
