@@ -12,6 +12,7 @@ import tempfile
 from typing import Iterable
 
 from .binding import LogicalPathId, PathBinding
+from .managed_device_manager import ManagedDeviceRealization
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .release1_config import Release1Config, render_helper_routing_interfaces
@@ -90,6 +91,7 @@ class RuntimeStatusSnapshot:
     version: str
     configured_intent: ConfiguredIntentStatus
     confirmed_effective_state: tuple[EffectiveProfileStatus, ...] | None
+    managed_device_realizations: tuple[ManagedDeviceRealization, ...]
     availability_state: tuple[AvailabilityProfileStatus, ...]
     readiness: RuntimeReadiness
     blocking_problems: tuple[str, ...]
@@ -117,6 +119,7 @@ class RuntimeStatusAgent:
         self._version = version
         self._configured = configured_intent
         self._effective: tuple[EffectiveProfileStatus, ...] | None = None
+        self._managed_devices: tuple[ManagedDeviceRealization, ...] = ()
         self._availability = tuple(
             AvailabilityProfileStatus(
                 profile.profile_id,
@@ -146,6 +149,22 @@ class RuntimeStatusAgent:
         self._readiness = readiness
         self._problems = ()
         self._unknown = ()
+
+    def confirm_managed_devices(
+        self,
+        realizations: Iterable[ManagedDeviceRealization],
+    ) -> None:
+        current = tuple(realizations)
+        if any(not isinstance(item, ManagedDeviceRealization) for item in current):
+            raise ValueError(
+                "realizations must contain ManagedDeviceRealization"
+            )
+        ids = [item.device_id for item in current]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate managed Device realization")
+        self._managed_devices = tuple(
+            sorted(current, key=lambda item: item.device_id)
+        )
 
     def confirm_availability(
         self,
@@ -243,6 +262,7 @@ class RuntimeStatusAgent:
             version=self._version,
             configured_intent=self._configured,
             confirmed_effective_state=self._effective,
+            managed_device_realizations=self._managed_devices,
             availability_state=self._availability,
             readiness=self._readiness,
             blocking_problems=self._problems,

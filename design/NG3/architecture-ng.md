@@ -1682,10 +1682,12 @@ Architectural decisions
 из одного источника, нормализует упорядоченный набор WireGuard-пиров и ссылки на секреты,
 а также выводит общие префиксы из действующих `Profile.destinations`.
 `AlphaPreparedPolicy.from_text` использует этот current-разбор как рабочую точку загрузки:
-внешняя конфигурация продолжает через совместимый базовый контракт, а наличие `managed_vpn`
-до materialization A.012/D.001/D.002 явно отклоняется до создания prepared policy и до любой
-сетевой мутации. Таким образом A.002 полностью материализует собственную обязанность
-нормализации, не присваивая обязанности последующих компонентов.
+внешняя конфигурация продолжает через совместимый базовый контракт, а явно управляемая
+конфигурация сохраняет `CurrentConfig` для A.012. Наличие `managed_vpn` больше не
+отклоняется на configuration boundary; A.012 материализует базовый lifecycle D.001, тогда как
+не реализованные еще D.002/D.003 остаются отдельным пробелом R8 и не присваиваются A.002.
+Таким образом A.002 полностью материализует собственную обязанность нормализации, не
+присваивая обязанности последующих компонентов.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -1937,7 +1939,7 @@ Agent, составляющий truthful current user-facing status из authori
 - `VPNG-D001-R1.R1.R5` — [`full`]
 - `VPNG-D001-R3.R1.R1` — [`full`]
 
-**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status.
+**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно.
 
 API
 
@@ -2131,10 +2133,10 @@ Manager текущей базовой VPN-реализации только дл
 базовой реализации. Внешне управляемые Devices в его предметную область не входят.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R7` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R2` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7` — [`full`]
+- `VPNG-U001-R1.R3.R7.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 
 API
 
@@ -2145,6 +2147,7 @@ API
 Implementation
 
     design/NG3/code/python/rou/managed_device_manager.py — current-only Manager структурной потребности явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
+    design/NG3/code/python/rou/alpha_runtime.py — Release-1 composition: startup/reconciliation до fresh C.004 observation, подтвержденное снятие product-owned policy dependencies при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
 
@@ -2172,7 +2175,7 @@ Architectural decisions
 8. `Правдивое текущее состояние`
    *A.012 передает A.008 желаемое и подтвержденное поколения, а также problem-state. Для внешне управляемого Device отсутствие состояния A.012 не изображается как результат управляемого жизненного цикла.*
 
-**Evidence:** `EV-00080`.
+**Evidence:** `EV-00080`, `EV-00090`.
 
 **Материализация:** `ManagedDeviceManager` вычисляет потребность только для явно
 управляемых Devices из `CurrentConfig.structural.active_device_ids`, получает
@@ -2182,11 +2185,18 @@ Architectural decisions
 Если управление Device удалено из новой конфигурации после прежнего владения, Manager
 сохраняет этот Device в текущем наборе очистки до подтвержденного отсутствия.
 
-**Пробел материализации:** A.012 core еще не подключен к рабочему alpha startup/reload/stop
-пути. Поэтому product runtime пока не вызывает Manager после создания Private network, не
-передает ему подтвержденную проекцию снятых зависимостей при исчезновении demand и не
-публикует `ManagedDeviceRealization` в A.008. До этого component-local вклад остается
-[`partial`].
+Alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
+portal, но до первого fresh C.004/VPN-path observation; каждый normal reconciliation снова
+начинается с A.012 fresh convergence до зависимой path/policy observation. При общей остановке
+A.001 сначала закрывает forwarding и подтвержденно снимает product-owned payload policy и
+return-affinity dependencies, затем передает все управляемые Devices как
+`dependency_free_device_ids`, требует confirmed A.012 absence и только после этого начинает
+обычный teardown Private network. Если dependency release либо A.012 absence не подтверждены,
+teardown Private network не начинается и stop остается failed/unconfirmed. Текущая alpha не
+имеет hot config reload: изменение конфигурации применяется через product restart, поэтому
+тот же stop/start path является текущей materialization restart semantics. Current
+`ManagedDeviceRealization` передается A.008. Kernel integration EV-00090 подтверждает этот
+порядок на production D.001 WireGuard Adapter.
 
 # Annex B. Ordinary-side transition components
 

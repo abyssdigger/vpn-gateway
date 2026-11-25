@@ -194,6 +194,7 @@ class ControllerStartupTests(unittest.TestCase):
         prepared=None,
         activation=READY_ACTIVATION,
         runner=None,
+        runner_fail_observe=False,
         preflight_error=None,
         ensure_error=None,
         loader_error=None,
@@ -202,10 +203,15 @@ class ControllerStartupTests(unittest.TestCase):
         stop_cleanup=STOPPED_CLEANUP,
         host_routing_contribution=None,
         host_routing_build_error=None,
+        private_network_prepare=False,
+        private_network_prepare_error=None,
     ):
         events = []
         lock = FakeLock()
-        runner = runner or FakeRunner(events)
+        runner = runner or FakeRunner(
+            events,
+            fail_observe=runner_fail_observe,
+        )
         prepared = prepared or FakePrepared(events)
 
         def acquire(_spec):
@@ -248,6 +254,15 @@ class ControllerStartupTests(unittest.TestCase):
         def activate(*args):
             events.append("activate")
             return activation
+
+        def prepare_private_network(prepared_arg, domain_spec_arg):
+            events.append("managed_prepare")
+            if prepared_arg is not prepared:
+                raise AssertionError(prepared_arg)
+            if domain_spec_arg != DOMAIN_SPEC:
+                raise AssertionError(domain_spec_arg)
+            if private_network_prepare_error is not None:
+                raise private_network_prepare_error
 
         def build_host_routing(prepared_arg, domain_spec_arg):
             events.append("host_routing_build")
@@ -315,6 +330,11 @@ class ControllerStartupTests(unittest.TestCase):
                     if host_routing_contribution is not None or host_routing_build_error is not None
                     else None
                 ),
+                prepare_private_network=(
+                    prepare_private_network
+                    if private_network_prepare
+                    else None
+                ),
             )
 
         return (
@@ -350,6 +370,55 @@ class ControllerStartupTests(unittest.TestCase):
         )
 
         result.session.lock.release()
+
+    def test_private_network_preparation_runs_before_interface_observation(self):
+        result, events, lock, *_ = self.run_startup(
+            private_network_prepare=True,
+        )
+
+        self.assertEqual(result.status, ControllerStartupStatus.READY)
+        self.assertEqual(
+            events,
+            [
+                "lock", "preflight", "load_policy", "ensure_domain",
+                "managed_prepare", "observe_interfaces", "build_desired", "activate",
+            ],
+        )
+        result.session.lock.release()
+
+    def test_private_network_preparation_failure_rolls_back_before_observation(self):
+        result, events, lock, *_ = self.run_startup(
+            private_network_prepare=True,
+            private_network_prepare_error=RuntimeError("managed lifecycle failed"),
+        )
+
+        self.assertEqual(
+            result.status,
+            ControllerStartupStatus.PRIVATE_NETWORK_PREPARATION_FAILED,
+        )
+        self.assertIn("rollback confirmed", result.diagnostic)
+        self.assertEqual(
+            events,
+            [
+                "lock", "preflight", "load_policy", "ensure_domain",
+                "managed_prepare", "cleanup_owned",
+            ],
+        )
+        self.assertFalse(lock.acquired)
+
+    def test_post_preparation_failure_uses_owned_domain_rollback(self):
+        result, events, lock, *_ = self.run_startup(
+            runner_fail_observe=True,
+            private_network_prepare=True,
+        )
+
+        self.assertEqual(
+            result.status,
+            ControllerStartupStatus.INTERFACE_OBSERVATION_FAILED,
+        )
+        self.assertIn("startup rollback confirmed", result.diagnostic)
+        self.assertEqual(events[-2:], ["observe_interfaces", "cleanup_owned"])
+        self.assertFalse(lock.acquired)
 
     def test_stop_requested_before_ownership_does_not_acquire_lock(self):
         stop = StopSequence(True)

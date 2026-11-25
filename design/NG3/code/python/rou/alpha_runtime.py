@@ -1,8 +1,8 @@
 """First executable NG3 alpha runtime assembly.
 
 Architecture: structured Annex A A.001 ProductLifecycleControl,
-A.011 ProtectiveModeManager, and Annex E E.001 HostPublicationAdapter
-runtime composition.
+A.011 ProtectiveModeManager, A.012 ManagedDeviceManager, and Annex E
+E.001 HostPublicationAdapter runtime composition.
 The component specs own normative requirement traceability.
 
 This module assembles the first executable NG3 runtime from accepted Release-1
@@ -34,6 +34,7 @@ import sys
 import threading
 from typing import Iterable, Mapping
 
+from .composite_nft_policy import CompositeNftDesiredState
 from .availability_manager import (
     LOG_TAG as AVAIL_LOG_TAG,
     AvailabilityManager,
@@ -88,6 +89,15 @@ from .linux_availability_cycle import (
 from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_protective_payload_gate import LinuxProtectivePayloadGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
+from .managed_device_manager import (
+    ManagedDeviceDesiredState,
+    ManagedDeviceManager,
+    ManagedDeviceRealization,
+)
+from .managed_wireguard_adapter import (
+    LinuxManagedWireGuardAdapter,
+    ManagedWireGuardState,
+)
 from .host_publication_adapter import HostPublicationAdapter
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
@@ -129,12 +139,15 @@ from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
     build_payload_network_policy_desired_state,
 )
+from .payload_forward_desired import PayloadForwardDesiredState
+from .device_firewall_desired import DeviceFirewallDesiredState
+from .payload_routing_desired import PayloadRoutingDesiredState
 from .payload_profile import (
     LOG_TAG as PROF_LOG_TAG,
     PayloadProfileRequest,
     build_payload_profile_requests,
 )
-from .payload_nat_desired import ProfileSnatPolicyIntent
+from .payload_nat_desired import PayloadNatDesiredState, ProfileSnatPolicyIntent
 from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
 from .probe_runtime import AvailabilityProbeRuntime
 from .protective_mode_control import (
@@ -143,7 +156,7 @@ from .protective_mode_control import (
 )
 from .protective_mode_manager import ProtectiveModeManager
 from .route_priority_inventory import RoutePriorityPathRoute
-from .release1_config import Release1Config, parse_current_config
+from .release1_config import CurrentConfig, Release1Config, parse_current_config
 from .operational_log import OperationalLogAdapter, OperationalLogLevel
 from .release1_host_route_helper import (
     LOG_TAG as HOST_LOG_TAG,
@@ -153,7 +166,12 @@ from .release1_host_route_helper import (
     validate_release1_helper_routing_scope,
 )
 from .structural_policy_mutation import compare_structural_policy
-from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
+from .structural_policy_transaction import converge_structural_policy
+from .stack_return_affinity import StackReturnAffinityDesired
+from .stack_return_affinity_convergence import (
+    StackReturnAffinityOwnerStatus,
+    converge_stack_return_affinity_once,
+)
 from .runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
@@ -188,6 +206,7 @@ class AlphaPreparedPolicy:
 
     local_address: IPv4Address
     binding_state: DeviceBindingState
+    current_config: CurrentConfig
     config: Release1Config
     last_bindings: tuple[PathBinding, ...] = ()
     last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
@@ -214,17 +233,12 @@ class AlphaPreparedPolicy:
         local_address: IPv4Address,
     ) -> "AlphaPreparedPolicy":
         current = parse_current_config(text)
-        if current.managed_vpns:
-            managed_ids = ", ".join(sorted(current.managed_vpns))
-            raise AlphaRuntimeError(
-                "managed_vpn configuration is recognized but managed VPN "
-                f"lifecycle is not materialized for Device(s): {managed_ids}"
-            )
         config = current.base
 
         prepared = cls(
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
+            current_config=current,
             config=config,
         )
         try:
@@ -423,6 +437,84 @@ class AlphaReconcileResult:
             AlphaReconcileStatus.EXACT,
             AlphaReconcileStatus.RECONCILED,
         }
+
+
+def _managed_device_problem(
+    realizations: tuple[ManagedDeviceRealization, ...],
+    *,
+    require_absent: bool = False,
+) -> str | None:
+    for item in realizations:
+        if item.problem is not None:
+            return f"managed Device {item.device_id!r}: {item.problem}"
+        if item.waiting_for_dependencies:
+            return f"managed Device {item.device_id!r} is still waiting for dependencies"
+        if require_absent:
+            if item.confirmed_state is not ManagedWireGuardState.ABSENT:
+                return f"managed Device {item.device_id!r} absence is not confirmed"
+            continue
+        if (
+            item.desired_state is ManagedDeviceDesiredState.PRESENT
+            and item.confirmed_state is not ManagedWireGuardState.PRESENT
+        ):
+            return f"managed Device {item.device_id!r} presence is not confirmed"
+        if (
+            item.desired_state is ManagedDeviceDesiredState.ABSENT
+            and item.confirmed_state is not ManagedWireGuardState.ABSENT
+        ):
+            return f"managed Device {item.device_id!r} absence is not confirmed"
+    return None
+
+
+def _release_alpha_managed_device_dependencies(
+    desired: PayloadNetworkPolicyDesiredState,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+) -> None:
+    """Remove owned policy dependencies before A.012 may stop managed Devices."""
+    gate = LinuxForwardingGateDriver(runner, domain_spec.namespace)
+    containment = converge_forwarding_gate_once(gate, ForwardingGateState.DISABLED)
+    if not containment.confirmed:
+        raise AlphaRuntimeError(
+            "managed Device dependency release requires confirmed disabled forwarding"
+        )
+
+    host_boundary = desired.routing.host_boundary
+    affinity = converge_stack_return_affinity_once(
+        gate,
+        LinuxStackReturnAffinityBackend(
+            runner,
+            domain_spec.namespace,
+            NG3_STACK_RETURN_AFFINITY_PLATFORM,
+        ),
+        StackReturnAffinityDesired(host_boundary, (), (), ()),
+    )
+    if not affinity.confirmed:
+        raise AlphaRuntimeError(
+            "stack return-affinity dependency cleanup is not confirmed"
+            + (f": {affinity.diagnostic}" if affinity.diagnostic else "")
+        )
+
+    structural = converge_structural_policy(
+        gate,
+        LinuxStructuralPolicyBackend(
+            runner=runner,
+            namespace=domain_spec.namespace,
+            platform=NG3_LINUX_POLICY_PLATFORM,
+        ),
+        PayloadRoutingDesiredState(host_boundary, (), ()),
+        CompositeNftDesiredState(
+            PayloadForwardDesiredState(()),
+            PayloadNatDesiredState(()),
+            DeviceFirewallDesiredState(()),
+        ),
+        NG3_LINUX_POLICY_PLATFORM,
+    )
+    if not structural.confirmed:
+        raise AlphaRuntimeError(
+            "payload policy dependency cleanup is not confirmed"
+            + (f": {structural.diagnostic}" if structural.diagnostic else "")
+        )
 
 
 def reconcile_alpha_payload_once(
@@ -820,6 +912,12 @@ def run_alpha_runtime(
         ) from exc
 
     runner = SubprocessNftRunner()
+    managed_device_manager = ManagedDeviceManager(
+        LinuxManagedWireGuardAdapter(runner, ALPHA_NAMESPACE)
+    )
+    managed_realizations_holder: dict[str, tuple[ManagedDeviceRealization, ...]] = {
+        "current": ()
+    }
     probe_driver = LinuxIcmpProbeDriver(
         runner=SubprocessProbeCommandRunner(),
         namespace=ALPHA_NAMESPACE,
@@ -916,6 +1014,19 @@ def run_alpha_runtime(
             runner,
         )
 
+    def prepare_managed_devices(prepared, current_domain_spec):
+        if not isinstance(prepared, AlphaPreparedPolicy):
+            raise AlphaRuntimeError(
+                "managed Device preparation requires AlphaPreparedPolicy"
+            )
+        if current_domain_spec.namespace != domain_spec.namespace:
+            raise AlphaRuntimeError("managed Device preparation namespace mismatch")
+        realizations = managed_device_manager.reconcile(prepared.current_config)
+        managed_realizations_holder["current"] = realizations
+        problem = _managed_device_problem(realizations)
+        if problem is not None:
+            raise AlphaRuntimeError(problem)
+
     try:
         startup = start_controller_once(
             InstanceLockSpec(
@@ -929,6 +1040,7 @@ def run_alpha_runtime(
             stop_requested=stop_event.is_set,
             build_host_routing_contribution=build_host_routing_contribution,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            prepare_private_network=prepare_managed_devices,
         )
         if startup.status is not ControllerStartupStatus.READY:
             log(
@@ -961,7 +1073,47 @@ def run_alpha_runtime(
             ALPHA_STATUS_PATH,
             ALPHA_STATUS_TEXT_PATH,
         )
+        status_agent.confirm_managed_devices(
+            managed_realizations_holder["current"]
+        )
         status_publisher.publish(status_agent.snapshot())
+
+        def stop_owned_runtime():
+            host_cleanup = HostPublicationAdapter(
+                LinuxHostPublicationDriver(runner)
+            ).cleanup()
+            managed_cleanup_error = None
+            try:
+                _release_alpha_managed_device_dependencies(
+                    startup.session.desired,
+                    domain_spec,
+                    runner,
+                )
+                shutdown_config = CurrentConfig(prepared.config, {})
+                shutdown_realizations = managed_device_manager.reconcile(
+                    shutdown_config,
+                    dependency_free_device_ids=frozenset(
+                        prepared.current_config.managed_vpns
+                    ),
+                )
+                managed_realizations_holder["current"] = shutdown_realizations
+                status_agent.confirm_managed_devices(shutdown_realizations)
+                problem = _managed_device_problem(
+                    shutdown_realizations,
+                    require_absent=True,
+                )
+                if problem is not None:
+                    raise AlphaRuntimeError(problem)
+            except Exception as exc:
+                managed_cleanup_error = f"{type(exc).__name__}: {exc}"
+            if managed_cleanup_error is not None:
+                return host_cleanup, managed_cleanup_error, None
+            stopped = stop_controller_once(
+                startup.session,
+                domain_spec,
+                runner,
+            )
+            return host_cleanup, None, stopped
 
         availability_start = reconcile_alpha_availability_once(
             prepared,
@@ -969,11 +1121,7 @@ def run_alpha_runtime(
             probe_driver,
         )
         if not availability_start.confirmed:
-            stopped = stop_controller_once(
-                startup.session,
-                domain_spec,
-                runner,
-            )
+            host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
             status_agent.mark_unconfirmed(
                 readiness=RuntimeReadiness.FAILED,
                 problem=(
@@ -992,15 +1140,39 @@ def run_alpha_runtime(
                 status="availability_unready",
                 availability=availability_start.status.value,
                 diagnostic=availability_start.diagnostic,
-                managed_cleanup=stopped.status.value,
+                host_cleanup=host_cleanup.status.value,
+                managed_device_cleanup_error=managed_cleanup_error,
+                managed_cleanup=(
+                    stopped.status.value
+                    if stopped is not None
+                    else "not_attempted"
+                ),
             )
             return (
                 1
-                if stopped.status is ControllerStopStatus.STOPPED
+                if host_cleanup.confirmed
+                and managed_cleanup_error is None
+                and stopped is not None
+                and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
 
         def reconcile_normal_once_unlocked():
+            managed_realizations = managed_device_manager.reconcile(
+                prepared.current_config
+            )
+            managed_realizations_holder["current"] = managed_realizations
+            status_agent.confirm_managed_devices(managed_realizations)
+            managed_problem = _managed_device_problem(managed_realizations)
+            if managed_problem is not None:
+                return (
+                    AlphaReconcileResult(
+                        AlphaReconcileStatus.FAILED,
+                        None,
+                        diagnostic=managed_problem,
+                    ),
+                    None,
+                )
             result = reconcile_alpha_payload_once(
                 prepared,
                 domain_spec,
@@ -1050,12 +1222,7 @@ def run_alpha_runtime(
         )
         host_start = host_publication_adapter.apply(host_publication_desired)
         if not host_start.confirmed:
-            host_cleanup = host_publication_adapter.cleanup()
-            stopped = stop_controller_once(
-                startup.session,
-                domain_spec,
-                runner,
-            )
+            host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
             status_agent.mark_unconfirmed(
                 readiness=RuntimeReadiness.FAILED,
                 problem=(
@@ -1071,11 +1238,18 @@ def run_alpha_runtime(
                 status="host_publication_unready",
                 diagnostic=host_start.diagnostic,
                 host_cleanup=host_cleanup.status.value,
-                managed_cleanup=stopped.status.value,
+                managed_device_cleanup_error=managed_cleanup_error,
+                managed_cleanup=(
+                    stopped.status.value
+                    if stopped is not None
+                    else "not_attempted"
+                ),
             )
             return (
                 1
                 if host_cleanup.confirmed
+                and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
@@ -1108,12 +1282,7 @@ def run_alpha_runtime(
         try:
             protective_service.start()
         except Exception as exc:
-            host_cleanup = host_publication_adapter.cleanup()
-            stopped = stop_controller_once(
-                startup.session,
-                domain_spec,
-                runner,
-            )
+            host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
             status_agent.mark_unconfirmed(
                 readiness=RuntimeReadiness.FAILED,
                 problem=(
@@ -1129,11 +1298,18 @@ def run_alpha_runtime(
                 status="protective_mode_unready",
                 diagnostic=f"{type(exc).__name__}: {exc}",
                 host_cleanup=host_cleanup.status.value,
-                managed_cleanup=stopped.status.value,
+                managed_device_cleanup_error=managed_cleanup_error,
+                managed_cleanup=(
+                    stopped.status.value
+                    if stopped is not None
+                    else "not_attempted"
+                ),
             )
             return (
                 1
                 if host_cleanup.confirmed
+                and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
@@ -1273,16 +1449,11 @@ def run_alpha_runtime(
         status_agent.mark_stopping()
         status_publisher.publish(status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
-        host_cleanup = HostPublicationAdapter(
-            LinuxHostPublicationDriver(runner)
-        ).cleanup()
-        stopped = stop_controller_once(
-            startup.session,
-            domain_spec,
-            runner,
-        )
+        host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
         if (
             host_cleanup.confirmed
+            and managed_cleanup_error is None
+            and stopped is not None
             and stopped.status is ControllerStopStatus.STOPPED
         ):
             status_agent.mark_stopped()
@@ -1292,7 +1463,8 @@ def run_alpha_runtime(
                 problem=(
                     "shutdown cleanup is not confirmed: "
                     f"host={host_cleanup.status.value}, "
-                    f"managed={stopped.status.value}"
+                    f"managed_devices={managed_cleanup_error or 'confirmed'}, "
+                    f"managed={stopped.status.value if stopped is not None else 'not_attempted'}"
                 ),
             )
         status_publisher.publish(status_agent.snapshot())
@@ -1300,20 +1472,33 @@ def run_alpha_runtime(
             (
                 OperationalLogLevel.INFO
                 if host_cleanup.confirmed
+                and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else OperationalLogLevel.ERROR
             ),
             LIFE_LOG_TAG,
             "stop_complete",
-            status=stopped.status.value,
+            status=(
+                stopped.status.value
+                if stopped is not None
+                else "managed_device_cleanup_failed"
+            ),
             host_publication_cleanup=host_cleanup.status.value,
             host_publication_error=host_cleanup.diagnostic,
-            cleanup_error=stopped.cleanup_error,
-            lock_error=stopped.lock_error,
+            managed_device_cleanup_error=managed_cleanup_error,
+            cleanup_error=(
+                stopped.cleanup_error if stopped is not None else None
+            ),
+            lock_error=(
+                stopped.lock_error if stopped is not None else None
+            ),
         )
         return (
             0
             if host_cleanup.confirmed
+            and managed_cleanup_error is None
+            and stopped is not None
             and stopped.status is ControllerStopStatus.STOPPED
             else 2
         )
