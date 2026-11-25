@@ -5,6 +5,21 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-25 — Generalized managed-WireGuard recovery requirement family closed
+
+The complete `VPNG-U001-R1.R3.R8*` family is now accepted as architecture-closed. The
+current implementation supports multiple Profile-derived recoverable groups on one managed
+WireGuard interface, independent group owners, per-peer technical checks, optional group
+end-to-end checks, group-local ordinary stickiness/reserve failback, exact confirmed
+`AllowedIPs` convergence including no-owner state, and ownership-generation invalidation of
+stale Profile availability evidence without requiring a common-interface restart.
+
+Closure rests on the already accepted generalized configuration, D.002/D.003 runtime and
+kernel evidence through `EV-00140`–`EV-00280`. No new WireGuard mechanism is introduced by
+this milestone; it records that the previously implemented and reviewed cross-component R8
+behavior now has no unresolved architecture decision in its current scope.
+
+
 ## 2026-11-25 — Managed Device lifecycle requirement branch closed
 
 The explicitly managed Device lifecycle under `VPNG-U001-R1.R3.R7*` now has accepted
