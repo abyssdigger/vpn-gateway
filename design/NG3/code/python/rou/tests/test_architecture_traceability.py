@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[6]
 ARCHITECTURE = ROOT / "design/NG3/architecture-ng.md"
 REQUIREMENTS = ROOT / "design/NG3/requirements.md"
 PROJECT_CONVENTIONS = ROOT / "PROJECT-CONVENTIONS.md"
+AGENTS = ROOT / "AGENTS.md"
+REQUIREMENTS_MODEL = ROOT / "design/requirements-model.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
 EVIDENCE_INDEX = ROOT / "design/NG3/evidence-index.md"
 REFERENCE_IMPLEMENTATION = ROOT / "design/NG3/code/python/rou"
@@ -191,14 +193,44 @@ def component_requirement_edges(body: str) -> tuple[tuple[str, str], ...]:
     return tuple(result)
 
 
+def validate_component_trace_syntax(body: str) -> None:
+    mode: str | None = None
+    for line in body.splitlines():
+        if line == "**Implements:**":
+            mode = "implements"
+            continue
+        if line == "**Constrained by:**":
+            mode = "constrained_by"
+            continue
+        if line.startswith("**Implements:**") or line.startswith("**Constrained by:**"):
+            raise AssertionError(f"trace heading has non-canonical form: {line}")
+        if line.startswith("- \x60VPNG-"):
+            if mode == "implements":
+                if re.fullmatch(
+                    r"- \x60VPNG-[^\x60]+\x60 — \[\x60(full|partial|none)\x60\]",
+                    line,
+                ) is None:
+                    raise AssertionError(
+                        f"requirement edge has non-canonical form: {line}"
+                    )
+            elif mode == "constrained_by":
+                if re.fullmatch(r"- \x60VPNG-[^\x60]+\x60", line) is None:
+                    raise AssertionError(
+                        f"constraint edge has non-canonical form: {line}"
+                    )
+            else:
+                raise AssertionError(f"trace edge outside canonical block: {line}")
+            continue
+        if not line.strip() or mode is not None:
+            mode = None
+
+
 def component_constraint_edges(body: str) -> tuple[str, ...]:
+    validate_component_trace_syntax(body)
     result: list[str] = []
     lines = body.splitlines()
     for index, line in enumerate(lines):
-        if not line.startswith("**Constrained by:**"):
-            continue
-        result.extend(re.findall(r"\x60(VPNG-[^\x60]+)\x60", line))
-        if line.strip() != "**Constrained by:**":
+        if line != "**Constrained by:**":
             continue
         cursor = index + 1
         while cursor < len(lines) and lines[cursor].startswith("- \x60VPNG-"):
@@ -324,15 +356,30 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                 self.assertNotIn(technology, methodology)
         self.assertIn("release/<version>/RELEASE-SCOPE.md", methodology)
 
-    def test_projectholder_term_is_canonical_in_current_governing_docs(self):
-        text = (
-            PROJECT_CONVENTIONS.read_text(encoding="utf-8")
-            + "\n"
-            + REQUIREMENTS.read_text(encoding="utf-8")
+    def test_projectholder_role_identifier_is_canonical_in_current_normative_docs(self):
+        current_docs = (
+            AGENTS,
+            PROJECT_CONVENTIONS,
+            REQUIREMENTS_MODEL,
+            REQUIREMENTS,
         )
-        self.assertIsNone(re.search(r"\bproject holder\b", text, re.IGNORECASE))
-        self.assertIsNone(re.search(r"\bproject-holder\b", text, re.IGNORECASE))
-        self.assertNotIn("владелец разработки", text.lower())
+        forbidden = (
+            re.compile(r"\bproject holder\b", re.IGNORECASE),
+            re.compile(r"\bproject-holder\b", re.IGNORECASE),
+            re.compile(r"владел(?:ец|ьца|ьцу|ьцем|ьце)\s+проекта", re.IGNORECASE),
+            re.compile(r"владелец\s+разработки", re.IGNORECASE),
+        )
+        for path in current_docs:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                self.assertIn("projectholder", text)
+                for pattern in forbidden:
+                    self.assertIsNone(pattern.search(text))
+        conventions = PROJECT_CONVENTIONS.read_text(encoding="utf-8")
+        self.assertIn(
+            "`projectholder` является каноническим буквальным идентификатором проектной роли",
+            conventions,
+        )
 
     def test_stable_architecture_uses_only_stable_evidence_addresses(self):
         architecture = ARCHITECTURE.read_text(encoding="utf-8")
@@ -500,6 +547,11 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
         self.assertNotIn("**Requirements:**", section)
         self.assertIn("**Coverage nodes:**", section)
 
+    def test_component_trace_edges_use_only_canonical_blocks(self):
+        for spec_id, body in component_specs().items():
+            with self.subTest(spec=spec_id):
+                validate_component_trace_syntax(body)
+
     def test_component_edges_are_typed_requirement_vs_constraint(self):
         nodes = {str(node["id"]): node for node in requirement_nodes()}
         for spec_id, body in component_specs().items():
@@ -520,6 +572,12 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                         nodes[constraint_id]["kind"],
                     )
 
+    def test_materialization_explanation_label_is_canonical(self):
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
+        self.assertNotRegex(architecture, r"\*\*Материализация\s+R[^:]*:\*\*")
+        self.assertNotIn("**Пробел материализации:**", architecture)
+        self.assertNotIn("**Пробелы материализации:**", architecture)
+
     def test_non_full_requirement_edges_explain_the_gap(self):
         for spec_id, body in component_specs().items():
             edges = component_requirement_edges(body)
@@ -528,7 +586,7 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                 with self.subTest(spec=spec_id):
                     self.assertRegex(
                         body,
-                        r"\*\*Пробел(?:ы)? материализации:\*\*",
+                        r"\*\*Материализация:\*\*",
                     )
 
     def test_component_local_implementation_edges_are_in_full_manifest(self):

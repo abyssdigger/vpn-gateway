@@ -448,8 +448,8 @@ code
 Если ID является текстом гиперссылки, допустима обычная Markdown-форма
 `[A.011](...)`; она не является каноническим spec heading.
 
-Каждая requirement-связь в блоках `Implements`, `Implements / supports` и
-`Supports implementation of` имеет явный статус материализации:
+Каждая requirement-связь в каноническом блоке `Implements` имеет явный статус
+материализации:
 
 - [`full`] — вся текущая архитектурная обязанность данного компонента по указанному R/C
   материализована в рабочей реализации продукта и имеет требуемую для этой обязанности
@@ -466,6 +466,11 @@ code
 заявленного `full`, `partial` или `none` не требует редакции архитектуры, пока не
 меняется сам статус или архитектурная обязанность.
 
+Поэтому Requirement со статусом [`open`] может иметь один или несколько component edges
+[`full`] и оставаться [`open`], пока достаточный architecture closure всего узла еще не
+принят. [`full`] означает полноту **локальной обязанности данного компонента по edge**, а
+не closure Requirement целиком.
+
 ### 2.9.1. Stable evidence references
 
 Стабильная архитектура ссылается на executable/review evidence только через IDs из
@@ -475,6 +480,12 @@ code
 Конкретные CI workflow/run IDs, commit SHAs и experiment result artifacts принадлежат записи
 evidence index либо связанному review/result artifact. Они не являются стабильными адресами
 архитектурного решения.
+
+Component-local поле `Evidence:` является **необязательной ссылочной поверхностью**, а не
+признаком существования evidence как такового. Оно используется, когда устойчивый EV-адрес
+полезно показать непосредственно в spec; отсутствие локального поля не отменяет accepted
+shared/cross-component evidence и само по себе не меняет `full|partial|none`. Если поле
+`Evidence:` присутствует, оно содержит только зарегистрированные `EV-xxxxx` адреса.
 
 ### 2.9.2. Lower technical-boundary reuse
 
@@ -1834,7 +1845,7 @@ Architectural decisions
 8. `Готовность управляемого WireGuard не равна привязке`
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
-**Материализация R8:** A.004 полностью материализует собственную архитектурную обязанность
+**Материализация:** A.004 полностью материализует собственную архитектурную обязанность
 по generalized R8: он получает уже current A.007 availability projection после D.002-generation
 synchronization и сходится только по этой projection. D.002 realization currentness не является
 дополнительной обязанностью A.004 и поэтому не может служить основанием для `partial` статуса.
@@ -1903,9 +1914,10 @@ Profile-local reserve roles, established availability problems и current active
 - `VPNG-U003-R3.R8` — [`full`]
 - `VPNG-U003-R3.R8.R1` — [`full`]
 - `VPNG-D001-R1.R1.R1` — [`full`]
-
-**Constrained by:** `VPNG-U003-R3.R8.C1`
 - `VPNG-D001-R1.R1.R5` — [`full`]
+
+**Constrained by:**
+- `VPNG-U003-R3.R8.C1`
 
 API
 
@@ -2083,7 +2095,8 @@ facility текущего deployment. Он не является current-state o
 - `VPNG-M001-R2.R3.R5` — [`full`]
 - `VPNG-M001-R2.R3.R6` — [`full`]
 
-**Constrained by:** `VPNG-M001-R2.R3.R6.C1`
+**Constrained by:**
+- `VPNG-M001-R2.R3.R6.C1`
 
 API
 
@@ -2400,7 +2413,7 @@ Availability cycle проверяет A.007 subset через
 stale/conflict boundary. Legacy A.007-only direct test/experiment seam сохранен без изменения
 whole-scope semantics.
 
-**Материализация R8:** C.001 полностью материализует собственную архитектурную обязанность
+**Материализация:** C.001 полностью материализует собственную архитектурную обязанность
 по R8/R8.R1: полный A.007+D.002 probe-owner union, collision-free lower allocation,
 full-union convergence и owner-scoped readiness работают в production alpha. Peer/group
 selection и Profile-evidence semantics принадлежат D.002/A.007 и не являются отсутствующей
@@ -2991,7 +3004,7 @@ subjects typed `unconfirmed` dependency, поэтому прежнее Profile e
 force до A.004 priority convergence. Если generation меняется за тем же `wg0`, A.007 context
 меняется до fresh remote attempt. D.003 split-group kernel acceptance закрыт EV-00190.
 
-**Пробел материализации:** edge `VPNG-U003-R3.R6.R2` остается [`partial`] только потому,
+**Материализация:** edge `VPNG-U003-R3.R6.R2` остается [`partial`] только потому,
 что D.002 переиспользует общий bounded probe mechanism для peer/group technical evidence, но не
 является владельцем общей A.007 availability-attempt semantics. Эта общая semantics
 материализована A.007/C.008; отдельного незакрытого R8 implementation gap у D.002 больше нет.
@@ -3146,7 +3159,8 @@ Manager continuous ownership отдельно включенной authoritative
 - `VPNG-U001-R5.R2.R3` — [`full`]
 - `VPNG-U001-R5.R2.R3.R2` — [`full`]
 
-**Constrained by:** `VPNG-U001-R5.R2.C1`
+**Constrained by:**
+- `VPNG-U001-R5.R2.C1`
 
 **Evidence:** `EV-00040`.
 
@@ -3187,7 +3201,8 @@ Bounded Enforcer одного composite aggressive postcondition. Он не вы
 - `VPNG-U001-R5.R2.R3` — [`full`]
 - `VPNG-U001-R5.R2.R3.R1` — [`full`]
 
-**Constrained by:** `VPNG-U001-R5.R2.C1`
+**Constrained by:**
+- `VPNG-U001-R5.R2.C1`
 
 **Evidence:** `EV-00040`.
 

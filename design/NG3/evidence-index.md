@@ -207,7 +207,9 @@ responsibilities.
 
 ## EV-00110 — reusable WireGuard peer-probe lower seam
 
-**Status:** accepted / C.008 full, C.001 partial for R8  
+**Status:** accepted historical lower-seam evidence  
+**Historical baseline disposition:** C.008 full; C.001 partial for R8 at this review baseline.  
+**Current materialization superseded by:** `EV-00200`, `EV-00210`, `EV-00280`.  
 **Scope:** removal of A.007 semantic-owner coupling from the physical ICMP Driver; distinct
 `WireGuardPeerProbeOwner(device_id, peer_id)`; shared deterministic probe resource allocation;
 peer-specific /32 route/RPDB/local-admission projection through one current path; and generic
@@ -225,8 +227,10 @@ The tests prove that the peer-owner projection is physically equivalent to the a
 A.007 probe route/RPDB/local-admission shape while retaining a distinct semantic owner, and
 that the extracted physical ICMP context renders the same command as the legacy A.007 wrapper.
 No new Linux mechanism is introduced, so separate kernel evidence is not required for this
-refactor/projection seam. Runtime composition of peer-probe demand remains a D.002-dependent
-C.001 gap.
+refactor/projection seam. At this historical baseline, runtime composition of peer-probe demand
+remained a D.002-dependent C.001 gap. That gap was later closed by the combined probe-plane
+composition/runtime and generation-currentness work registered at `EV-00200`, `EV-00210`
+and `EV-00280`; EV-00110 must not be read as the current C.001 materialization status.
 
 ## EV-00120 — D.002 WireGuard peer Manager core
 
