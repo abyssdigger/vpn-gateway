@@ -1719,10 +1719,11 @@ Invalid nonmember Device detail, unknown/duplicate peer и unknown membership su
 отклоняются до runtime materialization. Existing Profile overlap normalization закрывает
 R8.R2.C1.
 
-`ManagedWireGuardConfig.shared_prefixes` временно сохраняется только как явно transitional
-one-group projection для еще не переписанного D.002 prototype и не является вторым
-user-facing source of truth. A.002 generalized R8 configuration responsibility теперь
-[`full`]; дальнейший gap принадлежит D.002/C.001/runtime consumers typed groups.
+A.002 generalized R8 configuration responsibility [`full`]: D.002 теперь потребляет
+typed `CurrentConfig.wireguard_groups` напрямую, поэтому прежний internal
+`ManagedWireGuardConfig.shared_prefixes` one-group bridge удален и второго prefix source
+между A.002 и D.002 больше нет. Дальнейшие gaps принадлежат D.002/C.001/runtime composition,
+а не configuration normalization.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -2853,17 +2854,16 @@ Manager изменяемой peer/group realization одного явно упр
 
 **Implements / supports:**
 - `VPNG-U001-R1.R3.R8` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R5` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R2` — [`none`]
-- `VPNG-U001-R1.R3.R8.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R1` — [`full`]
+- `VPNG-U001-R1.R3.R8.R2` — [`full`]
+- `VPNG-U001-R1.R3.R8.R3` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
-- `VPNG-U001-R1.R3.R8.R4` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R5` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R6` — [`partial`]
+- `VPNG-U001-R1.R3.R8.R4` — [`full`]
+- `VPNG-U001-R1.R3.R8.R5` — [`full`]
+- `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`
 
 API
 
@@ -2903,17 +2903,28 @@ Architectural decisions
 10. `Shared probe plane не сливает semantic evidence`
     *Peer probes и будущие group endpoint probes используют общий C.008 physical ICMP contract и общий C.001 collision-free convergence scope вместе с A.007 только через distinct semantic owners и owner-scoped readiness. Физически совпадающие lower objects могут переиспользоваться, но peer/group/Profile verdicts не объединяются.*
 
-**Материализация:** текущий `wireguard_peer_manager.py` материализует one-group degenerate
-case: один shared-prefix bundle, один selected peer, sticky ordinary selection, peer-specific
-technical probes и D.003 exact convergence. `wireguard_peer_probe_executor.py` materializes
-production peer-probe execution against confirmed C.001 readiness.
+**Материализация:** `wireguard_peer_manager.py` принимает typed
+`ManagedWireGuardGroupConfig` inputs A.002 и хранит current `group -> peer` ownership map,
+а не один global selected peer. Для каждого reconciliation он использует один fresh
+peer-health cache, поэтому один технический peer probe может подтвердить пригодность peer для
+нескольких groups без слияния group semantics. Ordinary current owner остается sticky;
+current reserve owner допускает failback к более предпочтительному fresh-confirmed ordinary
+candidate. Confirmed peer failure приводит к независимому пересчету затронутых groups;
+group без пригодного кандидата получает no-owner, не блокируя подтвержденный owner другой
+group. D.003 получает один полный exact peer -> AllowedIPs desired state со всеми group
+bundles; Device-wide D.002 generation публикуется только после fresh D.003 confirmation и
+изменяется при base/interface/group-policy/group-owner context change.
+`wireguard_peer_probe_executor.py` сохраняет production peer-probe execution against
+confirmed C.001 readiness. Старый internal `ManagedWireGuardConfig.shared_prefixes`
+one-group bridge удален.
 
-**Пробел материализации:** generalized R8 требует A.002 normalized group input,
-выводимый из `(Profile, managed WireGuard Device)`, Profile-local peer candidate/reserve
-policy, independent group ownership state, optional qualified Profile-check -> group endpoint
-probe owner/executor, multi-group generation/publication and alpha/runtime composition. До этой
-перестройки также остается ранее выявленный C.001 owner-subset readiness gap и обязательная
-инвалидизация зависимого A.007 evidence. Поэтому D.002 остается [`partial`].
+**Пробел материализации:** optional group endpoint пока намеренно не принимается D.002 core:
+валидная group policy с endpoint отклоняется до probe/mutation, пока не существует отдельный
+group-probe semantic owner/executor. Также остаются C.001 owner-subset readiness,
+alpha/runtime composition, periodic/explicit trigger/status publication и обязательная
+инвалидизация зависимого A.007 evidence после D.002 generation change. D.003 split-group
+kernel acceptance остается отдельным lower evidence gap. Поэтому общий вклад D.002 в R8
+остается [`partial`], несмотря на [`full`] component-local group-selection edges.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 

@@ -721,10 +721,9 @@ semantic owners/verdicts остаются раздельными. Если ус�
 
 Текущий `parse_current_config` принимает `device_membership.*.peer_order` и публикует
 typed `CurrentConfig.wireguard_groups` с derived prefixes, peer memberships и qualifying
-group availability description. `ManagedWireGuardConfig.shared_prefixes` пока сохраняется
-только как transitional one-group projection для существующего D.002 prototype; это не
-user-facing source of truth и при переводе D.002 на typed groups может быть удалено без
-compatibility alias, поскольку binding release еще не существует.
+group availability description. D.002 потребляет эти typed groups напрямую; прежний
+`ManagedWireGuardConfig.shared_prefixes` one-group bridge удален. Prefix bundle имеет один
+user-facing source of truth — `Profile.destinations`.
 
 ### Транспортные разрешения не дублируются
 

@@ -7,7 +7,7 @@ Lower runtime materializers consume typed results; they do not parse user string
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 import base64
 import ipaddress
@@ -189,9 +189,6 @@ class ManagedWireGuardConfig:
     private_key_file: str
     listen_port: int | None
     peers: tuple[ManagedWireGuardPeerConfig, ...]
-    # Transitional one-group projection consumed by the current D.002 prototype.
-    # Generalized callers use CurrentConfig.wireguard_groups instead.
-    shared_prefixes: tuple[ipaddress.IPv4Network, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,28 +315,13 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
     except Release1ConfigError as exc:
         raise CurrentConfigError(str(exc)) from None
 
-    managed: dict[str, ManagedWireGuardConfig] = {}
-    for device_id, intent in managed_bases.items():
-        # Preserve the old one-group projection only for the current D.002
-        # prototype until that Manager consumes typed groups.
-        shared = {
-            network
+    managed: dict[str, ManagedWireGuardConfig] = dict(managed_bases)
+    for device_id, intent in managed.items():
+        exact_business_targets = {
+            network.network_address
             for profile in base.structural.profiles.values()
             if profile.enabled and device_id in profile.device_order
             for network in profile.destinations
-        }
-        shared_prefixes = tuple(
-            sorted(
-                shared,
-                key=lambda network: (
-                    int(network.network_address),
-                    network.prefixlen,
-                ),
-            )
-        )
-        exact_business_targets = {
-            network.network_address
-            for network in shared_prefixes
             if network.prefixlen == 32
         }
         for peer in intent.peers:
@@ -349,10 +331,6 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
                     f"probe_target {peer.probe_target} is also an exact Profile "
                     "destination"
                 )
-        managed[device_id] = replace(
-            intent,
-            shared_prefixes=shared_prefixes,
-        )
 
     groups: dict[tuple[str, str], ManagedWireGuardGroupConfig] = {}
     for profile_id, profile in base.structural.profiles.items():
