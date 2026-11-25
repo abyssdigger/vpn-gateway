@@ -1,7 +1,7 @@
 # #32 — Сводка исследования межэкспертного транспорта
 
-**Статус:** рабочая сводка для обсуждения, v5; не нормативный документ, не утвержденная архитектура, не отчет о выполненном эксперименте.
-**Источник:** [Issue #32](https://github.com/abyssdigger/vpn-gateway/issues/32), включая checkpoint [v1](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175858653), [delta v2](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175896642) и последующие сообщения до #7176425300. Полные обсуждения и первичные ссылки остаются в Issue.
+**Статус:** рабочая сводка для обсуждения, v6; не нормативный документ, не утвержденная архитектура, не отчет о выполненном эксперименте.
+**Источник:** [Issue #32](https://github.com/abyssdigger/vpn-gateway/issues/32), включая checkpoint [v1](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175858653), [delta v2](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175896642) и последующие сообщения до #7176461602. Полные обсуждения и первичные ссылки остаются в Issue.
 **Владелец сводки:** GPT-6.2; GPT-5.6 предлагает корректировки в #32 (распоряжение projectholder, [уведомление](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7176117594)).
 **Базовый ref:** main @ 7a8d5ad655b08eb71a0fe7d9ed098db92549aca3. Запись разрешена только в выделенную ветку сводки; это не разрешение на настройку, платный API, live-эксперименты или изменение процесса.
 
@@ -127,6 +127,10 @@ INFERRED: аналог distributed termination detection ([Dijkstra–Scholten](
 
 Synthetic illustration, не observed cost: при одинаковых 20 material inputs два независимых role batches требуют 2 manual wakes при passivation, 5 sequential waves — 5, строгая alternating chain — 20; ideal overlapping live window может обойтись двумя initial wakes только при реально живых turns. Нужны causal depth/critical blocked intervals и полезная работа на activation, не одна метрика messages/wake. Предпочтение daily maintenance не означает допустимость daily-only wake latency. Independent fanout подходит для batch; tight serial review — для overlapping live window либо будущего supported autonomous wake. Не прекращать обязательный WAIT ради метрики. Инкрементальную экономику shim сравнивать с уже работающим manual batch, не с устаревшим copy/paste workflow.
 
+Дополнительно: overlapping role windows имеют свои start/reserve; peer availability hint не продлевает чужой CDC и не дает terminal witness/authority. Если оцененный overlap недостаточен, запрос сохранять как durable obligation, не рассчитывать на немедленный ответ. Pilot измеряет полезные hops внутри overlap и critical blocked time вне него. Claimed stop basis, independently observed terminal (если доступен), remaining obligations и holder rescue — разные наблюдения. Issue-only watchdog может диагностировать overdue/unknown, но молчание/heartbeat не доказывают terminal/active; не разрешать автоматический Send. #7176442039, #7176453624.
+
+OBSERVED checkpoint cost proxy (#7176461602): v5 содержала 61 literal distinct comment-ID refs, все разрешились при read. Source cutoff 186 comments — 396408 JS string-length chars тела, 408630 compact JSON chars; v5 — 31941 chars (~8.1% body volume); v5 + три later-comment tail — 34967 chars. Это измеренная text-volume reduction, не billing, semantic coverage или R-CAPS PASS. Reviewer fetches exact references as needed.
+
 Основания: #7176371678, #7176399798. Пилот не требует VM/API/UI automation или изменения процесса; решение о его запуске/форме учета отдельно.
 
 ## 7. Процесс: отдельный открытый вопрос
@@ -150,7 +154,7 @@ Holder предложил смягчить ограничения research loop,
 | O-GOV | OPEN | Отдельно согласовать норму research branch; текущая сводка не создает прецедента автоматического grant. |
 | O-ATTENTION | EXPERIMENT NEEDED | Измерить ручной batch, READY→attention, устраненные лишние вмешательства и ложные уведомления. |
 | O-QUIESCENCE | OPEN | Локальный stop, quiescent cut и semantic closure разделены; obligation/readiness/eligibility candidate, проверить delivery/recovery. |
-| O-REVIEW | CONDITIONAL PASS v2; v3–v5 review pending | Последнее блокирующее замечание #7176208539 (split O-WAKE) устранено в v3; новые findings открыты для ревью. |
+| O-REVIEW | CONDITIONAL PASS v2; v3–v6 review pending | Последнее блокирующее замечание #7176208539 (split O-WAKE) устранено в v3; новые findings открыты для ревью. |
 
 Предварительный вывод: транспорт внутри активного turn и частичный workflow уже полезны; автономное продолжение того же чата после terminal пока не доказано. Не зафиксировать архитектуру или PASS до получения различающего evidence.
 
@@ -162,3 +166,5 @@ Holder предложил смягчить ограничения research loop,
 - v4: peer review #7176270959 / #7176289682 — уточнение минимального журнала obligations и passivation; добавлены два toy discriminators, GitHub polling/history/status evidence, native MCP Tasks non-candidate, наблюдение holder principal separation и model-visible delta filtering, низкоприоритетная reaction hypothesis. Никаких реальных wake/setup/process changes.
 
 - v5: пилот без нового ПО и causal-depth economics, natural manual recovery observation (не formal R-SEM), factorized R-CAPS при смене модели и качество review, legacy extraction для необязательной локальной модели, 8-trace toy polling reconciliation. Сводка промежуточная; новых production/live экспериментов или process changes нет.
+
+- v6: cadence/overlap, stop observability (не подмена исполнения новой нормой) и фактический checkpoint text-volume proxy. Latest peer review относится к v2; последующие содержательные corrections приняты, независимый review v3–v6 не получен на данном cutoff. Открытые экспериментальные obligations сохраняются.
