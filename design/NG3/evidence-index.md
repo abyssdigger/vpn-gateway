@@ -227,3 +227,25 @@ that the extracted physical ICMP context renders the same command as the legacy 
 No new Linux mechanism is introduced, so separate kernel evidence is not required for this
 refactor/projection seam. Runtime composition of peer-probe demand remains a D.002-dependent
 C.001 gap.
+
+## EV-00120 — D.002 WireGuard peer Manager core
+
+**Status:** accepted / partial D.002 materialization  
+**Scope:** current-only ordered peer selection, sticky current-owner behavior without automatic
+failback, confirmed-owner failover, conservative current-owner local-error handling, complete
+D.003 desired-state construction and peer-realization generation publication only after fresh
+D.003 confirmation.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_manager.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_peer_manager.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d002-manager-core-review.md`.  
+**Executable evidence:** GitHub Actions run `45554305306`, `unit` job
+`139002651040` — PASS on source
+`77a4e9a53862990710314bab84ef7f0dd51446ee`.
+
+The core evidence confirms first suitable selection in configured order, sticky retention of a
+still-replying current owner, failover only after confirmed current-owner no-reply, no false
+failover on current-owner local execution error, exact no-owner realization when no peer is
+confirmed suitable, generation change across owner/base/interface/order context changes, and
+no generation publication when D.003 is unconfirmed. The production C.001/C.008/D.003 lower
+seams are separately accepted by EV-00110/EV-00100; runtime composition remains explicit
+follow-up work.

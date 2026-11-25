@@ -2809,10 +2809,10 @@ Manager изменяемой реализации пиров одного явн
 поколением этой реализации и публикует текущее подтвержденное либо проблемное состояние.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R8` — [`none`]
-- `VPNG-U003-R3.R6.R2` — [`none`]
+- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`
+**Evidence:** `EV-00050`, `EV-00120`
 
 API
 
@@ -2849,7 +2849,9 @@ Architectural decisions
 9. `Текущие доказательства не требуют отдельного ограничения трафика на время переключения`
    *`EV-00050` не выявил потерь или передачи полезного трафика третьему пиру при проверенном переносе полного состояния. Поэтому отдельное защитное ограничение трафика не вводится без новых доказательств. Частично примененное или неоднозначное состояние никогда не считается новым подтвержденным поколением и переводит путь в problem/unconfirmed.*
 
-**Пробел материализации:** Рабочая реализация выбора WireGuard-пира, его отдельного наблюдения и поколения peer-realization отсутствует. Существующий availability probe stack не является готовой D.002 реализацией: его semantic owner сейчас жестко задан как `ProbePolicyOwner(profile_id, LogicalPathId)`, а physical ICMP Driver принимает A.007-specific `ProbeObservationContext`. D.002 не должен изображать peer как `LogicalPathId`. Production reuse требует сохранить отдельную D.002 peer identity, выделить protocol-neutral physical ICMP execution seam C.008 и предоставить C.001 отдельный owner-scoped peer-probe precondition; D.003 остается нижним exact-AllowedIPs postcondition Enforcer и может быть материализован независимо до Manager.
+**Материализация:** `design/NG3/code/python/rou/wireguard_peer_manager.py` содержит current-only Manager core. Он принимает подтвержденный D.001 base generation и current path realization, использует отдельный peer-probe port с `WireGuardPeerProbeOwner`, сохраняет текущего владельца при его fresh `reply` без принудительного failback, после `no_reply` выбирает наиболее предпочтительный из fresh-confirmed пригодных пиров и передает D.003 полный desired `AllowedIPs` state. `local_error` текущего владельца не трактуется как подтвержденная непригодность и переводит current projection в problem/unconfirmed. Новое peer-realization generation вычисляется и публикуется только после confirmed D.003 postcondition; смена base generation, interface generation, ordered peer context, shared-prefix set либо владельца меняет generation. Наличие `problem` никогда не сохраняет прежнее generation как current evidence.
+
+**Пробел материализации:** D.002 core еще не подключен к alpha/runtime composition. Не материализованы: совместное добавление peer-probe demand в рабочий C.001 desired/convergence; production peer-probe port, который подтверждает C.001 precondition и вызывает C.008; периодический/explicit trigger D.002; публикация D.002 realization в A.008; и обязательная инвалидизация A.007 Profile-availability evidence при смене peer generation. Поэтому D.002 остается [`partial`] и R8 в целом не закрывается.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
