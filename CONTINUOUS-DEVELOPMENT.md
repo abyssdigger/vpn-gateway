@@ -11,6 +11,10 @@ Those subjects are owned by `AGENTS.md`, `design/requirements-model.md`,
 `design/component-model.md`, current-stage normative artifacts and
 `PROJECT-CONVENTIONS.md`.
 
+`INTERACTIVE-DEVELOPMENT.md` is an optional execution extension for an already active CD when
+the user explicitly requests interactive/in-dialog development. It does not activate CD, reset
+or replace the CD clock, change CD stop semantics or widen repository/GitHub authorization.
+
 ## 1. Entering CD
 
 A CD cycle starts or resumes only after an explicit user instruction to start/resume/continue
@@ -72,6 +76,36 @@ requirement-only unit need not manufacture implementation/evidence phases that d
 
 If a later phase exposes an earlier insufficiency, return to the earliest insufficient owner
 instead of inventing semantics locally.
+
+### Mandatory execution transition gate
+
+After every bounded local operation that returns execution control to the agent, perform
+`EXEC_NEXT` before deciding whether to continue or finish the active turn.
+
+A local operation includes, for example:
+
+- a tool/read/write batch;
+- a commit/publication or its verification;
+- a validation/test/review result;
+- completion of one analysis/design/implementation step;
+- completion of a review unit or development block;
+- return from a bounded external-event wait.
+
+`EXEC_NEXT` must choose exactly one transition:
+
+- `WORK` — a concrete, sufficiently defined, authorized and safe next step exists; execute it;
+- `WAIT` — progress depends on an external event/input and the active execution mode provides
+  an applicable bounded wait mechanism; enter that wait, then return to `EXEC_NEXT` when it
+  returns for input, timeout or recoverable error;
+- `STOP` — continuation is not permitted/appropriate under a currently true CD stop basis;
+  enter `PRE_FINAL_GATE` before ending the turn.
+
+Completion of a local operation, review unit, originally mentioned subsystem or development
+block is not by itself a `STOP` basis. A bounded wait timeout is likewise not a `STOP` basis.
+
+When active CD is running under `INTERACTIVE-DEVELOPMENT.md`, that document defines the
+live-dialog mechanics for `WAIT` and continuation but does not change these transition
+semantics.
 
 ### Requirement work
 
@@ -262,6 +296,25 @@ As the cycle approaches `CYCLE_INTERVAL`, prefer a safe technical stopping point
 usable handoff over squeezing in another change.
 
 Do not intentionally run materially beyond the interval to finish a block.
+
+### Mandatory pre-final gate
+
+Before ending an active CD turn or returning a final/handoff response, perform
+`PRE_FINAL_GATE`.
+
+The gate must:
+
+1. name the exact currently applicable stop basis from this document (for example user
+   intervention pause, required human decision/external blocker, publication ambiguity, no
+   sufficiently defined unblocked work, or the session-safety boundary);
+2. verify that basis against current observable facts rather than inference from completion of
+   the last local operation;
+3. verify that the active work frontier has no safer permitted `WORK` transition and, when an
+   applicable bounded waiting mechanism exists, no required `WAIT` transition;
+4. prepare the required truthful handoff/conclusion for the actual stop basis.
+
+If no permitted stop basis is currently true, `STOP` is invalid: do not return a final
+response; return to `EXEC_NEXT` and choose `WORK` or `WAIT`.
 
 At the stop:
 
