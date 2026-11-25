@@ -204,3 +204,26 @@ peer B, preservation of both permanent peer-specific probe /32 prefixes, and unc
 WireGuard interface identity across the transfer. D.003 does not choose a peer, publish a
 peer-realization generation, or claim Profile availability; those remain D.002/downstream
 responsibilities.
+
+## EV-00110 — reusable WireGuard peer-probe lower seam
+
+**Status:** accepted / C.008 full, C.001 partial for R8  
+**Scope:** removal of A.007 semantic-owner coupling from the physical ICMP Driver; distinct
+`WireGuardPeerProbeOwner(device_id, peer_id)`; shared deterministic probe resource allocation;
+peer-specific /32 route/RPDB/local-admission projection through one current path; and generic
+fresh execution-precondition gating without creating a peer `LogicalPathId`.  
+**Implementation:** `design/NG3/code/python/rou/icmp_probe_driver.py`,
+`design/NG3/code/python/rou/network_policy_layout.py`,
+`design/NG3/code/python/rou/wireguard_peer_probe_policy.py`,
+`design/NG3/code/python/rou/probe_precondition.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-peer-probe-seam-review.md`.  
+**Executable evidence:** GitHub Actions run `45553552569`, `unit` job
+`139000197586` — PASS on source
+`5a2e112dc3d13880d212dd23eb62c993f612cd38`.
+
+The tests prove that the peer-owner projection is physically equivalent to the already proven
+A.007 probe route/RPDB/local-admission shape while retaining a distinct semantic owner, and
+that the extracted physical ICMP context renders the same command as the legacy A.007 wrapper.
+No new Linux mechanism is introduced, so separate kernel evidence is not required for this
+refactor/projection seam. Runtime composition of peer-probe demand remains a D.002-dependent
+C.001 gap.
