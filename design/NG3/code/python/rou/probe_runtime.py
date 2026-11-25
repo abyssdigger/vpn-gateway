@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from .availability_confirmation import AvailabilityOutcome
 from .interface_identity import InterfaceIdentity
@@ -52,11 +52,57 @@ class ProbeTechnicalObservation:
             )
 
 
+class ProbeOwnershipDependencyState(str, Enum):
+    NOT_APPLICABLE = "not_applicable"
+    CONFIRMED = "confirmed"
+    UNCONFIRMED = "unconfirmed"
+
+
+@dataclass(frozen=True, slots=True)
+class ProbeOwnershipDependency:
+    state: ProbeOwnershipDependencyState
+    generation: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, ProbeOwnershipDependencyState):
+            raise ProbeRuntimeError(
+                "ownership dependency state must be ProbeOwnershipDependencyState"
+            )
+        if self.state is ProbeOwnershipDependencyState.CONFIRMED:
+            if not isinstance(self.generation, str) or not self.generation:
+                raise ProbeRuntimeError(
+                    "confirmed ownership dependency requires generation"
+                )
+        elif self.generation is not None:
+            raise ProbeRuntimeError(
+                "non-confirmed ownership dependency must not carry generation"
+            )
+
+    @classmethod
+    def not_applicable(cls) -> "ProbeOwnershipDependency":
+        return cls(ProbeOwnershipDependencyState.NOT_APPLICABLE)
+
+    @classmethod
+    def confirmed(cls, generation: str) -> "ProbeOwnershipDependency":
+        return cls(ProbeOwnershipDependencyState.CONFIRMED, generation)
+
+    @classmethod
+    def unconfirmed(cls) -> "ProbeOwnershipDependency":
+        return cls(ProbeOwnershipDependencyState.UNCONFIRMED)
+
+    @property
+    def permits_remote_evidence(self) -> bool:
+        return self.state is not ProbeOwnershipDependencyState.UNCONFIRMED
+
+
 @dataclass(frozen=True, slots=True)
 class ProbeObservationContext:
     intent: AvailabilityProbeIntent
     endpoint: InterfaceIdentity
     generation: int
+    ownership_dependency: ProbeOwnershipDependency = field(
+        default_factory=ProbeOwnershipDependency.not_applicable
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.intent, AvailabilityProbeIntent):
@@ -74,6 +120,13 @@ class ProbeObservationContext:
         if type(self.generation) is not int or self.generation <= 0:
             raise ProbeRuntimeError(
                 "generation must be a positive integer"
+            )
+        if not isinstance(
+            self.ownership_dependency,
+            ProbeOwnershipDependency,
+        ):
+            raise ProbeRuntimeError(
+                "ownership_dependency must be ProbeOwnershipDependency"
             )
 
 
@@ -126,6 +179,7 @@ class AvailabilityProbeAgent:
         self,
         intent: AvailabilityProbeIntent,
         endpoint: InterfaceIdentity,
+        ownership_dependency: ProbeOwnershipDependency | None = None,
     ) -> ProbeObservationContext:
         if not isinstance(intent, AvailabilityProbeIntent):
             raise ProbeRuntimeError(
@@ -135,12 +189,22 @@ class AvailabilityProbeAgent:
             raise ProbeRuntimeError(
                 "endpoint must be InterfaceIdentity"
             )
+        dependency = (
+            ProbeOwnershipDependency.not_applicable()
+            if ownership_dependency is None
+            else ownership_dependency
+        )
+        if not isinstance(dependency, ProbeOwnershipDependency):
+            raise ProbeRuntimeError(
+                "ownership_dependency must be ProbeOwnershipDependency"
+            )
 
         current = self._current
         if (
             current is not None
             and current.intent == intent
             and current.endpoint == endpoint
+            and current.ownership_dependency == dependency
         ):
             return current
 
@@ -149,6 +213,7 @@ class AvailabilityProbeAgent:
             intent=intent,
             endpoint=endpoint,
             generation=self._last_generation,
+            ownership_dependency=dependency,
         )
         return self._current
 
@@ -162,6 +227,10 @@ class AvailabilityProbeAgent:
         if self._current is None:
             raise ProbeRuntimeError(
                 "probe observation context is not configured"
+            )
+        if not self._current.ownership_dependency.permits_remote_evidence:
+            raise ProbeRuntimeError(
+                "probe ownership dependency is unconfirmed"
             )
         return self._current
 
@@ -236,6 +305,10 @@ class AvailabilityProbeRuntime:
         self,
         intents: Iterable[AvailabilityProbeIntent],
         path_routes: Iterable[RoutePriorityPathRoute],
+        ownership_dependencies: Mapping[
+            ProbePolicyOwner,
+            ProbeOwnershipDependency,
+        ] | None = None,
     ) -> tuple[ProbeObservationContext, ...]:
         raw_intents = tuple(intents)
         raw_routes = tuple(path_routes)
@@ -270,6 +343,32 @@ class AvailabilityProbeRuntime:
                 )
             route_by_path[route.path_id] = route
 
+        if ownership_dependencies is None:
+            dependency_by_owner = {
+                owner: ProbeOwnershipDependency.not_applicable()
+                for owner in intent_by_owner
+            }
+        else:
+            dependency_by_owner = dict(ownership_dependencies)
+            if any(
+                not isinstance(owner, ProbePolicyOwner)
+                for owner in dependency_by_owner
+            ):
+                raise ProbeRuntimeError(
+                    "ownership dependency keys must be ProbePolicyOwner"
+                )
+            if any(
+                not isinstance(dependency, ProbeOwnershipDependency)
+                for dependency in dependency_by_owner.values()
+            ):
+                raise ProbeRuntimeError(
+                    "ownership dependencies must contain ProbeOwnershipDependency"
+                )
+            if set(dependency_by_owner) != set(intent_by_owner):
+                raise ProbeRuntimeError(
+                    "ownership dependencies must match availability probe owners exactly"
+                )
+
         desired_contexts = []
         for owner, intent in intent_by_owner.items():
             route = route_by_path.get(owner.path_id)
@@ -277,15 +376,26 @@ class AvailabilityProbeRuntime:
                 raise ProbeRuntimeError(
                     f"probe owner has no current path realization: {owner!r}"
                 )
-            desired_contexts.append((owner, intent, route.endpoint))
+            desired_contexts.append(
+                (
+                    owner,
+                    intent,
+                    route.endpoint,
+                    dependency_by_owner[owner],
+                )
+            )
 
         # Validation above is complete before any current Agent state changes.
-        for owner, intent, endpoint in desired_contexts:
+        for owner, intent, endpoint, dependency in desired_contexts:
             agent = self._agents.get(owner)
             if agent is None:
                 agent = AvailabilityProbeAgent()
                 self._agents[owner] = agent
-            agent.configure(intent, endpoint)
+            agent.configure(
+                intent,
+                endpoint,
+                dependency,
+            )
 
         next_active = frozenset(intent_by_owner)
         for owner in self._active - next_active:

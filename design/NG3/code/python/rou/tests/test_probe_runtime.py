@@ -12,6 +12,8 @@ from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.probe_runtime import (
     AvailabilityProbeAgent,
     AvailabilityProbeRuntime,
+    ProbeOwnershipDependency,
+    ProbeOwnershipDependencyState,
     ProbeRuntimeError,
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
@@ -142,6 +144,47 @@ class ProbeRuntimeTests(unittest.TestCase):
 
 
 
+    def test_confirmed_ownership_generation_change_invalidates_context(self):
+        agent = AvailabilityProbeAgent()
+        first = agent.configure(
+            intent(),
+            EP_A1,
+            ProbeOwnershipDependency.confirmed("wg-generation-a"),
+        )
+        second = agent.configure(
+            intent(),
+            EP_A1,
+            ProbeOwnershipDependency.confirmed("wg-generation-b"),
+        )
+        self.assertGreater(second.generation, first.generation)
+        self.assertEqual(
+            second.ownership_dependency.state,
+            ProbeOwnershipDependencyState.CONFIRMED,
+        )
+        self.assertIsNone(
+            agent.accept_result(
+                first,
+                ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY),
+            )
+        )
+
+    def test_unconfirmed_ownership_dependency_blocks_attempt(self):
+        agent = AvailabilityProbeAgent()
+        current = agent.configure(
+            intent(),
+            EP_A1,
+            ProbeOwnershipDependency.unconfirmed(),
+        )
+        self.assertEqual(
+            current.ownership_dependency.state,
+            ProbeOwnershipDependencyState.UNCONFIRMED,
+        )
+        with self.assertRaisesRegex(
+            ProbeRuntimeError,
+            "ownership dependency is unconfirmed",
+        ):
+            agent.begin_attempt()
+
 
 class AvailabilityProbeRuntimeTests(unittest.TestCase):
     def test_multiple_subjects_are_active_concurrently(self):
@@ -258,6 +301,34 @@ class AvailabilityProbeRuntimeTests(unittest.TestCase):
                 (intent(), intent()),
                 (RoutePriorityPathRoute(A, EP_A1),),
             )
+
+    def test_explicit_dependencies_must_match_all_current_owners(self):
+        runtime = AvailabilityProbeRuntime()
+        owner = ProbePolicyOwner("corp", A)
+        with self.assertRaisesRegex(
+            ProbeRuntimeError,
+            "must match availability probe owners exactly",
+        ):
+            runtime.configure(
+                (intent(),),
+                (RoutePriorityPathRoute(A, EP_A1),),
+                {},
+            )
+
+        contexts = runtime.configure(
+            (intent(),),
+            (RoutePriorityPathRoute(A, EP_A1),),
+            {
+                owner: ProbeOwnershipDependency.confirmed(
+                    "wg-generation-a"
+                )
+            },
+        )
+        self.assertEqual(
+            contexts[0].ownership_dependency,
+            ProbeOwnershipDependency.confirmed("wg-generation-a"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

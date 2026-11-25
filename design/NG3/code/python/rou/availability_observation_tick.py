@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from .availability_manager import (
     AvailabilityManager,
     AvailabilityManagerProjection,
 )
+from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .probe_attempt import ProbeAttemptDriver, execute_probe_attempt_once
 from .probe_desired import ProbeDesiredAssembly
 from .probe_plane_desired import ProbePlaneDesiredAssembly
 from .probe_precondition import ProbeExecutionPrecondition
-from .probe_runtime import AvailabilityProbeRuntime, ProbeEvidence
+from .probe_runtime import (
+    AvailabilityProbeRuntime,
+    ProbeEvidence,
+    ProbeOwnershipDependency,
+)
 from .release1_config import Release1Config
 from .route_priority_inventory import RoutePriorityPathRoute
 
@@ -39,6 +44,11 @@ def run_availability_observation_tick(
     runtime: AvailabilityProbeRuntime,
     manager: AvailabilityManager,
     driver: ProbeAttemptDriver,
+    *,
+    ownership_dependencies: Mapping[
+        ProbePolicyOwner,
+        ProbeOwnershipDependency,
+    ] | None = None,
 ) -> AvailabilityObservationTickResult:
     """Run at most one probe attempt per current subject from one external wakeup.
 
@@ -74,7 +84,11 @@ def run_availability_observation_tick(
         if isinstance(assembly, ProbePlaneDesiredAssembly)
         else assembly.intents
     )
-    runtime.configure(availability_intents, routes)
+    runtime.configure(
+        availability_intents,
+        routes,
+        ownership_dependencies,
+    )
     projection = manager.synchronize(
         runtime.current_contexts,
         profiles,
@@ -90,6 +104,8 @@ def run_availability_observation_tick(
 
     evidence: list[ProbeEvidence] = []
     for context in runtime.current_contexts:
+        if not context.ownership_dependency.permits_remote_evidence:
+            continue
         item = execute_probe_attempt_once(
             runtime,
             context.intent.owner,
