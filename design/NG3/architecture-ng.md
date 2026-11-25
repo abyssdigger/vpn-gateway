@@ -2930,9 +2930,9 @@ executors используют принятые C.001 scoped-readiness/C.008 sea
 
 **Пробел материализации:** D.002 component-local group endpoint semantics теперь закрыты,
 но общий R8 остается неполным до combined A.007+D.002 alpha/runtime probe-plane composition,
-periodic/explicit reconciliation trigger и status publication, обязательной инвалидизации
-зависимого A.007 evidence после D.002 generation change и focused D.003 split-group kernel
-acceptance.
+periodic/explicit reconciliation trigger и status publication и обязательной инвалидизации
+зависимого A.007 evidence после D.002 generation change. D.003 split-group kernel acceptance
+закрыт EV-00190.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
@@ -2941,9 +2941,9 @@ Direct Enforcer одного полного требуемого `AllowedIPs` st
 generation смысловой realization.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 
-**Evidence:** `EV-00050`, `EV-00100`
+**Evidence:** `EV-00050`, `EV-00100`, `EV-00190`
 
 API
 
@@ -2966,16 +2966,13 @@ Architectural decisions
 5. `Наблюдение не превращается в заявление об атомарности`
    *Архитектурная гарантия строится на fresh-confirmed exact postcondition, а не на предположении, что `wg set` является универсально неделимой транзакцией. Неопределенное/частично примененное состояние не является подтвержденной D.002 realization.*
 
-**Материализация:** `wireguard_peer_ownership.py` уже принимает arbitrary complete
+**Материализация:** `wireguard_peer_ownership.py` принимает arbitrary complete
 per-peer `allowed_ips` tuples, fresh-проверяет D.001-owned interface identity, не принимает
 unexpected/incomplete peer set, применяет один полный `wg set` state и fresh-confirm exact
-postcondition. Эта lower форма структурно способна представить split ownership нескольких
-groups.
-
-**Пробел материализации:** существующее kernel evidence EV-00100 подтверждает перенос одного
-общего payload prefix между двумя peers, но не одновременный exact split нескольких group
-bundles между разными peers. После расширения R8 focused executable acceptance этой формы
-обязателен до возврата D.003 edge в [`full`].
+postcondition. Kernel acceptance EV-00190 подтверждает эту форму не только для transfer одного
+bundle, но и для simultaneous exact split двух independent group bundles между разными peers
+при сохранении permanent peer-probe /32 и неизменного ifindex общего `wg0`. Поэтому lower
+D.003 contribution к generalized R8 materialized [`full`].
 
 # Annex E. VPN-GATE-managed host state components
 
