@@ -2847,7 +2847,7 @@ Architectural decisions
 9. `Текущие доказательства не требуют отдельного ограничения трафика на время переключения`
    *`EV-00050` не выявил потерь или передачи полезного трафика третьему пиру при проверенном переносе полного состояния. Поэтому отдельное защитное ограничение трафика не вводится без новых доказательств. Частично примененное или неоднозначное состояние никогда не считается новым подтвержденным поколением и переводит путь в problem/unconfirmed.*
 
-**Пробел материализации:** Рабочая реализация выбора WireGuard-пира, его отдельного наблюдения и поколения peer-realization отсутствует.
+**Пробел материализации:** Рабочая реализация выбора WireGuard-пира, его отдельного наблюдения и поколения peer-realization отсутствует. Существующий availability probe stack не является готовой D.002 реализацией: его semantic owner сейчас жестко задан как `ProbePolicyOwner(profile_id, LogicalPathId)`, а physical ICMP Driver принимает A.007-specific `ProbeObservationContext`. D.002 не должен изображать peer как `LogicalPathId`. Production reuse требует сохранить отдельную D.002 peer identity, выделить protocol-neutral physical ICMP execution seam C.008 и предоставить C.001 отдельный owner-scoped peer-probe precondition; D.003 остается нижним exact-AllowedIPs postcondition Enforcer и может быть материализован независимо до Manager.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
