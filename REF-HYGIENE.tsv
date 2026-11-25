@@ -36,3 +36,5 @@ ADD_TAG	ng3-snapshot-wireguard-peer-probe-seam-source	31a884ac546c63d261885a4675
 DEL_BRANCH	ng3-wireguard-peer-probe-seam-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-d002-manager-core-source	9f1627f98fdf3429220dac97db29b49807c5d8c4	D.002 WireGuard peer Manager core.
 DEL_BRANCH	ng3-wireguard-d002-manager-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-peer-probe-executor-source	7728086fec87c0e6bf45ac09e4e9374e47580ab6	Confirmed WireGuard peer-probe executor.
+DEL_BRANCH	ng3-wireguard-peer-probe-executor-cdc-20261125
