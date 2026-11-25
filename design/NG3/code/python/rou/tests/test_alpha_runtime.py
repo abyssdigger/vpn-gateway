@@ -8,10 +8,17 @@ from rou.alpha_runtime import (
     AlphaReconcileStatus,
     AlphaRuntimeError,
     reconcile_alpha_payload_once,
+    reconcile_alpha_wireguard_peers_once,
 )
 from rou.host_publication_policy import HostPublicationSelectorKind
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_routing_desired import ManagedRouteType
+from rou.managed_device_manager import (
+    ManagedDeviceDesiredState,
+    ManagedDeviceRealization,
+)
+from rou.managed_wireguard_adapter import ManagedWireGuardState
+from rou.wireguard_peer_runtime import WireGuardPeerRuntimeResult
 
 
 CONFIG = """
@@ -129,6 +136,101 @@ target = "10.253.0.1"
             {context.intent.owner for context in prepared.availability_runtime.current_contexts},
             {assembly.availability_intents[0].owner},
         )
+
+    def test_wireguard_peer_helper_uses_current_alpha_probe_plane(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            """
+[device.wg-main]
+enabled = true
+use_outbound_nat = false
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/run/private.key"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.0/16"]
+device_order = ["wg-main"]
+
+[profile.alpha.availability_check]
+mechanism = "icmp"
+target = "10.253.0.1"
+""",
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        prepared.build_current(
+            host_boundary,
+            (
+                InterfaceIdentity("lo", 1),
+                host_boundary,
+                InterfaceIdentity("wg0", 11),
+            ),
+        )
+        base = ManagedDeviceRealization(
+            device_id="wg-main",
+            desired_state=ManagedDeviceDesiredState.PRESENT,
+            desired_generation="base-a",
+            confirmed_state=ManagedWireGuardState.PRESENT,
+            confirmed_generation="base-a",
+        )
+        coordinator = SimpleNamespace()
+        coordinator.reconcile = unittest.mock.Mock(
+            return_value=WireGuardPeerRuntimeResult(())
+        )
+        backend = object()
+
+        with patch(
+            "rou.alpha_runtime.LinuxStructuralPolicyBackend",
+            return_value=backend,
+        ):
+            result = reconcile_alpha_wireguard_peers_once(
+                prepared,
+                (base,),
+                coordinator,
+                object(),
+                object(),
+                object(),
+            )
+
+        self.assertTrue(result.confirmed)
+        coordinator.reconcile.assert_called_once()
+        args, kwargs = coordinator.reconcile.call_args
+        self.assertIs(args[0], prepared.current_config)
+        self.assertEqual(args[1], (base,))
+        self.assertEqual(args[2], prepared.last_path_routes)
+        self.assertIs(args[3], prepared.last_probe_assembly)
+        self.assertIs(kwargs["snapshot_observer"], backend)
+        self.assertIn("probe_driver", kwargs)
+        self.assertIn("ownership", kwargs)
+
+    def test_wireguard_peer_helper_requires_current_probe_plane(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        with self.assertRaisesRegex(
+            AlphaRuntimeError,
+            "current probe desired assembly",
+        ):
+            reconcile_alpha_wireguard_peers_once(
+                prepared,
+                (),
+                SimpleNamespace(),
+                object(),
+                object(),
+                object(),
+            )
 
     def test_external_device_still_uses_current_parser_compatibility_path(self):
         prepared = AlphaPreparedPolicy.from_text(
