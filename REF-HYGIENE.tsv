@@ -72,3 +72,5 @@ ADD_TAG	ng3-snapshot-wireguard-d002-alpha-integration-source	7b8b967fd78f4366e0f
 DEL_BRANCH	ng3-wireguard-d002-alpha-integration-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-r8r6-generation-ordering-source	88c031ffc0312b8e3b2dff708eb21b329f88b73f	R8.R6 A.007/D.002 evidence-generation ordering clarification.
 DEL_BRANCH	ng3-wireguard-r8r6-evidence-generation-cdc-20261125
+ADD_TAG	ng3-snapshot-typed-trace-evidence-gates-source	7117a5372882c2be3a6928b60f347443425ae6a7	Typed R/C architecture traceability and stable EV-only evidence gates.
+DEL_BRANCH	ng3-trace-evidence-gates-cdc-20261125
