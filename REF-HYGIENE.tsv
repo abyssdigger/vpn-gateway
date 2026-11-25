@@ -40,3 +40,5 @@ ADD_TAG	ng3-snapshot-wireguard-peer-probe-executor-source	7728086fec87c0e6bf45ac
 DEL_BRANCH	ng3-wireguard-peer-probe-executor-cdc-20261125
 ADD_TAG	ng3-snapshot-shared-probe-plane-readiness-design-source	d67bf873c46f41143edcd349e33e5c58dba0b6ca	Shared A.007/D.002 probe-plane readiness design.
 DEL_BRANCH	ng3-shared-probe-plane-design-cdc-20261125
+ADD_TAG	ng3-snapshot-binding-release-compatibility-source	34a202113bf0148511906989e1c158440d71f8b2	Binding-release compatibility policy and requirement classification.
+DEL_BRANCH	ng3-compatibility-wg-groups-cdc-20261125
