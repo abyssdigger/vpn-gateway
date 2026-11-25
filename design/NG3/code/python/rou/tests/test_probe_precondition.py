@@ -9,6 +9,7 @@ from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.network_policy_layout import (
     ProbePolicyOwner,
+    WireGuardGroupProbeOwner,
     WireGuardPeerProbeOwner,
 )
 from rou.nft_namespace_inventory import (
@@ -370,6 +371,34 @@ class ProbeScopedExecutionPreconditionTests(unittest.TestCase):
         self.assertEqual(peer.owners, frozenset({peer_owner}))
         self.assertEqual(len(profile.local.confirmed), 2)
         self.assertEqual(len(peer.local.confirmed), 2)
+
+    def test_group_owner_is_supported_by_scoped_readiness(self):
+        group_owner = WireGuardGroupProbeOwner("corp", "device")
+        profile_rule = self._rule(OWNER, 0x2000, 0xC0000000)
+        group_rule = self._rule(group_owner, 0x2002, 0xC0000002)
+        desired = ProbeNetworkPolicyDesiredState(
+            (),
+            (profile_rule, group_rule),
+            self._locals(OWNER) + self._locals(group_owner),
+        )
+        current = snapshot(
+            routing_rules=(
+                self._observed(profile_rule),
+                self._observed(group_rule),
+            ),
+            local_exact=True,
+        )
+
+        scoped = verify_probe_execution_precondition_scoped(
+            current,
+            desired,
+            frozenset({group_owner}),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+
+        self.assertTrue(scoped.confirmed)
+        self.assertEqual(scoped.owners, frozenset({group_owner}))
+        self.assertEqual(len(scoped.local.confirmed), 2)
 
     def test_missing_sibling_does_not_block_requested_owner_but_legacy_union_fails(self):
         peer_owner, profile_rule, _peer_rule, desired = self._full_desired()
