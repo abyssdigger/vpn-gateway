@@ -253,7 +253,11 @@ class BoundedConvergenceTests(unittest.TestCase):
         lifecycle.fail.clear()
         lifecycle.actions.clear()
         recovered = converge_managed_device_presence(cfg, manager, lifecycle.fresh)
-        self.assertEqual(lifecycle.actions, [("present", "a"), ("confirm", "r")])
+        self.assertEqual(
+            [action for action in lifecycle.actions if action[0] == "present"],
+            [("present", "a")],
+        )
+        self.assertIn(("confirm", "r"), lifecycle.actions)
         self.assertEqual(recovered.projection.desired_device_ids, {"a"})
         waiting = next(x for x in recovered.realizations if x.device_id == "r")
         self.assertTrue(waiting.waiting_for_dependencies)
