@@ -26,3 +26,5 @@ ADD_TAG	ng3-snapshot-production-d001-managed-wireguard-adapter-source	cbb453faba
 ADD_TAG	ng3-snapshot-partial-a012-managed-device-orchestration-source	0d8484f814543b476b50476917742f6703b7d637	Partial A.012 managed Device orchestration core.
 ADD_TAG	ng3-snapshot-wireguard-d001-cdc-ref-hygiene-source	refs/remotes/origin/ng3-wireguard-d001-cdc-20261124	WireGuard D.001 and A.012 core CDC ref-hygiene source.
 DEL_BRANCH	ng3-wireguard-d001-cdc-20261124
+ADD_TAG	ng3-snapshot-managed-device-runtime-composition-source	38e7fbf935ce331d3a222b5f1801b128f0d7ca88	Managed Device runtime composition.
+DEL_BRANCH	ng3-managed-device-runtime-cdc-20261125
