@@ -16,6 +16,7 @@ from .managed_device_manager import ManagedDeviceRealization
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .release1_config import Release1Config, render_helper_routing_interfaces
+from .wireguard_peer_manager import WireGuardPeerRealization
 
 
 _SEMVER_PATTERN = re.compile(
@@ -92,6 +93,7 @@ class RuntimeStatusSnapshot:
     configured_intent: ConfiguredIntentStatus
     confirmed_effective_state: tuple[EffectiveProfileStatus, ...] | None
     managed_device_realizations: tuple[ManagedDeviceRealization, ...]
+    wireguard_peer_realizations: tuple[WireGuardPeerRealization, ...]
     availability_state: tuple[AvailabilityProfileStatus, ...]
     readiness: RuntimeReadiness
     blocking_problems: tuple[str, ...]
@@ -120,6 +122,7 @@ class RuntimeStatusAgent:
         self._configured = configured_intent
         self._effective: tuple[EffectiveProfileStatus, ...] | None = None
         self._managed_devices: tuple[ManagedDeviceRealization, ...] = ()
+        self._wireguard_peers: tuple[WireGuardPeerRealization, ...] = ()
         self._availability = tuple(
             AvailabilityProfileStatus(
                 profile.profile_id,
@@ -163,6 +166,22 @@ class RuntimeStatusAgent:
         if len(ids) != len(set(ids)):
             raise ValueError("duplicate managed Device realization")
         self._managed_devices = tuple(
+            sorted(current, key=lambda item: item.device_id)
+        )
+
+    def confirm_wireguard_peers(
+        self,
+        realizations: Iterable[WireGuardPeerRealization],
+    ) -> None:
+        current = tuple(realizations)
+        if any(not isinstance(item, WireGuardPeerRealization) for item in current):
+            raise ValueError(
+                "realizations must contain WireGuardPeerRealization"
+            )
+        ids = [item.device_id for item in current]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate WireGuard peer realization")
+        self._wireguard_peers = tuple(
             sorted(current, key=lambda item: item.device_id)
         )
 
@@ -263,6 +282,7 @@ class RuntimeStatusAgent:
             configured_intent=self._configured,
             confirmed_effective_state=self._effective,
             managed_device_realizations=self._managed_devices,
+            wireguard_peer_realizations=self._wireguard_peers,
             availability_state=self._availability,
             readiness=self._readiness,
             blocking_problems=self._problems,
