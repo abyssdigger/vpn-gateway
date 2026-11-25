@@ -80,6 +80,10 @@ A current executable reference unit without a normal requirement path may appear
 
 - `design/NG3/code/python/rou/managed_device_manager.py`
 
+## Trace: `A.013`
+
+- `design/NG3/code/python/rou/managed_device_demand.py`
+
 ## Trace: `C.001`, `C.008`, `D.002`
 
 - `design/NG3/code/python/rou/wireguard_group_probe_executor.py`

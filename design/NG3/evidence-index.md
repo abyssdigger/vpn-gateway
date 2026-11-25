@@ -646,3 +646,30 @@ line following an inline `Constrained by` heading. The canonical grammar now per
 list-form `Implements` and `Constrained by` blocks and rejects trace-looking lines outside
 those blocks. No second/parallel validation script was introduced.
 
+## EV-00300 — configuration-driven managed presence and safe reserve release
+
+**Status:** accepted (evaluation-branch internal implementation review)  
+**Scope:** current-only warm normalization; A.013 deterministic ordinary/reserve demand,
+Profile-local roles and OR aggregation; explicit A.012 desired set; fresh observations
+between bounded D.001 attempts; selective dependency-confirmed reserve release and
+truthful A.008 diagnostic projection.  
+**Requirements:** `VPNG-U001-R1.R3.R7.R3` and R1–R4 children.  
+**Architecture:** A.001, A.002, A.008, A.012, A.013, C.004, D.001, D.003.  
+**Review:** `design/reviews/NG3-2026-11-25-warm-presence-evaluation-implementation-review.md`.  
+**Reviewed implementation baseline:** `74bfb5e3a5116cc998c6aa4578728d2bdca8ffee`.  
+**Executable evidence:** GitHub Actions [NG3 Python run 45645208959](https://github.com/abyssdigger/vpn-gateway/actions/runs/45645208959)
+— **25/25 jobs PASS**, unit job 139314335682 — **940/940 tests PASS**;
+`linux-managed-device-runtime` job 139314334848 — PASS;
+Actual main lineage guard run 45645208720 — PASS.
+
+The kernel integration uses the production WireGuard Adapter, real network namespace,
+normal C.001/probe convergence and D.003. It induces a primary-interface loss and a
+separately enforced D.001 secret-permission failure, confirms reserve activation, restores
+the primary with reserve still present, checks the release gate, confirms removal of
+dynamic payload AllowedIPs immediately before real D.001 deletion, and checks post-release
+binding and status. Stale replacement identity and D.003 failure are explicit injected
+negative observations; the successful stop and kernel AllowedIPs observations are real.
+No remote peer availability or payload-through-reserve claim is made by this experiment.
+
+This evidence is isolated on the evaluation branch. It does not record a main snapshot,
+release decision or projectholder acceptance of the implementation.

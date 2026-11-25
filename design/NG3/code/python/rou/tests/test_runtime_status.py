@@ -17,7 +17,8 @@ from rou.managed_device_manager import (
 from rou.managed_wireguard_adapter import ManagedWireGuardState
 from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
-from rou.release1_config import parse_release1_config
+from rou.release1_config import parse_current_config, parse_release1_config
+from rou.managed_device_demand import project_final
 from rou.wireguard_peer_manager import (
     WireGuardGroupOwnershipRecord,
     WireGuardPeerRealization,
@@ -80,6 +81,22 @@ class RuntimeStatusTests(unittest.TestCase):
         self.assertEqual(profile.destinations, ("10.253.0.0/24",))
         self.assertEqual(profile.device_order, ("ovpn",))
         self.assertIsNone(profile.availability_check)
+
+    def test_current_status_preserves_configured_warm_target_and_observed_demand(self):
+        config = parse_current_config(CONFIG + "warm_paths = 2\n")
+        agent = RuntimeStatusAgent(build_configured_intent_status(config))
+        self.assertEqual(agent.snapshot().configured_intent.profiles[0].warm_paths, 2)
+        self.assertIsNone(agent.snapshot().managed_profile_demands)
+        observed = PathBinding(LogicalPathId("ovpn", 0, 0), InterfaceIdentity("vpn0", 11))
+        agent.confirm_managed_demand(project_final(config, (observed,)))
+        encoded = json.loads(json.dumps(agent.snapshot().to_dict()))
+        demand = encoded["managed_profile_demands"][0]
+        self.assertEqual(demand["regular_target"], 2)
+        self.assertEqual(demand["regular_present"], 1)
+        self.assertEqual(demand["regular_deficit"], 1)
+        self.assertEqual(demand["ordinary_device_ids"], [])
+        agent.confirm_managed_demand(None)
+        self.assertIsNone(agent.snapshot().managed_profile_demands)
 
     def test_status_exposes_scoped_helper_routing_intent(self):
         configured = build_configured_intent_status(
