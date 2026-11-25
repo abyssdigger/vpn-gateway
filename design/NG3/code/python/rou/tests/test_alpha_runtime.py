@@ -1,7 +1,7 @@
 from ipaddress import IPv4Address
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from rou.alpha_runtime import (
     AlphaPreparedPolicy,
@@ -185,7 +185,7 @@ target = "10.253.0.1"
             confirmed_generation="base-a",
         )
         coordinator = SimpleNamespace()
-        coordinator.reconcile = unittest.mock.Mock(
+        coordinator.reconcile = Mock(
             return_value=WireGuardPeerRuntimeResult(())
         )
         backend = object()

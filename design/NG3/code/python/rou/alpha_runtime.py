@@ -1170,6 +1170,7 @@ def run_alpha_runtime(
                 )
                 managed_realizations_holder["current"] = shutdown_realizations
                 status_agent.confirm_managed_devices(shutdown_realizations)
+                status_agent.confirm_wireguard_peers(())
                 problem = _managed_device_problem(
                     shutdown_realizations,
                     require_absent=True,
@@ -1234,6 +1235,17 @@ def run_alpha_runtime(
                         f"{availability_start.status.value}"
                     )
                 ),
+                unknown_fields=(
+                    (
+                        "confirmed_effective_state",
+                        "wireguard_peer_realizations",
+                    )
+                    if (
+                        prepared.current_config.wireguard_groups
+                        and wireguard_start is None
+                    )
+                    else ("confirmed_effective_state",)
+                ),
             )
             status_publisher.publish(status_agent.snapshot())
             log(
@@ -1271,6 +1283,7 @@ def run_alpha_runtime(
             status_agent.confirm_managed_devices(managed_realizations)
             managed_problem = _managed_device_problem(managed_realizations)
             if managed_problem is not None:
+                status_agent.confirm_wireguard_peers(())
                 return (
                     AlphaReconcileResult(
                         AlphaReconcileStatus.FAILED,
@@ -1323,6 +1336,8 @@ def run_alpha_runtime(
                         "WireGuard peer reconciliation failed: "
                         f"{type(exc).__name__}: {exc}"
                     )
+            if wireguard_result is None:
+                status_agent.confirm_wireguard_peers(())
             return (
                 result,
                 availability_result,
@@ -1560,6 +1575,14 @@ def run_alpha_runtime(
                             if availability_result is not None
                             else f"alpha reconcile failed: {result.status.value}"
                         )
+                    ),
+                    unknown_fields=(
+                        (
+                            "confirmed_effective_state",
+                            "wireguard_peer_realizations",
+                        )
+                        if prepared.current_config.wireguard_groups
+                        else ("confirmed_effective_state",)
                     ),
                 )
             current_problem_owners = (
