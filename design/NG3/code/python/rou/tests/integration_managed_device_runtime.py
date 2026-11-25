@@ -62,7 +62,8 @@ def main() -> None:
         key_path.write_text(private + "\n", encoding="ascii")
         key_path.chmod(0o600)
         runtime_dir = root / "run"
-        runtime_dir.mkdir()
+        runtime_dir.mkdir(mode=0o700)
+        runtime_dir.chmod(0o700)
 
         config = f"""
 [device.wg-main]
