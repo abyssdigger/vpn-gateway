@@ -58,6 +58,11 @@ The release does not require the aggressive host-routing helper family
 0.1.0. Existing aggressive-helper implementation/evidence remains outside the Release-1 runtime
 scope and does not make its automatic Protective-mode escalation path a 0.1.0 commitment.
 
+The release does not require the runtime-service privilege-minimization family
+`VPNG-M001-R5*`; the first-release omission permitted by `VPNG-M001-R5.C1` **is exercised**
+for 0.1.0. This omission concerns only the long-running service privilege boundary and does not
+change the scope of one-shot installation/upgrade/administrative operations.
+
 The release does not require the formally postponed developer execution trace family
 `VPNG-D001-R2*`.
 
