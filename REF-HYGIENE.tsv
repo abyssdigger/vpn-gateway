@@ -52,3 +52,5 @@ ADD_TAG	ng3-snapshot-runtime-service-privilege-policy-source	958bbed6f3ccfc1eab8
 DEL_BRANCH	ng3-runtime-service-privilege-policy-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-d002-groups-source	6c8b05f403c3e8997be651977b314f34f6377914	Generalized D.002 recoverable-group Manager core.
 DEL_BRANCH	ng3-wireguard-d002-groups-cdc-20261125
+ADD_TAG	ng3-snapshot-probe-owner-scoped-readiness-source	eecc567b1dcc096b570fb23bc64bf4677b49d024	Owner-scoped shared probe-plane readiness verification.
+DEL_BRANCH	ng3-probe-owner-scoped-readiness-cdc-20261125
