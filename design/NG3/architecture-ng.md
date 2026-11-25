@@ -1834,6 +1834,7 @@ API
 
     <accepted-intent / binding / availability Events> — обновить current semantic inputs.
     <payload projection InfoEvent> — опубликовать текущую подтвержденную semantic projection для observers.
+    <retirement-protection projection> — для уже присутствующих managed paths публиковать current запрет на destructive retirement, когда удаление path нарушило бы действующую sticky/non-reserve active-path обязанность; эта projection не создает managed-presence demand и не запускает отсутствующий Device.
     <reconciliation trigger> — fresh-observe dependent lower domains и при необходимости converge через Adapters.
 
 Architectural decisions
@@ -1863,14 +1864,16 @@ Architectural decisions
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
 9. `Политика полезного трафика не создает потребность в VPN`
-   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией.*
+   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией. При этом current healthy non-reserve active path образует A.004-owned retirement protection: если физическое удаление уже присутствующего managed path обошло бы `VPNG-U003-R3.R8`, A.004 запрещает завершать destructive release этого path до fresh изменения current routing state. Такой запрет может только удержать уже присутствующий ресурс и не является источником demand для запуска отсутствующего Device.*
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
-и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` вклад теперь [`partial`]:
-текущий Manager умеет сохранять structural membership и участвовать в dependency release,
-но новая конфигурационная проекция требуемого присутствия Devices ему не принадлежит и пока
-не материализована отдельной границей.
+и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` вклад остается [`partial`]:
+конфигурационная проекция требуемого присутствия Devices материализована отдельно в A.013 и
+не принадлежит A.004. A.004 сохраняет structural membership/current active-path state и
+публикует отдельную retirement-protection projection для уже присутствующих managed paths.
+Selective lifecycle release обязан учитывать ее вместе с остальными dependency-release gates;
+такая protection не изменяет A.013 demand и не дает A.004 права запускать отсутствующий Device.
 
 **Evidence:** `EV-00280`.
 
@@ -2261,7 +2264,7 @@ Architectural decisions
    *Успешная реализация D.001 лишь позволяет VPN-endpoint появиться. C.004 независимо заново наблюдает и подтверждает `PathBinding`; для WireGuard по R8 D.002 дополнительно подтверждает реализацию выбранного пира. Manager не подменяет ни одну из этих границ.*
 
 5. `VPN-экземпляр удаляется после зависимостей`
-   *При исчезновении вычисленной потребности политика полезного трафика должна перестать использовать Device, а специфичное для VPN динамическое состояние должно быть снято до подтвержденного удаления базовой реализации D.001. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей.*
+   *Исчезновение вычисленной A.013 demand делает Device кандидатом на release, но само по себе не доказывает допустимость destructive removal. До подтвержденного удаления базовой реализации D.001 должны быть fresh-confirmed все применимые release dependencies: политика полезного трафика больше не использует retiring path, A.004 retirement-protection не запрещает его удаление, а специфичное для VPN динамическое состояние снято. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей. A.012 не вычисляет sticky routing semantics и принимает только внешний подтвержденный release verdict.*
 
 6. `Общая остановка продукта сохраняет единственного владельца`
    *A.001 при общей остановке задает отсутствие потребности во всех управляемых Devices и ожидает подтвержденного A.012 отсутствия до уничтожения Private network. Это не превращает A.001 во второго владельца состояния и не делает A.012 глобальным Manager жизненного цикла.*
@@ -2359,7 +2362,7 @@ Architectural decisions
    *Fresh current ordinary PathBinding любого ownership mode уменьшает regular deficit. Ownership влияет только на возможность actuation: Calculator никогда не превращает external Device в managed subject.*
 
 3. `Numeric target не означает proactive rebalance`
-   *Если текущие ordinary paths уже удовлетворяют numeric target, отсутствующий более предпочтительный ordinary managed Device не запускается только ради замены живого lower-baseline path. При избытке present managed ordinary memberships Calculator оставляет минимальный детерминированный набор, предпочитая baseline order среди действительно присутствующих candidates.*
+   *Если текущие ordinary paths уже удовлетворяют numeric target, отсутствующий более предпочтительный ordinary managed Device не запускается только ради замены живого lower-baseline path. При избытке present managed ordinary memberships Calculator может вернуть минимальный детерминированный warm-demand set, предпочитая baseline order среди действительно присутствующих candidates. Этот demand verdict отвечает только на вопрос, какое присутствие требуется создавать/поддерживать по warm policy, и не является достаточным разрешением на физическое удаление остальных уже присутствующих managed paths. Destructive retirement отдельно проходит A.004-owned sticky active-path protection и остальные release dependencies.*
 
 4. `Дефицит заполняется baseline-порядком`
    *Если ordinary presence меньше target, уже присутствующие ordinary managed Devices сохраняют demand, затем отсутствующие managed ordinary memberships выбираются в `Profile.device_order -> Device.expected_interfaces` baseline до покрытия недостающей configured capacity. Один Device может неизбежно дать capacity больше точного дефицита; lifecycle granularity остается Device-level.*
