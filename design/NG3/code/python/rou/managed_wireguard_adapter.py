@@ -132,6 +132,25 @@ class LinuxManagedWireGuardAdapter:
             interface=_identity(row),
         )
 
+    def confirm_present(
+        self,
+        device_id: str,
+        desired: ManagedWireGuardConfig,
+    ) -> ManagedWireGuardObservation:
+        """Fresh-read exact owned base generation without mutating it."""
+        prepared = self._prepare(device_id, desired)
+        row = self._owned_link(prepared.marker)
+        if row is None:
+            return ManagedWireGuardObservation(
+                device_id=device_id,
+                state=ManagedWireGuardState.ABSENT,
+            )
+        if not self._matches_prepared(row, prepared):
+            raise ManagedWireGuardError(
+                "current managed WireGuard base does not match expected generation"
+            )
+        return self._confirmed_observation(row, prepared)
+
     def converge_present(
         self,
         device_id: str,
