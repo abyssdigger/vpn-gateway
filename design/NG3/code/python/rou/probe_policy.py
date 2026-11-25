@@ -20,6 +20,8 @@ from .network_policy_layout import (
     NetworkPolicyPlatformSpace,
     ProbePolicyAllocation,
     ProbePolicyOwner,
+    ProbeSemanticOwner,
+    is_probe_semantic_owner,
 )
 from .payload_routing_desired import ManagedRouteSpec, ManagedRouteType
 from .route_priority_inventory import RoutePriorityPathRoute
@@ -84,7 +86,7 @@ class ProbeLocalPlatform:
 
 @dataclass(frozen=True, slots=True)
 class ProbeRuleSpec:
-    owner: ProbePolicyOwner
+    owner: ProbeSemanticOwner
     priority: int
     process_uid: int
     endpoint: InterfaceIdentity
@@ -93,9 +95,9 @@ class ProbeRuleSpec:
     mechanism: AvailabilityProbeMechanism = AvailabilityProbeMechanism.ICMP
 
     def __post_init__(self) -> None:
-        if not isinstance(self.owner, ProbePolicyOwner):
+        if not is_probe_semantic_owner(self.owner):
             raise ProbePolicyProjectionError(
-                "probe rule owner must be ProbePolicyOwner"
+                "probe rule owner must be a supported probe semantic owner"
             )
         if (
             type(self.priority) is not int
@@ -134,7 +136,7 @@ class ProbeLocalHook(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class ProbeLocalRuleSpec:
-    owner: ProbePolicyOwner
+    owner: ProbeSemanticOwner
     hook: ProbeLocalHook
     endpoint: InterfaceIdentity
     target: IPv4Address
@@ -143,9 +145,9 @@ class ProbeLocalRuleSpec:
     mechanism: AvailabilityProbeMechanism = AvailabilityProbeMechanism.ICMP
 
     def __post_init__(self) -> None:
-        if not isinstance(self.owner, ProbePolicyOwner):
+        if not is_probe_semantic_owner(self.owner):
             raise ProbePolicyProjectionError(
-                "probe local owner must be ProbePolicyOwner"
+                "probe local owner must be a supported probe semantic owner"
             )
         if not isinstance(self.hook, ProbeLocalHook):
             raise ProbePolicyProjectionError(

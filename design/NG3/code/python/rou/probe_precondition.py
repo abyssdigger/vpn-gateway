@@ -8,7 +8,8 @@ from ipaddress import IPv4Address
 from .interface_identity import InterfaceIdentity
 from .network_policy_layout import (
     NetworkPolicyPlatformSpace,
-    ProbePolicyOwner,
+    ProbeSemanticOwner,
+    is_probe_semantic_owner,
 )
 from .probe_local_observation import (
     ProbeLocalComparison,
@@ -28,10 +29,20 @@ from .structural_policy_mutation import StructuralPolicyPhysicalSnapshot
 
 @dataclass(frozen=True, slots=True)
 class ProbeExecutionContextKey:
-    owner: ProbePolicyOwner
+    owner: ProbeSemanticOwner
     mechanism: AvailabilityProbeMechanism
     target: IPv4Address
     endpoint: InterfaceIdentity
+
+    def __post_init__(self) -> None:
+        if not is_probe_semantic_owner(self.owner):
+            raise ValueError("unsupported probe semantic owner")
+        if self.mechanism is not AvailabilityProbeMechanism.ICMP:
+            raise ValueError("Release 1 probe execution context must use ICMP")
+        if not isinstance(self.target, IPv4Address):
+            raise ValueError("probe execution target must be IPv4Address")
+        if not isinstance(self.endpoint, InterfaceIdentity):
+            raise ValueError("probe execution endpoint must be InterfaceIdentity")
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,12 +53,33 @@ class ProbeExecutionPrecondition:
     contexts: frozenset[ProbeExecutionContextKey]
 
     @property
-    def owners(self) -> frozenset[ProbePolicyOwner]:
+    def owners(self) -> frozenset[ProbeSemanticOwner]:
         return frozenset(context.owner for context in self.contexts)
 
     @property
     def confirmed(self) -> bool:
         return self.routing.confirmed and self.local.desired_confirmed
+
+
+def require_probe_execution_context(
+    precondition: ProbeExecutionPrecondition,
+    context: ProbeExecutionContextKey,
+) -> None:
+    """Reject physical I/O unless this exact semantic context is freshly confirmed."""
+    if not isinstance(precondition, ProbeExecutionPrecondition):
+        raise TypeError("precondition must be ProbeExecutionPrecondition")
+    if not isinstance(context, ProbeExecutionContextKey):
+        raise TypeError("context must be ProbeExecutionContextKey")
+    if not precondition.confirmed:
+        raise RuntimeError("probe execution precondition is not confirmed")
+    if context not in precondition.contexts:
+        raise RuntimeError(
+            "probe context differs from confirmed execution precondition"
+        )
+    if context.endpoint not in precondition.interfaces_stable_snapshot:
+        raise RuntimeError(
+            "probe context endpoint is absent from readiness interface snapshot"
+        )
 
 
 def verify_probe_execution_precondition(
