@@ -68,3 +68,5 @@ ADD_TAG	ng3-snapshot-wireguard-d002-runtime-status-source	2b60751de9620e66b8462c
 DEL_BRANCH	ng3-wireguard-d002-runtime-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-d002-runtime-coordinator-source	aa5b8f3aa55758d32c7e79414b1000959b092024	Retained D.002 runtime coordinator core.
 DEL_BRANCH	ng3-wireguard-d002-runtime-coordinator-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d002-alpha-integration-source	7b8b967fd78f4366e0fb11488a670a8f83d6fa25	Production alpha D.002 trigger and A.008 status integration.
+DEL_BRANCH	ng3-wireguard-d002-alpha-integration-cdc-20261125
