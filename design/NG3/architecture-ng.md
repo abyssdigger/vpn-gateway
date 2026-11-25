@@ -511,7 +511,7 @@ Lower Machinery переиспользуется только при совпа�
 
 ### 2.9.3. Target production-runtime language boundary
 
-**Covers:** `VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`.
+**Covers:** `VPNG-D001-R1.R1.R8`, `VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`, `VPNG-D001-R1.R1.R8.R3`.
 
 Rust является target implementation boundary, а не component role и не источником product
 semantics. Финальная stable production runtime boundary включает configuration normalization,
@@ -1663,7 +1663,6 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
-- `VPNG-U001-R1.R3.R8.R2.C1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R4` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
@@ -1674,6 +1673,7 @@ semantic Device/Profile/binding/policy/availability contracts.
 **Evidence:** `EV-00140`
 
 **Constrained by:**
+- `VPNG-U001-R1.R3.R8.R2.C1`
 - `VPNG-U001-R4.R4.R6.R2.R5.C1`
 
 API
@@ -1898,8 +1898,9 @@ Profile-local reserve roles, established availability problems и current active
 - `VPNG-U003-R3.R7` — [`full`]
 - `VPNG-U003-R3.R8` — [`full`]
 - `VPNG-U003-R3.R8.R1` — [`full`]
-- `VPNG-U003-R3.R8.C1` — [`full`]
 - `VPNG-D001-R1.R1.R1` — [`full`]
+
+**Constrained by:** `VPNG-U003-R3.R8.C1`
 - `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
@@ -2077,7 +2078,8 @@ facility текущего deployment. Он не является current-state o
 - `VPNG-M001-R2.R3.R4` — [`full`]
 - `VPNG-M001-R2.R3.R5` — [`full`]
 - `VPNG-M001-R2.R3.R6` — [`full`]
-- `VPNG-M001-R2.R3.R6.C1` — [`full`]
+
+**Constrained by:** `VPNG-M001-R2.R3.R6.C1`
 
 API
 
@@ -2136,7 +2138,7 @@ Manager явного административного защитного ре�
 confirmed/problem состоянием public protective mode и непрерывно поддерживает gate, пока хотя
 бы один авторизованный source сохраняет запрос защиты.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U004-R5` — [`full`]
 - `VPNG-U004-R5.R1` — [`full`]
 - `VPNG-U004-R5.R2` — [`full`]
@@ -2149,10 +2151,7 @@ control surface; отдельный audit worker с конечной cadence fre
 normal reconciliation, заново подтверждает обычное desired/runtime состояние и сохраняет/
 восстанавливает protective block при неподтвержденном выходе.
 
-**Evidence:** `EV-00030`;
-`tests/integration_protective_mode_manager.py`;
-`tests/integration_protective_mode_runtime.py`;
-`release/0.1.0/qa/release_deployment_qa.py`.
+**Evidence:** `EV-00030`.
 
 API
 
@@ -2190,7 +2189,7 @@ Manager текущей базовой VPN-реализации только дл
 наличия или отсутствия VPN-экземпляра, вызывает D.001 и публикует подтвержденное поколение
 базовой реализации. Внешне управляемые Devices в его предметную область не входят.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
@@ -2264,7 +2263,7 @@ Direct lifecycle Machinery ordinary-side transition. Она материализ
 managed-L3 door между Private network и ordinary host, не принимая ownership
 Private-network service identity/default route или traffic-selection policy соседних Spaces.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R1.R3.R2` — [`full`]
 - `VPNG-U004-R4.R6` — [`full`]
 - `VPNG-M001-R1.R1.R1` — [`full`]
@@ -2611,7 +2610,7 @@ Architectural decisions
 
 Технический Driver к managed-domain forwarding state.
 
-**Supports implementation of:**
+**Implements:**
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U004-R4.R3.R2` — [`full`]
 - `VPNG-U004-R4.R4` — [`full`]
@@ -2645,7 +2644,7 @@ Direct lifecycle Machinery базовой Linux-materialization Private network:
 namespace + loopback. Она не материализует ordinary-side transition и не конфигурирует
 stack-local address/default route.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U004-R4.R6` — [`full`]
 - `VPNG-M001-R1.R1.R1` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
@@ -2739,7 +2738,7 @@ Direct lifecycle Machinery Private-network ordinary-side portal realization. Р�
 established `ManagedL3BoundaryLifecycle` и владеет exact stack-local IPv4 identity +
 ordinary-side default routing state на current private-facing endpoint.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U004-R4.R6` — [`full`]
 - `VPNG-M001-R1.R1.R1` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
@@ -2781,7 +2780,7 @@ Implementation
 
 Bounded Enforcer dedicated protective-mode containment state Private network.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U004-R5` — [`full`]
 - `VPNG-U004-R5.R2` — [`full`]
 - `VPNG-U004-R5.R3` — [`full`]
@@ -2824,7 +2823,7 @@ Direct Adapter от нормализованного намерения упра
 конкретной поддерживаемой VPN-интеграции. Он не выбирает политику Profile, не определяет
 доступность бизнес-сети и не принимает под управление уже существующие внешние VPN-службы.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
@@ -2894,7 +2893,7 @@ Manager изменяемой peer/group realization одного явно упр
 каждой recoverable network group, управляет поколением этой realization и публикует текущее
 подтвержденное либо проблемное состояние.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
@@ -2999,7 +2998,7 @@ Direct Enforcer одного полного требуемого `AllowedIPs` st
 управляемого WireGuard. Он не выбирает peer/group owners, не планирует проверки и не владеет
 generation смысловой realization.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R1.R3.R8` — [`full`]
 
 **Evidence:** `EV-00050`, `EV-00100`, `EV-00190`
@@ -3041,7 +3040,7 @@ Independent Adapter Device server publication в host-side owned scope. Один
 publication intent здесь materializes as a separate host mapping postcondition; managed-domain
 local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R1.R3.R6.R1` — [`full`]
 - `VPNG-U001-R4.R4.R6.R3` — [`full`]
 - `VPNG-U004-R4.R6` — [`full`]
@@ -3097,11 +3096,9 @@ Manager/supervisor.
 - `VPNG-U001-R5.R1.R1` — [`full`]
 
 **Constrained by:**
-- `VPNG-D001-R1.R1.R8`
 - `VPNG-D001-R1.R1.R8.C1`
 - `VPNG-D001-R1.R1.R8.C2`
 - `VPNG-D001-R1.R1.R8.C3`
-- `VPNG-D001-R1.R1.R8.R3`
 
 API
 
@@ -3139,7 +3136,7 @@ Manager continuous ownership отдельно включенной authoritative
 выбирает desired aggressive state из принятого intent/current boundary context, периодически
 подтверждает effective postcondition и инициирует recovery или protective escalation.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R5.R2` — [`full`]
 - `VPNG-U001-R5.R2.R2` — [`full`]
 - `VPNG-U001-R5.R2.R3` — [`full`]
@@ -3180,7 +3177,7 @@ Implementation
 Bounded Enforcer одного composite aggressive postcondition. Он не выбирает continuous policy
 и не является отдельным Manager.
 
-**Implements / supports:**
+**Implements:**
 - `VPNG-U001-R5.R2` — [`full`]
 - `VPNG-U001-R5.R2.R1` — [`full`]
 - `VPNG-U001-R5.R2.R3` — [`full`]

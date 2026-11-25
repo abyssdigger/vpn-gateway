@@ -1,12 +1,12 @@
-# NG3 production implementation trace
+# NG3 executable reference implementation trace
 
 **Status:** normative architecture trace manifest  
 **Architecture:** `design/NG3/architecture-ng.md`  
-**Scope:** production Python reference runtime under `design/NG3/code/python/rou/*.py`
+**Scope:** current executable Python reference implementation under `design/NG3/code/python/rou/*.py`
 
-This manifest is the exhaustive code-to-architecture edge for the current Python reference runtime. Every production Python unit appears exactly once below and resolves to one or more component specs. The referenced component specs own normative requirement traceability.
+This manifest is the exhaustive code-to-architecture edge for the current executable Python reference implementation. Every current reference implementation unit appears exactly once below and resolves to one or more component specs. The referenced component specs own normative requirement traceability.
 
-A production unit without a normal requirement path may appear only under `Architecture debt` with an explicit reason. Such an entry is a visible finding, not an accepted substitute for requirements.
+A current executable reference unit without a normal requirement path may appear only under `Architecture debt` with an explicit reason. Such an entry is a visible finding, not an accepted substitute for requirements.
 
 ## Trace: `A.001`, `A.007`, `A.008`, `A.011`, `A.012`, `C.001`, `D.001`, `D.002`, `D.003`, `E.001`
 
