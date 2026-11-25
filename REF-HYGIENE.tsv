@@ -28,3 +28,5 @@ ADD_TAG	ng3-snapshot-wireguard-d001-cdc-ref-hygiene-source	refs/remotes/origin/n
 DEL_BRANCH	ng3-wireguard-d001-cdc-20261124
 ADD_TAG	ng3-snapshot-managed-device-runtime-composition-source	38e7fbf935ce331d3a222b5f1801b128f0d7ca88	Managed Device runtime composition.
 DEL_BRANCH	ng3-managed-device-runtime-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-peer-probe-reuse-boundary-source	5ece4aba50830a6b98e993253597d820df32ffb2	WireGuard D.002 peer-probe reuse boundary.
+DEL_BRANCH	ng3-wireguard-d002-cdc-20261125
