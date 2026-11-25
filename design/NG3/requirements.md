@@ -1,9 +1,8 @@
 # VPN-GATE NG3 — Requirements
 
-**Status:** NG3 design-cycle draft  
-**Cycle:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
+**Status:** current normative NG3 requirement tree  
 **Normative model:** `design/requirements-model.md`  
-**Architecture status:** no NG2 architecture is inherited automatically
+**Architecture:** `design/NG3/architecture-ng.md`
 
 Внешние основания нормативно значимых свойств, которые нельзя проверить непосредственно
 по этому дереву требований, перечислены в каноническом реестре
@@ -17,8 +16,8 @@ trees remain subject to normal requirement/constraint review.
 Current NG3 requirement namespaces are:
 
 - `VPNG-Uxxx` — user/product behavior and safety expectations;
-- `VPNG-D0xx` — project-holder development-cost requirements;
-- `VPNG-M0xx` — project-holder operational/maintenance-cost requirements.
+- `VPNG-D0xx` — projectholder development-cost requirements;
+- `VPNG-M0xx` — projectholder operational/maintenance-cost requirements.
 
 The namespace letter/range classifies the optimized concern and therefore the requirement's
 beneficiary, not the actor that must implement or comply with it. A restriction imposed on
@@ -424,7 +423,7 @@ NG3 requirement merely because it existed before.
 
                 - **[VPNG-D001-R1.R1.R8.C2]** *Поскольку перенос ещё меняющегося `rou` в Rust создаёт второй исполняемый источник истины, заставляет синхронно переделывать две реализации при каждом архитектурном решении и расходует время до того, как само поведение доказано.* | Rust-transition production runtime `rou` не должен становиться текущей разработческой работой, пока целевой набор решений `rou` для соответствующего production boundary не реализован как связный executable Python reference и не апробирован на достаточном unit/integration/operational evidence. До выполнения этого gate новые Rust-порты `rou`, production cutover и расширение Rust runtime surface должны быть postponed; Python остаётся единственной текущей executable reference implementation для проверки меняющейся семантики. После выполнения gate переход на Rust выполняется как implementation replacement с сохранением уже доказанных contracts. [`decomposition`: `complete`] [`closed`]
 
-                - **[VPNG-D001-R1.R1.R8.C3]** *Поскольку project holder отдельно исключил host-routing helper из автоматического language cutover и требует рассматривать его перенос на Rust как самостоятельное проектное решение, а не как неявное следствие общей production-runtime boundary.* | Реализации host-routing helper, выполняющие `VPNG-U001-R5.R1` и `VPNG-U001-R5.R2`, могут оставаться на Python после первого product release и после перевода остальной целевой production runtime boundary на Rust. Требование `VPNG-D001-R1.R1.R8` само по себе не является основанием для их переноса на Rust. Такой перенос допускается только после отдельного явного решения project holder; до этого Python implementation helper'а является разрешённой production implementation для этой ограниченной ответственности. [`decomposition`: `complete`] [`closed`]
+                - **[VPNG-D001-R1.R1.R8.C3]** *Поскольку projectholder отдельно исключил host-routing helper из автоматического language cutover и требует рассматривать его перенос на Rust как самостоятельное проектное решение, а не как неявное следствие общей production-runtime boundary.* | Реализации host-routing helper, выполняющие `VPNG-U001-R5.R1` и `VPNG-U001-R5.R2`, могут оставаться на Python после первого product release и после перевода остальной целевой production runtime boundary на Rust. Требование `VPNG-D001-R1.R1.R8` само по себе не является основанием для их переноса на Rust. Такой перенос допускается только после отдельного явного решения projectholder; до этого Python implementation helper'а является разрешённой production implementation для этой ограниченной ответственности. [`decomposition`: `complete`] [`closed`]
 
                 - **[VPNG-D001-R1.R1.R8.R1]** *Чтобы выбор Rust для production runtime не запрещал более дешевые и удобные инструменты там, где их свойства не входят в runtime safety/performance boundary продукта.* | Другие языки допускаются для disposable experiments, evidence/CI harnesses, test fixtures, build/install tooling, code generation и исследовательских/reference implementations, если такой код не становится частью окончательной production runtime implementation boundary. [`decomposition`: `complete`] [`closed`]
 

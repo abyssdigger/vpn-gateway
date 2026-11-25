@@ -605,17 +605,13 @@ Documentation-driven acceptance доказывает не только корр�
    способное изменить документированный operational path, инвалидирует соответствующий
    documentation-driven acceptance и требует повторного walkthrough.
 
-Для NG3 Release-1 documentation-driven acceptance обязан как минимум пройти опубликованный путь:
-
-- установка VPN-GATE из release bundle;
-- создание/проверка release configuration;
-- настройка и фактический запуск документированных WireGuard, OpenConnect и L2TP integrations;
-- проверка каждой интеграции через поддерживаемую встроенную диагностику/current-state surface
-  и реальный payload;
-- ручной Protective-mode status/enter/status/leave/status через опубликованный operator
-  interface;
-- подтверждение Protective-mode эффекта и выхода через встроенную диагностику и реальный
-  payload.
+Конкретный обязательный набор documentation-driven walkthrough для каждого выпуска задается
+совместно утвержденным `release/<version>/RELEASE-SCOPE.md` и публикуемой
+administrator/user documentation этого выпуска. Общая release methodology не перечисляет
+конкретные VPN technologies или release-specific features: если scope делает integration path,
+operator capability или иной документированный сценарий обязательным для данного выпуска, его
+успешный walkthrough через опубликованный интерфейс и применимое штатное наблюдение становится
+release gate именно через release-specific scope.
 
 QA report обязан перечислить проверенные документы и их identity/digest, результаты
 documentation-driven walkthrough по разделам/шагам и отдельно результаты дополнительного
@@ -631,7 +627,7 @@ negative/fault-injection QA.
 версию, например:
 
 ```text
-NG3-0.1.0-2026-11-23-release-fulfillment-review.md
+NG3-<version>-<date>-release-fulfillment-review.md
 ```
 
 Fulfillment review обязан зафиксировать как минимум:
@@ -681,7 +677,7 @@ documentation, example configuration, deployment contract, runtime behavior ил
 ### 10.5. Решение о выпуске, публикация и повторная проверка
 
 Завершенные QA, requirements coverage и fulfillment review не являются решением о выпуске.
-Владелец разработки рассматривает их результат отдельно и может выпустить кандидат, перенести
+Projectholder рассматривает их результат отдельно и может выпустить кандидат, перенести
 выпуск либо вернуть работу в разработку.
 
 Если после fulfillment review меняется проверенное состояние исходного кода и изменение способно
