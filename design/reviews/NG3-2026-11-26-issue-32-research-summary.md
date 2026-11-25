@@ -1,7 +1,7 @@
 # #32 — Сводка исследования межэкспертного транспорта
 
-**Статус:** рабочая сводка для обсуждения, v4; не нормативный документ, не утвержденная архитектура, не отчет о выполненном эксперименте.
-**Источник:** [Issue #32](https://github.com/abyssdigger/vpn-gateway/issues/32), включая checkpoint [v1](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175858653), [delta v2](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175896642) и последующие сообщения до #7176350345. Полные обсуждения и первичные ссылки остаются в Issue.
+**Статус:** рабочая сводка для обсуждения, v5; не нормативный документ, не утвержденная архитектура, не отчет о выполненном эксперименте.
+**Источник:** [Issue #32](https://github.com/abyssdigger/vpn-gateway/issues/32), включая checkpoint [v1](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175858653), [delta v2](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7175896642) и последующие сообщения до #7176425300. Полные обсуждения и первичные ссылки остаются в Issue.
 **Владелец сводки:** GPT-6.2; GPT-5.6 предлагает корректировки в #32 (распоряжение projectholder, [уведомление](https://github.com/abyssdigger/vpn-gateway/issues/32#issuecomment-7176117594)).
 **Базовый ref:** main @ 7a8d5ad655b08eb71a0fe7d9ed098db92549aca3. Запись разрешена только в выделенную ветку сводки; это не разрешение на настройку, платный API, live-эксперименты или изменение процесса.
 
@@ -56,6 +56,8 @@ DOCUMENTED: [comments REST](https://docs.github.com/en/rest/issues/comments) `si
 
 [Comment history](https://docs.github.com/en/communities/moderating-comments-and-conversations/tracking-changes-in-a-comment) сохраняет до 100 edits и допускает удаление содержимого revision; hash обнаруживает потерю, не восстанавливает тело. В versioned artifact сохранять достаточно материала для восстановления важных решений, не дублировать весь brainstorm и не републиковать удаленный секрет. [Issue status preview](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/issue-status-webhooks-and-workflows) меняется автоматически, события duplicate/out-of-order/best effort; status лишь projection, не semantic closure. GitHub не автоматически повторяет неудавшийся webhook; push — hint, reconciled Issue — state source.
 
+Synthetic discriminator (#7176419342): 8/8 ожидаемых исходов toy ID/hash reconciliation на late lower ID, edit, missing complete/partial scan, identical/differing duplicate, page drift, normal append. Отсутствие на partial scan — UNRESOLVED, не deletion; новый input может быть зарегистрирован без объявления всего frontier reconciled. Max-ID cursor недостаточен. Это in-memory traces, не тест API, атомарности пагинации или гарантий ID ordering.
+
 Основания: #7176296382, #7176310335.
 
 Основания: #7175320780, #7175456494, #7175465164, #7175565896, #7175607435, #7175766090, #7175852051, #7175866045, #7175904275, #7175964188. Аналоги actor/workflow (Orleans, Dapr, LangGraph) — источники паттернов, не доказательство поведения ChatGPT.
@@ -67,7 +69,7 @@ DOCUMENTED: [comments REST](https://docs.github.com/en/rest/issues/comments) `si
 - Двухступенчатое чтение: компактный индекс message_id/refs/frontier, затем необходимые тела. В #32 уже наблюдалось 119 комментариев / 279120 символов тел, при этом 115 YAML-конвертов занимали 24293 символа (#7175820067). Это измерение, не универсальная оценка токенов. OBSERVED в текущем CDC: на 175 comments compact all id/body JSON 394410 chars, 9 delta comments 18315, 2 новых peer comments 7343 (~1.9%). Текущий tool wrapper отфильтровывает результат до model-visible text без нового сервиса/LLM; connector все еще получает all pages, billed tokens и network savings не измерены (#7176331461).
 - Typed capsule: действующие и отмененные решения, открытые обязательства, основания/ссылки, frontier, текущие артефакты/SHAs, capability requirements, отдельно истекшие разрешения. Верификация по поведению, не по пересказу. Native Branch/Project Source — способы переноса, не authoritative state. Автоматический overflow может терять контекст; точного доступного meter не установлено.
 - Ротация крупными issue/epoch по необходимости, либо issue-per-obligation; родительские ссылки сохраняют причинность. Не архивировать/удалять исходные записи без отдельного решения. Никакого нового issue сейчас.
-- Модель на локальной машине может подготовить черновик capsule или выявить аномалию; не устанавливает истинность фактов сама.
+- Модель на локальной машине может подготовить черновик capsule или выявить аномалию; не устанавливает истинность фактов сама. Отдельный полезный кандидат — migration legacy untyped text: предложить `{source_span, proposed_type, exact_refs, uncertainty}` из старых Issue/CVS/requirements, детерминированно сверить span и refs, передать material disposition на review. Оценить omissions, false obligations и ручной труд на corpus с quotation/supersession, hypothesis, partial reply, stale SHA, conflicts и injected instruction. Не ставить Ollama только ради wake; текущий tool-side delta filter уже дешев. #7176391449.
 
 Основания: #7175304472, #7175692386, #7175713552, #7175820067, #7175851907, #7175917970, #7175954688.
 
@@ -84,6 +86,10 @@ FAIL: нарушение заявленного свойства при вали
 R-MECH: committed document URI, точность route/incarnation, modal/disabled/duplicate controls, внутреннее состояние contenteditable, авария до/после Send, задержанный ACK, restart/missing tab, изменение UI. Кандидаты: AT-SPI (узкая поверхность, проверить contenteditable), Playwright (точность, шире привилегии, sandbox обязателен), blind/type-to-focus (недостаточный guard, отрицательный контроль). Desktop/Windows UIA/MV3 — резервные варианты, не разрабатывать параллельно. Приоритет ближайшего различающего наблюдения: R-SEM и, если отдельно разрешен setup, ручная проверка R-PLUGIN; R-MECH остается независимым synthetic comparator. Для live-кандидатов — отдельное подтверждение допустимости. Вопрос к Support (#7176119177): допускается ли низкочастотный input-only continuation в известном чате без извлечения данных, скрытых API и обхода защит? Отдельно — поддерживается ли автоматический trigger Plugin UI. Ответа нет; запрос в Support не отправлялся. Отсутствие прямого запрета не равно разрешению.
 
 24/72h soak после выбора безопасного механизма: сначала synthetic, затем live только при отдельном разрешении. Редкие wakes, burst/coalescing, RSS/latency, restart VM/browser/daemon, stale incarnation, edit/delete/missed polls, crash around ACK. Метрика — внеплановые ручные вмешательства в сутки/неделю отдельно от содержательных решений holder. Никаких автоматических повторов ambiguous send.
+
+R-SEM-like OBSERVED: после ошибочного terminal на v2 holder вручную возобновил исходный диалог; восстановлены scope, оригинальная граница времени, Issue и branch tip, обработан поздний review, опубликованы v3/v4 без переноса результата holder в prompt. Это частичное практическое manual recovery, не формальный R-SEM PASS: независимый chat-ID witness, seeded/negative canaries и предварительный критерий отсутствовали. Правила + durable journal не гарантируют исполнения модели. #7176425300.
+
+R-CAPS при смене моделей: разделять same/new chat × same/changed model там, где доступно. Один corpus canaries, отдельно role/capability identity. [Документация model changes](https://help.openai.com/en/articles/20001053-what-to-expect-when-models-change) говорит о переносе context, не одинаковом поведении. Не утверждать неподтвержденную дату retirement. Для качества peer review — независимый первый проход exact artifact до чужого verdict, затем reconciliation; измерять существенные проверенные findings, не число согласий. Исследования корреляции ошибок, [multi-agent debate](https://arxiv.org/abs/2601.19921), [CONSENSAGENT](https://aclanthology.org/2025.findings-acl.1141/) — источники гипотез, не результаты VPNG. Same model in two chats не доказательство независимости. #7176379735, #7176384121.
 
 Основания: #7175650281, #7175947946, #7175954688, #7176075931.
 
@@ -115,6 +121,14 @@ INFERRED: аналог distributed termination detection ([Dijkstra–Scholten](
 
 Контрпример: A final read empty → B публикует work → A заканчивает turn → B ожидает A. Это причина не обещать unattended liveness. Разные бюджеты активных экспертов и коалесценция review batches допустимы как гипотезы; текущие loop/ID правила не изменены. Основание: #7176258012.
 
+### 6.3. Пилот без нового ПО
+
+Предложение, не проведенный пилот: 3–5 обычных совместных units; одна компактная запись на обычный checkpoint/activation boundary, не на каждый comment. Activation ID/role, наблюдаемое start/stop UTC и trigger, обработанные material IDs/count, frontier before/after, actual stop basis, holder decision/authority gates, unexpected recovery, model-visible delta chars. Manual wake наблюдается в своем source-chat; cross-chat attention session не выводить из суммы сообщений или запусков, при необходимости один retrospective estimate holder. READY→wake только если обе метки надежно известны. Не выдавать chars/tool calls за billing; account usage сравнивать только в сопоставимых model/surface/workload с учетом rollout.
+
+Synthetic illustration, не observed cost: при одинаковых 20 material inputs два независимых role batches требуют 2 manual wakes при passivation, 5 sequential waves — 5, строгая alternating chain — 20; ideal overlapping live window может обойтись двумя initial wakes только при реально живых turns. Нужны causal depth/critical blocked intervals и полезная работа на activation, не одна метрика messages/wake. Предпочтение daily maintenance не означает допустимость daily-only wake latency. Independent fanout подходит для batch; tight serial review — для overlapping live window либо будущего supported autonomous wake. Не прекращать обязательный WAIT ради метрики. Инкрементальную экономику shim сравнивать с уже работающим manual batch, не с устаревшим copy/paste workflow.
+
+Основания: #7176371678, #7176399798. Пилот не требует VM/API/UI automation или изменения процесса; решение о его запуске/форме учета отдельно.
+
 ## 7. Процесс: отдельный открытый вопрос
 
 Holder предложил смягчить ограничения research loop, чтобы рабочая GitHub-ветка была доступна для сохранения исследовательских результатов (#7175959190). Текущая явная команда разрешила именно эту ветку и сводку, но не изменила общую норму.
@@ -136,7 +150,7 @@ Holder предложил смягчить ограничения research loop,
 | O-GOV | OPEN | Отдельно согласовать норму research branch; текущая сводка не создает прецедента автоматического grant. |
 | O-ATTENTION | EXPERIMENT NEEDED | Измерить ручной batch, READY→attention, устраненные лишние вмешательства и ложные уведомления. |
 | O-QUIESCENCE | OPEN | Локальный stop, quiescent cut и semantic closure разделены; obligation/readiness/eligibility candidate, проверить delivery/recovery. |
-| O-REVIEW | CONDITIONAL PASS v2 | Последнее блокирующее замечание #7176208539 (split O-WAKE) устранено в v3; новые findings открыты для ревью. |
+| O-REVIEW | CONDITIONAL PASS v2; v3–v5 review pending | Последнее блокирующее замечание #7176208539 (split O-WAKE) устранено в v3; новые findings открыты для ревью. |
 
 Предварительный вывод: транспорт внутри активного turn и частичный workflow уже полезны; автономное продолжение того же чата после terminal пока не доказано. Не зафиксировать архитектуру или PASS до получения различающего evidence.
 
@@ -146,3 +160,5 @@ Holder предложил смягчить ограничения research loop,
 - v2: review #7176168538: (1) декабрьская экономика/границы анонса — принято; (2) Plugin UI lifecycle и гипотеза гибрида — принято как дополнительный discriminator и сохраненная гипотеза, не как подтвержденный live winner. Ограничение user activation и отдельная policy gate сохраняются. Добавлен открытый вопрос Support из #7176119177; контакта с Support не было.
 - v3: закрыта конкретная поправка review #7176182393 / #7176192880 / #7176208539: O-CONTINUITY отделена от O-ACTIVATE, R-SEM уточнен. Добавлены partial-workflow economics, actual Issue graph observation, notification evidence и distributed-quiescence hypothesis. Сводка остается промежуточной; brainstorm продолжается.
 - v4: peer review #7176270959 / #7176289682 — уточнение минимального журнала obligations и passivation; добавлены два toy discriminators, GitHub polling/history/status evidence, native MCP Tasks non-candidate, наблюдение holder principal separation и model-visible delta filtering, низкоприоритетная reaction hypothesis. Никаких реальных wake/setup/process changes.
+
+- v5: пилот без нового ПО и causal-depth economics, natural manual recovery observation (не formal R-SEM), factorized R-CAPS при смене модели и качество review, legacy extraction для необязательной локальной модели, 8-trace toy polling reconciliation. Сводка промежуточная; новых production/live экспериментов или process changes нет.
