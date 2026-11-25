@@ -1834,7 +1834,7 @@ API
 
     <accepted-intent / binding / availability Events> — обновить current semantic inputs.
     <payload projection InfoEvent> — опубликовать текущую подтвержденную semantic projection для observers.
-    <retirement-protection projection> — для уже присутствующих managed paths публиковать current запрет на destructive retirement, когда удаление path нарушило бы действующую sticky/non-reserve active-path обязанность; эта projection не создает managed-presence demand и не запускает отсутствующий Device.
+    <retirement-protection projection> — для уже присутствующих, still-authorized exact current managed paths публиковать A.004-owned разрешение/запрет destructive retirement из current active/effective state; кандидат остается в structural membership на время этой проверки, а отсутствие, созданное самой retirement-процедурой, не может служить доказательством разрешения. Projection не создает managed-presence demand и не запускает отсутствующий Device.
     <reconciliation trigger> — fresh-observe dependent lower domains и при необходимости converge через Adapters.
 
 Architectural decisions
@@ -1864,7 +1864,7 @@ Architectural decisions
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
 9. `Политика полезного трафика не создает потребность в VPN`
-   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией. При этом current healthy non-reserve active path образует A.004-owned retirement protection: если физическое удаление уже присутствующего managed path обошло бы `VPNG-U003-R3.R8`, A.004 запрещает завершать destructive release этого path до fresh изменения current routing state. Такой запрет может только удержать уже присутствующий ресурс и не является источником demand для запуска отсутствующего Device.*
+   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией. При этом current healthy non-reserve active path образует A.004-owned retirement protection: если удаление уже присутствующего managed path обошло бы `VPNG-U003-R3.R8`, A.004 запрещает destructive release до fresh изменения current routing state. Проверка выполняется пока candidate path еще находится в exact current structural membership; stale/unknown generation либо исчезновение, вызванное самой retirement-процедурой, не разрешают release. Для active reserve membership A.004 применяет accepted reserve-failback semantics: снятие reserve lifecycle demand не означает, что путь уже можно удалить, пока current effective policy не подтверждает подходящую разрешенную замену. Такой protection verdict может только удержать уже присутствующий ресурс и не является источником demand для запуска отсутствующего Device.*
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
@@ -1872,8 +1872,13 @@ Architectural decisions
 конфигурационная проекция требуемого присутствия Devices материализована отдельно в A.013 и
 не принадлежит A.004. A.004 сохраняет structural membership/current active-path state и
 публикует отдельную retirement-protection projection для уже присутствующих managed paths.
-Selective lifecycle release обязан учитывать ее вместе с остальными dependency-release gates;
-такая protection не изменяет A.013 demand и не дает A.004 права запускать отсутствующий Device.
+Selective lifecycle release обязан получить эту projection на fresh exact state **до**
+исключения retiring candidate из structural/effective membership и учитывать ее вместе с
+остальными owner-specific release gates; такая protection не изменяет A.013 demand и не дает
+A.004 права запускать отсутствующий Device. Current alpha implementation до RU-F1 correction
+не выполняет этот порядок полностью: undemanded managed endpoint может быть отфильтрован из
+normal binding projection до подтвержденной retirement protection; это implementation gap,
+а не альтернативная архитектурная семантика.
 
 **Evidence:** `EV-00280`.
 
@@ -2240,7 +2245,7 @@ Manager текущей базовой VPN-реализации только дл
 
 API
 
-    <нормализованное намерение управления / вычисленный desired managed-Device set / подтверждение снятия зависимостей> — заменить текущий требуемый контекст.
+    <нормализованное намерение управления / вычисленный desired managed-Device set / подтвержденный aggregate release verdict> — заменить текущий требуемый контекст; desired ABSENT и confirmed PRESENT могут сосуществовать как truthful pending-retirement state.
     <reconciliation trigger> — заново наблюдать фактическое состояние и при необходимости привести его к требуемому через D.001.
     <ManagedDeviceRealization InfoEvent> — публиковать подтвержденное отсутствие/наличие с поколением либо problem.
 
@@ -2264,7 +2269,7 @@ Architectural decisions
    *Успешная реализация D.001 лишь позволяет VPN-endpoint появиться. C.004 независимо заново наблюдает и подтверждает `PathBinding`; для WireGuard по R8 D.002 дополнительно подтверждает реализацию выбранного пира. Manager не подменяет ни одну из этих границ.*
 
 5. `VPN-экземпляр удаляется после зависимостей`
-   *Исчезновение вычисленной A.013 demand делает Device кандидатом на release, но само по себе не доказывает допустимость destructive removal. До подтвержденного удаления базовой реализации D.001 должны быть fresh-confirmed все применимые release dependencies: политика полезного трафика больше не использует retiring path, A.004 retirement-protection не запрещает его удаление, а специфичное для VPN динамическое состояние снято. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей. A.012 не вычисляет sticky routing semantics и принимает только внешний подтвержденный release verdict.*
+   *Исчезновение вычисленной A.013 demand делает Device кандидатом на release, но само по себе не доказывает допустимость destructive removal. Пока candidate остается still-authorized, его exact confirmed existing endpoint сохраняется в structural projection до получения positive aggregate release permission. Permission собирается из всех current owners, чьи принятые обязательства зависят от сохранения candidate: A.004 sticky/reserve effective-path state, current C.001 payload/probe policy, применимая D.002/D.003 WireGuard ownership/readiness и current return-affinity/return-domain state в поддерживаемом scope. Ни один owner не вправе считать собственную предварительную cleanup-мутацию доказательством того, что cleanup была разрешена. Только после positive permission dependent state может быть снят, а D.001 base instance удаляется последним. A.012 не вычисляет эти policy semantics и принимает внешний подтвержденный aggregate release verdict.*
 
 6. `Общая остановка продукта сохраняет единственного владельца`
    *A.001 при общей остановке задает отсутствие потребности во всех управляемых Devices и ожидает подтвержденного A.012 отсутствия до уничтожения Private network. Это не превращает A.001 во второго владельца состояния и не делает A.012 глобальным Manager жизненного цикла.*
@@ -2273,13 +2278,13 @@ Architectural decisions
    *Неудача D.001 публикуется как problem; новую попытку можно выполнить по событию или с конечной периодичностью. Долговечного журнала команд и слепого повторного выполнения нет: каждая попытка начинается с нового наблюдения фактического состояния.*
 
 8. `Правдивое текущее состояние`
-   *A.012 передает A.008 желаемое и подтвержденное поколения, а также problem-state. Для внешне управляемого Device отсутствие состояния A.012 не изображается как результат управляемого жизненного цикла.*
+   *A.012 передает A.008 желаемое и подтвержденное поколения, а также problem-state. Desired ABSENT не изображается как фактическое отсутствие: пока release dependencies не подтверждены, owned Device может правдиво оставаться confirmed PRESENT / waiting for release. Для внешне управляемого Device отсутствие состояния A.012 не изображается как результат управляемого жизненного цикла.*
 
 9. `Один Device агрегирует потребность всех Profiles`
    *В A.012 поступает один итоговый desired verdict на Device. Снятие потребности одним Profile не разрешает остановку, пока тот же Device требуется другому Profile. Выбор минимального набора managed Devices при дефиците и сохранение уже присутствующих подходящих путей относятся к вычислению demand, а не к lifecycle actuation A.012.*
 
-10. `Regular before reserve; reserve before release`
-   *Один reconciliation сначала получает fresh presence, вычисляет ordinary demand через A.013 и converges недостающие ordinary managed Devices через D.001, не снимая уже действующий reserve только из-за промежуточной фазы. После fresh повторного C.004 observation A.013 заново вычисляет regular deficit и окончательный reserve exception. Только этот второй verdict может добавить reserve либо снять его demand. Поэтому startup не будит reserve одновременно с еще не испробованным regular, а recovery не выключает reserve до подтверждения ordinary replacement.*
+10. `Regular before reserve; reserve demand before release permission`
+   *Один reconciliation сначала получает fresh presence, вычисляет ordinary demand через A.013 и converges недостающие ordinary managed Devices через D.001, не снимая уже действующий reserve только из-за промежуточной фазы. После fresh повторного C.004 observation A.013 заново вычисляет regular deficit и окончательный reserve exception. Только этот второй verdict может добавить reserve либо снять его **lifecycle demand**. Снятие reserve demand еще не разрешает исключить/остановить уже действующий reserve: candidate остается current до подтверждения A.004-owned suitable replacement semantics и всех остальных applicable release owners, включая D.002-backed readiness там, где она определяет фактическую пригодность пути. Поэтому startup не будит reserve одновременно с еще не испробованным regular, а recovery не выключает reserve только по факту numeric ordinary presence.*
 
 11. `Независимый отказ кандидата не запрещает reserve fallback`
    *Problem одного ordinary managed candidate остается диагностикой этого Device и не превращается в глобальный запрет продолжить fresh reconciliation для остальных candidates и reserve exception. Успех каждого D.001 действия по-прежнему требует собственного подтвержденного postcondition.*
@@ -2304,23 +2309,29 @@ problem-state и не вызывает `converge_absent`, пока caller не �
 отсутствия.
 
 Текущая alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
-portal. Startup и normal reconciliation используют двухфазную последовательность:
+portal. Startup и normal reconciliation используют двухфазную warm/reserve последовательность:
 fresh C.004 endpoint observation с tentative projection без commit binding state →
 A.013 ordinary-demand projection → bounded ordinary A.012/D.001 convergence с удержанием
 существующего reserve → fresh C.004 observation → A.013 final reserve-exception
-projection → bounded reserve A.012/D.001 convergence → еще одно fresh C.004 observation и
-обычная binding projection. Каждому managed candidate предоставляется не более одной
-попытки за trigger; ошибка не прерывает попытки независимых candidates. В normal binding
-принимается exact interface identity подтвержденной D.001 present realization для
-demanded managed Device; external endpoints сохраняют прежний contract.
+projection → bounded reserve A.012/D.001 convergence → еще одно fresh C.004 observation.
+Каждому managed candidate предоставляется не более одной start-attempt за trigger; ошибка
+не прерывает попытки независимых candidates.
 
-При selective release normal C.001 payload/probe policy и D.002 reconciliation сначала
-исключают retiring Device. D.003 затем подтверждает отсутствие dynamic payload ownership
-при сохранении permanent peer-probe /32. Перед разрешением D.001 stop свежо сверяются
-desired set и exact binding generations, для которых подтверждена replacement policy.
-Отказ любого из этих release prerequisites оставляет Device поднятым. После попытки stop
-normal binding/policy/probe convergence снова получают fresh observation. Managed lifecycle
-problem публикуется отдельно и не отменяет подтвержденную unrelated policy.
+Для selective release normative ordering отличается от current incomplete alpha materialization.
+Exact confirmed still-authorized managed endpoints, включая undemanded pending-retirement,
+сначала остаются в C.004/A.004 current structural projection. На этом pre-retirement state
+fresh-confirmed A.004 effective/active state, applicable D.002 realization и остальные current
+dependent owners формируют aggregate release permission. Только positive verdict разрешает
+исключить candidate из dependent structural/effective projection и начать drain C.001,
+return-affinity и D.003 ownership. После существенных cleanup mutations release transition
+fresh-revalidates owner/currentness prerequisites; D.001 stop остается последней destructive
+операцией. Failed/unknown/stale permission оставляет Device confirmed PRESENT с desired ABSENT
+и не делает отсутствие, созданное retirement-процедурой, основанием для release.
+
+Current alpha до RU-F1/RU-F2 correction фильтрует normal binding до demanded managed Devices
+слишком рано и начинает C.001/D.002 exclusion до полного pre-retirement permission; это
+зафиксированный implementation gap. Managed lifecycle problem публикуется отдельно и не
+отменяет подтвержденную unrelated policy.
 
 При общей остановке
 A.001 сначала закрывает forwarding и подтвержденно снимает product-owned payload policy и
