@@ -17,6 +17,8 @@ from .network_policy_layout import (
     NetworkPolicyLayout,
     NetworkPolicyPlatformSpace,
     ProbeRoutingDemand,
+    WireGuardGroupProbeOwner,
+    WireGuardPeerProbeOwner,
     allocate_network_policy_layout,
     probe_owner_sort_key,
 )
@@ -26,6 +28,7 @@ from .probe_policy import (
     ProbeLocalPlatform,
     ProbeNetworkPolicyDesiredState,
 )
+from .release1_config import CurrentConfig
 from .route_priority_inventory import RoutePriorityPathRoute
 from .wireguard_group_probe_policy import WireGuardGroupProbeIntent
 from .wireguard_peer_probe_policy import WireGuardPeerProbeIntent
@@ -44,6 +47,141 @@ class ProbePlaneDesiredAssembly:
     availability_intents: tuple[AvailabilityProbeIntent, ...]
     peer_intents: tuple[WireGuardPeerProbeIntent, ...]
     group_intents: tuple[WireGuardGroupProbeIntent, ...]
+
+
+def project_current_wireguard_probe_intents(
+    current_config: CurrentConfig,
+    payload_profiles: Iterable[PayloadProfileRequest],
+    path_routes: Iterable[RoutePriorityPathRoute],
+) -> tuple[
+    tuple[WireGuardPeerProbeIntent, ...],
+    tuple[WireGuardGroupProbeIntent, ...],
+]:
+    """Project normalized managed-WireGuard current demand onto current paths only."""
+
+    if not isinstance(current_config, CurrentConfig):
+        raise ProbePlaneDesiredAssemblyError(
+            "current_config must be CurrentConfig"
+        )
+    profiles = tuple(payload_profiles)
+    routes = tuple(path_routes)
+    if any(not isinstance(item, PayloadProfileRequest) for item in profiles):
+        raise ProbePlaneDesiredAssemblyError(
+            "payload_profiles must contain PayloadProfileRequest"
+        )
+    if any(not isinstance(item, RoutePriorityPathRoute) for item in routes):
+        raise ProbePlaneDesiredAssemblyError(
+            "path_routes must contain RoutePriorityPathRoute"
+        )
+
+    profile_by_id = {item.profile_id: item for item in profiles}
+    if len(profile_by_id) != len(profiles):
+        raise ProbePlaneDesiredAssemblyError(
+            "payload_profiles contains duplicate Profile"
+        )
+    route_by_path = {item.path_id: item for item in routes}
+    if len(route_by_path) != len(routes):
+        raise ProbePlaneDesiredAssemblyError(
+            "path_routes contains duplicate logical path realization"
+        )
+
+    peer_by_owner: dict[
+        WireGuardPeerProbeOwner,
+        WireGuardPeerProbeIntent,
+    ] = {}
+    groups: list[WireGuardGroupProbeIntent] = []
+
+    for group_key in sorted(current_config.wireguard_groups):
+        group = current_config.wireguard_groups[group_key]
+        profile = profile_by_id.get(group.profile_id)
+        if profile is None:
+            raise ProbePlaneDesiredAssemblyError(
+                f"WireGuard group {group_key!r} has no current payload Profile"
+            )
+
+        current_paths = tuple(
+            path
+            for path in profile.ordered_paths
+            if path.device_id == group.device_id
+        )
+        if not current_paths:
+            # The managed Device has no accepted current path realization.
+            continue
+        if len(current_paths) != 1:
+            raise ProbePlaneDesiredAssemblyError(
+                f"managed WireGuard Device {group.device_id!r} has ambiguous "
+                "current logical paths"
+            )
+        route = route_by_path.get(current_paths[0])
+        if route is None:
+            raise ProbePlaneDesiredAssemblyError(
+                "WireGuard group current path has no accepted route realization"
+            )
+
+        managed = current_config.managed_vpns.get(group.device_id)
+        if managed is None:
+            raise ProbePlaneDesiredAssemblyError(
+                f"WireGuard group {group_key!r} has no managed Device config"
+            )
+        peer_by_id = {item.peer_id: item for item in managed.peers}
+        if len(peer_by_id) != len(managed.peers):
+            raise ProbePlaneDesiredAssemblyError(
+                f"managed WireGuard Device {group.device_id!r} repeats peer ID"
+            )
+
+        for membership in group.peer_memberships:
+            peer = peer_by_id.get(membership.peer_id)
+            if peer is None:
+                raise ProbePlaneDesiredAssemblyError(
+                    f"WireGuard group {group_key!r} references unknown peer "
+                    f"{membership.peer_id!r}"
+                )
+            owner = WireGuardPeerProbeOwner(
+                group.device_id,
+                membership.peer_id,
+            )
+            intent = WireGuardPeerProbeIntent(
+                owner,
+                peer.probe_target,
+                route,
+            )
+            previous = peer_by_owner.get(owner)
+            if previous is not None and previous != intent:
+                raise ProbePlaneDesiredAssemblyError(
+                    f"WireGuard peer {owner!r} has conflicting current probe binding"
+                )
+            peer_by_owner[owner] = intent
+
+        check = group.availability_check
+        if check is not None:
+            if check.mechanism != "icmp" or check.target is None:
+                raise ProbePlaneDesiredAssemblyError(
+                    f"WireGuard group {group_key!r} has unsupported availability check"
+                )
+            groups.append(
+                WireGuardGroupProbeIntent(
+                    WireGuardGroupProbeOwner(
+                        group.profile_id,
+                        group.device_id,
+                    ),
+                    check.target,
+                    route,
+                )
+            )
+
+    peers = tuple(
+        sorted(
+            peer_by_owner.values(),
+            key=lambda item: probe_owner_sort_key(item.owner),
+        )
+    )
+    ordered_groups = tuple(
+        sorted(
+            groups,
+            key=lambda item: probe_owner_sort_key(item.owner),
+        )
+    )
+    return peers, ordered_groups
 
 
 def build_probe_plane_desired_assembly(

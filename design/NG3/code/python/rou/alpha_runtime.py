@@ -35,6 +35,7 @@ import threading
 from typing import Iterable, Mapping
 
 from .composite_nft_policy import CompositeNftDesiredState
+from .availability_description import resolve_availability_probe_intents
 from .availability_manager import (
     LOG_TAG as AVAIL_LOG_TAG,
     AvailabilityManager,
@@ -148,7 +149,11 @@ from .payload_profile import (
     build_payload_profile_requests,
 )
 from .payload_nat_desired import PayloadNatDesiredState, ProfileSnatPolicyIntent
-from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
+from .probe_plane_desired import (
+    ProbePlaneDesiredAssembly,
+    build_probe_plane_desired_assembly,
+    project_current_wireguard_probe_intents,
+)
 from .probe_runtime import AvailabilityProbeRuntime
 from .protective_mode_control import (
     DEFAULT_CONTROL_PATH,
@@ -212,7 +217,7 @@ class AlphaPreparedPolicy:
     last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_path_routes: tuple[RoutePriorityPathRoute, ...] = ()
-    last_probe_assembly: ProbeDesiredAssembly | None = None
+    last_probe_assembly: ProbePlaneDesiredAssembly | None = None
     availability_runtime: AvailabilityProbeRuntime = field(
         default_factory=AvailabilityProbeRuntime
     )
@@ -280,16 +285,27 @@ class AlphaPreparedPolicy:
             projection.bindings,
         )
         path_routes = realize_direct_device_path_routes(projection.bindings)
-        probe_assembly = build_probe_desired_assembly(
+        availability_intents = resolve_availability_probe_intents(
             self.config,
+            tuple(route.path_id for route in path_routes),
+        )
+        peer_intents, group_intents = project_current_wireguard_probe_intents(
+            self.current_config,
             profiles,
+            path_routes,
+        )
+        probe_assembly = build_probe_plane_desired_assembly(
+            profiles,
+            availability_intents,
+            peer_intents,
+            group_intents,
             path_routes,
             NG3_LINUX_POLICY_PLATFORM,
             NG3_PROBE_LOCAL_PLATFORM,
         )
         layout = probe_assembly.layout
         self.availability_runtime.configure(
-            probe_assembly.intents,
+            probe_assembly.availability_intents,
             path_routes,
         )
         availability_projection = self.availability_manager.synchronize(

@@ -66,6 +66,70 @@ device_order = ["wg-main"]
             "wg0",
         )
 
+    def test_managed_wireguard_current_path_joins_shared_probe_plane(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            """
+[device.wg-main]
+enabled = true
+use_outbound_nat = true
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/vpn-gate/secrets/wg-main.key"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.0/16"]
+device_order = ["wg-main"]
+
+[profile.alpha.availability_check]
+mechanism = "icmp"
+target = "10.253.0.1"
+""",
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        desired = prepared.build_current(
+            host_boundary,
+            (
+                InterfaceIdentity("lo", 1),
+                host_boundary,
+                InterfaceIdentity("wg0", 11),
+            ),
+        )
+
+        assembly = prepared.last_probe_assembly
+        self.assertIsNotNone(assembly)
+        assert assembly is not None
+        self.assertEqual(len(assembly.availability_intents), 1)
+        self.assertEqual(len(assembly.peer_intents), 1)
+        self.assertEqual(len(assembly.group_intents), 1)
+        self.assertEqual(
+            {type(item.owner).__name__ for item in assembly.probe.rules},
+            {
+                "ProbePolicyOwner",
+                "WireGuardPeerProbeOwner",
+                "WireGuardGroupProbeOwner",
+            },
+        )
+        self.assertEqual(
+            len(desired.nft.probe_local),
+            len(assembly.probe.local_rules),
+        )
+        self.assertEqual(
+            {context.intent.owner for context in prepared.availability_runtime.current_contexts},
+            {assembly.availability_intents[0].owner},
+        )
+
     def test_external_device_still_uses_current_parser_compatibility_path(self):
         prepared = AlphaPreparedPolicy.from_text(
             CONFIG,
@@ -178,7 +242,10 @@ device_order = ["wg-main"]
             (InterfaceIdentity("lo", 1), host_boundary, vpn0),
         )
         self.assertIsNotNone(availability.last_probe_assembly)
-        self.assertEqual(len(availability.last_probe_assembly.intents), 1)
+        self.assertEqual(
+            len(availability.last_probe_assembly.availability_intents),
+            1,
+        )
         self.assertEqual(len(desired.nft.probe_local), 2)
 
         snat = AlphaPreparedPolicy.from_text(
