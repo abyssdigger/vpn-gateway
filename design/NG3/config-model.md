@@ -719,10 +719,12 @@ semantic owners/verdicts остаются раздельными. Если ус�
 Базовая конфигурация WireGuard содержит только эти permanent `/32`; payload prefixes
 появляются в `AllowedIPs` только через подтвержденную D.002 group ownership projection.
 
-Текущий parser/normalized `ManagedWireGuardConfig.shared_prefixes` пока материализует старый
-one-group subset и не принимает `device_membership.*.peer_order`. Поскольку binding release
-еще не существует, при реализации generalized parser этот внутренний pre-binding shape может
-быть заменен напрямую без compatibility alias.
+Текущий `parse_current_config` принимает `device_membership.*.peer_order` и публикует
+typed `CurrentConfig.wireguard_groups` с derived prefixes, peer memberships и qualifying
+group availability description. `ManagedWireGuardConfig.shared_prefixes` пока сохраняется
+только как transitional one-group projection для существующего D.002 prototype; это не
+user-facing source of truth и при переводе D.002 на typed groups может быть удалено без
+compatibility alias, поскольку binding release еще не существует.
 
 ### Транспортные разрешения не дублируются
 

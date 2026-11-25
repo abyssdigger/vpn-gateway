@@ -269,3 +269,25 @@ confirmed peer-specific precondition. Owner/peer mismatch, Device/path mismatch,
 readiness and stale interface generation are rejected before the shared physical Driver is
 invoked. The Linux ICMP mechanism itself is unchanged and already covered by the C.008
 evidence selected in EV-00110.
+
+## EV-00140 — Profile-derived WireGuard group normalization
+
+**Status:** accepted / full A.002 generalized R8 configuration materialization  
+**Scope:** canonical derivation of one WireGuard recoverable group per enabled
+`(Profile, managed WireGuard Device)` membership; payload bundle from
+`Profile.destinations`; optional group-local ordered peer subset with `:reserve`; reuse of
+a qualifying in-group Profile ICMP description without merging semantic evidence; and strict
+rejection of invalid membership/peer references.  
+**Implementation:** `design/NG3/code/python/rou/release1_config.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_group_config.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-group-normalization-review.md`.  
+**Executable evidence:** GitHub Actions run `45562870491`, unit job
+`139030635335` — PASS on source
+`aa26d7845435c12b164070e97377eab2693923af`.
+
+The focused tests confirm default all-peer ordinary membership, explicit ordered subset with
+group-local reserve role, typed prefix derivation, qualified Profile availability-description
+reuse, and fail-closed rejection of detail for a nonmember Device, unknown/duplicate peers and
+unsupported membership suffixes. Existing whole-suite tests remain green. The legacy
+`shared_prefixes` field is retained only as a temporary internal bridge for the one-group
+D.002 prototype and is not part of the accepted generalized configuration contract.
