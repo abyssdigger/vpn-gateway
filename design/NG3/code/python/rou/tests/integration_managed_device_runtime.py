@@ -247,6 +247,16 @@ warm_paths = 1
             # Reconcile all path-dependent objects before releasing the old device.
             reconcile_dependencies(recovery)
             assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-main"}
+            # A different observed generation is not evidence that the
+            # already-applied replacement policy remains valid.
+            with patch("rou.alpha_runtime._observe_presence_bindings", return_value=()):
+                _, released = release_alpha_undemanded_devices(
+                    prepared, domain, runner, manager, recovery, ownership,
+                    dependencies_confirmed=True,
+                )
+            assert not released
+            assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
+            print("A012_RUNTIME_STALE_REPLACEMENT_BLOCKS_RELEASE=PASS")
             released_realizations, released = release_alpha_undemanded_devices(
                 prepared, domain, runner, manager, recovery, ownership,
                 dependencies_confirmed=True,

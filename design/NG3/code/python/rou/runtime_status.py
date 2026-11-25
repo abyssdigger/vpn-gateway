@@ -13,9 +13,10 @@ from typing import Iterable
 
 from .binding import LogicalPathId, PathBinding
 from .managed_device_manager import ManagedDeviceRealization
+from .managed_device_demand import ManagedDeviceDemandProjection, ProfileManagedDeviceDemand
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
-from .release1_config import Release1Config, render_helper_routing_interfaces
+from .release1_config import CurrentConfig, Release1Config, WarmPaths, render_helper_routing_interfaces
 from .wireguard_peer_manager import WireGuardPeerRealization
 
 
@@ -55,6 +56,7 @@ class ConfiguredProfileStatus:
     destinations: tuple[str, ...]
     device_order: tuple[str, ...]
     availability_check: str | None
+    warm_paths: WarmPaths | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +100,8 @@ class RuntimeStatusSnapshot:
     readiness: RuntimeReadiness
     blocking_problems: tuple[str, ...]
     unknown_or_unconfirmed_fields: tuple[str, ...]
+    # Last demand calculated from fresh structural presence, not a payload verdict.
+    managed_profile_demands: tuple[ProfileManagedDeviceDemand, ...] | None = None
 
     def to_dict(self) -> dict[str, object]:
         value = asdict(self)
@@ -122,6 +126,7 @@ class RuntimeStatusAgent:
         self._configured = configured_intent
         self._effective: tuple[EffectiveProfileStatus, ...] | None = None
         self._managed_devices: tuple[ManagedDeviceRealization, ...] = ()
+        self._managed_demands: tuple[ProfileManagedDeviceDemand, ...] | None = None
         self._wireguard_peers: tuple[WireGuardPeerRealization, ...] = ()
         self._availability = tuple(
             AvailabilityProfileStatus(
@@ -168,6 +173,13 @@ class RuntimeStatusAgent:
         self._managed_devices = tuple(
             sorted(current, key=lambda item: item.device_id)
         )
+
+    def confirm_managed_demand(
+        self, projection: ManagedDeviceDemandProjection | None
+    ) -> None:
+        if projection is not None and not isinstance(projection, ManagedDeviceDemandProjection):
+            raise ValueError("projection must be ManagedDeviceDemandProjection or None")
+        self._managed_demands = None if projection is None else projection.profiles
 
     def confirm_wireguard_peers(
         self,
@@ -303,6 +315,7 @@ class RuntimeStatusAgent:
             readiness=self._readiness,
             blocking_problems=self._problems,
             unknown_or_unconfirmed_fields=self._unknown,
+            managed_profile_demands=self._managed_demands,
         )
 
 
@@ -318,9 +331,14 @@ def read_release_version(path: Path) -> str:
     return version
 
 
-def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentStatus:
+def build_configured_intent_status(
+    config: Release1Config | CurrentConfig,
+) -> ConfiguredIntentStatus:
+    current = config if isinstance(config, CurrentConfig) else None
+    if current is not None:
+        config = current.base
     if not isinstance(config, Release1Config):
-        raise ValueError("config must be Release1Config")
+        raise ValueError("config must be Release1Config or CurrentConfig")
 
     devices = []
     for device_id in sorted(config.structural.devices):
@@ -383,6 +401,10 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
                     item.with_prefixlen for item in structural.destinations
                 ),
                 device_order=structural.device_order,
+                warm_paths=(
+                    current.warm_paths.get(profile_id, "all")
+                    if current is not None and structural.enabled else None
+                ),
                 availability_check=(
                     "default"
                     if semantic.availability_uses_device_default

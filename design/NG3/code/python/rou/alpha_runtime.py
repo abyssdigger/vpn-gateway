@@ -586,13 +586,22 @@ def release_alpha_undemanded_devices(
     if not dependencies_confirmed or not pending:
         return convergence.realizations, False
     desired = convergence.projection.desired_device_ids
-    # In particular, a replacement disappearing since policy convergence
-    # must not cause release of a still-needed reserve.
-    try:
+
+    def replacement_still_current() -> bool:
         fresh = _observe_presence_bindings(
             prepared, domain_spec, runner, eligible_only=True
         )
-        if project_final(prepared.current_config, fresh).desired_device_ids != desired:
+        # A desired Device set alone cannot distinguish a vanished or replaced
+        # concrete path from the generation whose dependencies were confirmed.
+        return (
+            frozenset(fresh) == frozenset(prepared.last_bindings)
+            and project_final(prepared.current_config, fresh).desired_device_ids == desired
+        )
+
+    # In particular, a replacement disappearing since policy convergence
+    # must not cause release of a still-needed reserve.
+    try:
+        if not replacement_still_current():
             return convergence.realizations, False
     except Exception:
         return convergence.realizations, False
@@ -626,10 +635,7 @@ def release_alpha_undemanded_devices(
     if safe_ids:
         # Recheck after D.003 mutations, immediately before authorizing D.001.
         try:
-            fresh = _observe_presence_bindings(
-                prepared, domain_spec, runner, eligible_only=True
-            )
-            if project_final(prepared.current_config, fresh).desired_device_ids != desired:
+            if not replacement_still_current():
                 safe_ids.clear()
         except Exception:
             safe_ids.clear()
@@ -1421,7 +1427,7 @@ def run_alpha_runtime(
                 "alpha startup returned an unexpected host-routing helper"
             )
         status_agent = RuntimeStatusAgent(
-            build_configured_intent_status(prepared.config),
+            build_configured_intent_status(prepared.current_config),
             version=release_version,
         )
         status_publisher = RuntimeStatusFilePublisher(
@@ -1430,6 +1436,9 @@ def run_alpha_runtime(
         )
         status_agent.confirm_managed_devices(
             managed_realizations_holder["current"]
+        )
+        status_agent.confirm_managed_demand(
+            managed_convergence_holder["current"].projection
         )
         status_publisher.publish(status_agent.snapshot())
 
@@ -1444,6 +1453,7 @@ def run_alpha_runtime(
                     domain_spec,
                     runner,
                 )
+                status_agent.confirm_managed_demand(None)
                 shutdown_config = CurrentConfig(prepared.config, {})
                 shutdown_realizations = managed_device_manager.reconcile(
                     shutdown_config,
@@ -1579,6 +1589,7 @@ def run_alpha_runtime(
                 except Exception as containment_exc:
                     diagnostic += f"; containment failed: {containment_exc}"
                 status_agent.confirm_managed_devices(())
+                status_agent.confirm_managed_demand(None)
                 status_agent.confirm_wireguard_peers(())
                 managed_realizations_holder["current"] = ()
                 return (
@@ -1588,6 +1599,7 @@ def run_alpha_runtime(
             managed_realizations = convergence.realizations
             managed_realizations_holder["current"] = managed_realizations
             status_agent.confirm_managed_devices(managed_realizations)
+            status_agent.confirm_managed_demand(convergence.projection)
             for problem in convergence.attempt_problems:
                 log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
                     device_id=problem.device_id, diagnostic=problem.problem)
@@ -1888,12 +1900,16 @@ def run_alpha_runtime(
                         )
                     ),
                     unknown_fields=(
-                        (
-                            "confirmed_effective_state",
-                            "wireguard_peer_realizations",
+                        ("confirmed_effective_state",)
+                        + (
+                            ("wireguard_peer_realizations",)
+                            if prepared.current_config.wireguard_groups else ()
                         )
-                        if prepared.current_config.wireguard_groups
-                        else ("confirmed_effective_state",)
+                        + (
+                            ("managed_device_realizations", "managed_profile_demands")
+                            if status_agent.snapshot().managed_profile_demands is None
+                            else ()
+                        )
                     ),
                 )
             current_problem_owners = (
