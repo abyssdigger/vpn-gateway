@@ -18,6 +18,10 @@ from rou.managed_wireguard_adapter import ManagedWireGuardState
 from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
 from rou.release1_config import parse_release1_config
+from rou.wireguard_peer_manager import (
+    WireGuardGroupOwnershipRecord,
+    WireGuardPeerRealization,
+)
 from rou.runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
@@ -187,6 +191,46 @@ availability_check = "default"
             snapshot.to_dict()["managed_device_realizations"][0]["confirmed_state"],
             ManagedWireGuardState.PRESENT,
         )
+
+    def test_status_carries_authoritative_wireguard_peer_realization(self):
+        agent = RuntimeStatusAgent(self.configured())
+        realization = WireGuardPeerRealization(
+            device_id="wg-main",
+            base_generation="base-a",
+            interface_ifname="wg0",
+            interface_ifindex=17,
+            group_owners=(
+                WireGuardGroupOwnershipRecord("alpha", "edge-a"),
+            ),
+            generation="peer-generation-a",
+        )
+        agent.confirm_wireguard_peers((realization,))
+
+        snapshot = agent.snapshot()
+        self.assertEqual(snapshot.wireguard_peer_realizations, (realization,))
+        encoded = snapshot.to_dict()["wireguard_peer_realizations"][0]
+        self.assertEqual(encoded["device_id"], "wg-main")
+        self.assertEqual(encoded["generation"], "peer-generation-a")
+        self.assertEqual(
+            encoded["group_owners"][0],
+            {"profile_id": "alpha", "owner_peer_id": "edge-a"},
+        )
+
+    def test_status_rejects_duplicate_wireguard_peer_realization(self):
+        agent = RuntimeStatusAgent(self.configured())
+        realization = WireGuardPeerRealization(
+            device_id="wg-main",
+            base_generation="base-a",
+            interface_ifname="wg0",
+            interface_ifindex=17,
+            group_owners=(),
+            generation="peer-generation-a",
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "duplicate WireGuard peer realization",
+        ):
+            agent.confirm_wireguard_peers((realization, realization))
 
     def test_confirmed_effective_state_reports_current_order_and_endpoint(self):
         agent = RuntimeStatusAgent(self.configured())
