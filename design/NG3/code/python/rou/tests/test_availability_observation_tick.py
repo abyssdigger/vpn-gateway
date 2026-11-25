@@ -22,6 +22,7 @@ from rou.probe_precondition import (
 from rou.probe_routing_compare import ProbeRoutingComparison
 from rou.probe_runtime import (
     AvailabilityProbeRuntime,
+    ProbeOwnershipDependency,
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
 )
@@ -284,6 +285,54 @@ class AvailabilityObservationTickTests(unittest.TestCase):
             LocalErrorDriver(driver.outcomes),
         )
 
+        self.assertEqual(
+            result.projection.effective_profiles[0].ordered_paths,
+            (A, B),
+        )
+
+
+    def test_unconfirmed_ownership_dependency_skips_only_that_subject(self):
+        config = cfg()
+        p = baseline()
+        assembly = build_probe_desired_assembly(
+            config,
+            (p,),
+            ROUTES,
+            NG3_LINUX_POLICY_PLATFORM,
+            LOCAL,
+        )
+        runtime = AvailabilityProbeRuntime()
+        manager = AvailabilityManager(AvailabilityManagerPolicy(1, 1))
+        driver = Driver({
+            A: ProbeTechnicalOutcome.NO_REPLY,
+            B: ProbeTechnicalOutcome.REPLY,
+        })
+        owners = {
+            intent.owner.path_id: intent.owner
+            for intent in assembly.intents
+        }
+
+        result = run_availability_observation_tick(
+            config,
+            (p,),
+            ROUTES,
+            assembly,
+            exact_precondition(assembly),
+            runtime,
+            manager,
+            driver,
+            ownership_dependencies={
+                owners[A]: ProbeOwnershipDependency.unconfirmed(),
+                owners[B]: ProbeOwnershipDependency.not_applicable(),
+            },
+        )
+
+        self.assertTrue(result.attempts_enabled)
+        self.assertEqual(len(result.evidence), 1)
+        self.assertEqual(
+            [context.intent.owner for context in driver.contexts],
+            [owners[B]],
+        )
         self.assertEqual(
             result.projection.effective_profiles[0].ordered_paths,
             (A, B),

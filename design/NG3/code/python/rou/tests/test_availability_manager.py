@@ -15,7 +15,11 @@ from rou.interface_identity import InterfaceIdentity
 from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
 from rou.probe_policy import AvailabilityProbeIntent
-from rou.probe_runtime import ProbeEvidence, ProbeObservationContext
+from rou.probe_runtime import (
+    ProbeEvidence,
+    ProbeObservationContext,
+    ProbeOwnershipDependency,
+)
 from rou.release1_config import parse_release1_config
 
 
@@ -65,7 +69,13 @@ def profile():
     )
 
 
-def context(path, endpoint, generation=1, target=TARGET):
+def context(
+    path,
+    endpoint,
+    generation=1,
+    target=TARGET,
+    ownership_dependency=None,
+):
     return ProbeObservationContext(
         AvailabilityProbeIntent(
             ProbePolicyOwner("corp", path),
@@ -73,6 +83,11 @@ def context(path, endpoint, generation=1, target=TARGET):
         ),
         endpoint,
         generation,
+        (
+            ProbeOwnershipDependency.not_applicable()
+            if ownership_dependency is None
+            else ownership_dependency
+        ),
     )
 
 
@@ -203,6 +218,58 @@ class AvailabilityManagerTests(unittest.TestCase):
             projected.effective_profiles[0].ordered_paths,
             (A, B),
         )
+
+    def test_d002_generation_change_invalidates_problem_evidence_same_endpoint(self):
+        manager = AvailabilityManager(AvailabilityManagerPolicy(1, 1))
+        cfg = config()
+        p = profile()
+        ca1 = context(
+            A,
+            EA,
+            ownership_dependency=ProbeOwnershipDependency.confirmed(
+                "d002-generation-a"
+            ),
+        )
+        cb = context(B, EB)
+        manager.synchronize((ca1, cb), (p,), cfg)
+
+        failed = manager.apply_evidence(
+            evidence(ca1, AvailabilityOutcome.NEGATIVE),
+            (p,),
+            cfg,
+        )
+        self.assertEqual(
+            failed.problem_owners,
+            frozenset((ProbePolicyOwner("corp", A),)),
+        )
+        self.assertEqual(
+            failed.effective_profiles[0].ordered_paths,
+            (B, A),
+        )
+
+        ca2 = context(
+            A,
+            EA,
+            ownership_dependency=ProbeOwnershipDependency.confirmed(
+                "d002-generation-b"
+            ),
+        )
+        projected = manager.synchronize((ca2, cb), (p,), cfg)
+        self.assertEqual(projected.problem_owners, frozenset())
+        self.assertEqual(
+            projected.effective_profiles[0].ordered_paths,
+            (B, A),
+            "routing stickiness is separate from invalidated availability evidence",
+        )
+        with self.assertRaisesRegex(
+            AvailabilityManagerError,
+            "current synchronized context",
+        ):
+            manager.apply_evidence(
+                evidence(ca1, AvailabilityOutcome.NEGATIVE),
+                (p,),
+                cfg,
+            )
 
     def test_stale_evidence_is_rejected(self):
         manager = AvailabilityManager(AvailabilityManagerPolicy(2, 2))

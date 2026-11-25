@@ -592,3 +592,28 @@ index; preservation of explicit Rust-boundary coverage after removal of the stan
 `16e62c5cc43f79fe31729aad34908821f09db747`; actual-main lineage run
 `45596377672` — PASS.
 
+## EV-00280 — R8.R6 D.002 generation currentness for A.007 evidence
+
+**Status:** accepted  
+**Scope:** typed A.007 ownership-dependency state; ordered runtime composition
+`C.001 prepare -> D.002 reconcile/generation -> A.007 fresh observation -> A.004 priority`;
+same-`LogicalPathId`/same-interface D.002 generation invalidation; confirmed no-owner
+generation semantics; and blocking of remote A.007 evidence only for applicable unconfirmed
+D.002 subjects.  
+**Requirement:** `VPNG-U001-R1.R3.R8.R6`.  
+**Architecture:** A.004, A.007, C.001, D.002; D.003 unchanged-interface ownership evidence
+remains `EV-00190`.  
+**Review:** `design/reviews/NG3-2026-11-25-r8r6-runtime-ordering-review.md`.  
+**Executable evidence:** GitHub Actions run `45603272998` on reviewed source
+`42a0a27cfcf0a518841fa930b481c0dd2a5da08d`: unit job `139167589571` — PASS,
+`linux-probe-runtime` `139167589540` — PASS, `linux-wireguard-peer-ownership`
+`139167589253` — PASS, `linux-wireguard-multipeer` `139167589690` — PASS,
+`linux-alpha-smoke` `139167589811` — PASS, and frozen
+`release-0-1-0-deployment-qa` `139167589538` — PASS. Actual-main lineage run
+`45603273406` — PASS.
+
+The focused Manager acceptance proves that only the D.002 generation changes while
+`LogicalPathId` and exact interface identity stay equal: old availability-problem confirmation
+loses current force and old evidence is rejected. Separate A.004 ordinary-path stickiness may
+remain, demonstrating that routing history is not being misclassified as availability evidence.
+

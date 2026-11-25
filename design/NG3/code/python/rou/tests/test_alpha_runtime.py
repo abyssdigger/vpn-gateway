@@ -7,6 +7,8 @@ from rou.alpha_runtime import (
     AlphaPreparedPolicy,
     AlphaReconcileStatus,
     AlphaRuntimeError,
+    build_alpha_availability_ownership_dependencies,
+    reconcile_alpha_availability_wireguard_once,
     reconcile_alpha_payload_once,
     reconcile_alpha_wireguard_peers_once,
 )
@@ -18,6 +20,11 @@ from rou.managed_device_manager import (
     ManagedDeviceRealization,
 )
 from rou.managed_wireguard_adapter import ManagedWireGuardState
+from rou.probe_runtime import ProbeOwnershipDependencyState
+from rou.wireguard_peer_manager import (
+    WireGuardGroupOwnershipRecord,
+    WireGuardPeerRealization,
+)
 from rou.wireguard_peer_runtime import WireGuardPeerRuntimeResult
 
 
@@ -600,6 +607,122 @@ firewall = [
         )
         self.assertEqual(len(desired.nft.payload_nat.masquerade_rules), 1)
         self.assertEqual(len(desired.nft.device_firewall.chains), 2)
+
+
+    def test_confirmed_no_owner_is_valid_availability_dependency_generation(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            """
+[device.wg-main]
+enabled = true
+use_outbound_nat = false
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/run/private.key"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.0/16"]
+device_order = ["wg-main"]
+
+[profile.alpha.availability_check]
+mechanism = "icmp"
+target = "10.253.0.1"
+""",
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        prepared.build_current(
+            host_boundary,
+            (
+                InterfaceIdentity("lo", 1),
+                host_boundary,
+                InterfaceIdentity("wg0", 11),
+            ),
+        )
+        realization = WireGuardPeerRealization(
+            device_id="wg-main",
+            base_generation="base-a",
+            interface_ifname="wg0",
+            interface_ifindex=11,
+            group_owners=(
+                WireGuardGroupOwnershipRecord("alpha", None),
+            ),
+            generation="d002-generation-a",
+        )
+        dependencies = build_alpha_availability_ownership_dependencies(
+            prepared,
+            WireGuardPeerRuntimeResult((realization,)),
+        )
+        dependency = next(iter(dependencies.values()))
+        self.assertEqual(
+            dependency.state,
+            ProbeOwnershipDependencyState.CONFIRMED,
+        )
+        self.assertEqual(
+            dependency.generation,
+            "d002-generation-a",
+        )
+
+        unconfirmed = build_alpha_availability_ownership_dependencies(
+            prepared,
+            None,
+        )
+        self.assertEqual(
+            next(iter(unconfirmed.values())).state,
+            ProbeOwnershipDependencyState.UNCONFIRMED,
+        )
+
+    def test_combined_reconcile_orders_d002_before_a007_completion(self):
+        prepared = Mock()
+        preparation = SimpleNamespace(confirmed=True)
+        wireguard = WireGuardPeerRuntimeResult(())
+        calls = []
+
+        with (
+            patch(
+                "rou.alpha_runtime.prepare_alpha_availability_probe_plane_once",
+                side_effect=lambda *_: calls.append("prepare") or preparation,
+            ),
+            patch(
+                "rou.alpha_runtime.reconcile_alpha_wireguard_peers_once",
+                side_effect=lambda *_: calls.append("d002") or wireguard,
+            ),
+            patch(
+                "rou.alpha_runtime.build_alpha_availability_ownership_dependencies",
+                side_effect=lambda *_: calls.append("dependencies") or {},
+            ),
+            patch(
+                "rou.alpha_runtime.reconcile_alpha_availability_after_probe_plane_once",
+                side_effect=lambda *_: calls.append("a007_a004")
+                or SimpleNamespace(confirmed=True),
+            ),
+        ):
+            result, realized, error = reconcile_alpha_availability_wireguard_once(
+                prepared,
+                (),
+                SimpleNamespace(),
+                object(),
+                object(),
+                object(),
+            )
+
+        self.assertTrue(result.confirmed)
+        self.assertIs(realized, wireguard)
+        self.assertIsNone(error)
+        self.assertEqual(
+            calls,
+            ["prepare", "d002", "dependencies", "a007_a004"],
+        )
 
 
 if __name__ == "__main__":

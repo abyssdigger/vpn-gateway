@@ -111,6 +111,10 @@ from .managed_network_domain import (
 from .linux_availability_cycle import (
     LinuxAvailabilityCycleResult,
     LinuxAvailabilityCycleStatus,
+    LinuxProbePlanePreparationResult,
+    LinuxProbePlanePreparationStatus,
+    complete_linux_availability_cycle_once,
+    prepare_linux_availability_probe_plane_once,
     run_linux_availability_cycle_once,
 )
 from .linux_forwarding_gate import (
@@ -889,5 +893,7 @@ __all__ = [
     "prepare_payload_nft_scaffold_once",
     "project_device_bindings",
     "realize_direct_device_path_routes",
+    "complete_linux_availability_cycle_once",
+    "prepare_linux_availability_probe_plane_once",
     "run_linux_availability_cycle_once",
 ]

@@ -85,7 +85,9 @@ from .icmp_probe_driver import (
 )
 from .linux_availability_cycle import (
     LinuxAvailabilityCycleResult,
-    run_linux_availability_cycle_once,
+    LinuxProbePlanePreparationResult,
+    complete_linux_availability_cycle_once,
+    prepare_linux_availability_probe_plane_once,
 )
 from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_protective_payload_gate import LinuxProtectivePayloadGateDriver
@@ -136,6 +138,7 @@ from .managed_network_domain import (
     ensure_ordinary_side_portal,
     preflight_managed_network_environment,
 )
+from .network_policy_layout import ProbePolicyOwner
 from .network_policy_activation import (
     LOG_TAG as POLICY_LOG_TAG,
     NetworkPolicyActivationResult,
@@ -159,7 +162,10 @@ from .probe_plane_desired import (
     build_probe_plane_desired_assembly,
     project_current_wireguard_probe_intents,
 )
-from .probe_runtime import AvailabilityProbeRuntime
+from .probe_runtime import (
+    AvailabilityProbeRuntime,
+    ProbeOwnershipDependency,
+)
 from .protective_mode_control import (
     DEFAULT_CONTROL_PATH,
     ProtectiveModeControlService,
@@ -234,6 +240,10 @@ class AlphaPreparedPolicy:
             )
         )
     )
+    last_availability_dependencies: dict[
+        ProbePolicyOwner,
+        ProbeOwnershipDependency,
+    ] = field(default_factory=dict)
 
     @classmethod
     def from_text(
@@ -309,9 +319,24 @@ class AlphaPreparedPolicy:
             NG3_PROBE_LOCAL_PLATFORM,
         )
         layout = probe_assembly.layout
+        pre_d002_dependencies = {
+            intent.owner: (
+                self.last_availability_dependencies.get(
+                    intent.owner,
+                    ProbeOwnershipDependency.unconfirmed(),
+                )
+                if (
+                    intent.owner.profile_id,
+                    intent.owner.path_id.device_id,
+                ) in self.current_config.wireguard_groups
+                else ProbeOwnershipDependency.not_applicable()
+            )
+            for intent in probe_assembly.availability_intents
+        }
         self.availability_runtime.configure(
             probe_assembly.availability_intents,
             path_routes,
+            pre_d002_dependencies,
         )
         availability_projection = self.availability_manager.synchronize(
             self.availability_runtime.current_contexts,
@@ -760,8 +785,29 @@ def reconcile_alpha_payload_once(
     )
 
 
-def reconcile_alpha_availability_once(
+def prepare_alpha_availability_probe_plane_once(
     prepared: AlphaPreparedPolicy,
+    runner: SubprocessNftRunner,
+) -> LinuxProbePlanePreparationResult:
+    if prepared.last_probe_assembly is None:
+        raise AlphaRuntimeError(
+            "availability cycle requires a current probe desired assembly"
+        )
+    return prepare_linux_availability_probe_plane_once(
+        prepared.last_probe_assembly,
+        runner=runner,
+        namespace=ALPHA_NAMESPACE,
+        platform=NG3_LINUX_POLICY_PLATFORM,
+    )
+
+
+def reconcile_alpha_availability_after_probe_plane_once(
+    prepared: AlphaPreparedPolicy,
+    preparation: LinuxProbePlanePreparationResult,
+    ownership_dependencies: Mapping[
+        ProbePolicyOwner,
+        ProbeOwnershipDependency,
+    ],
     runner: SubprocessNftRunner,
     probe_driver: LinuxIcmpProbeDriver,
 ) -> LinuxAvailabilityCycleResult:
@@ -769,14 +815,17 @@ def reconcile_alpha_availability_once(
         raise AlphaRuntimeError(
             "availability cycle requires a current probe desired assembly"
         )
-    result = run_linux_availability_cycle_once(
+    prepared.last_availability_dependencies = dict(ownership_dependencies)
+    result = complete_linux_availability_cycle_once(
         prepared.config,
         prepared.last_baseline_profiles,
         prepared.last_path_routes,
         prepared.last_probe_assembly,
+        preparation,
         prepared.availability_runtime,
         prepared.availability_manager,
         probe_driver,
+        ownership_dependencies=ownership_dependencies,
         runner=runner,
         namespace=ALPHA_NAMESPACE,
         platform=NG3_LINUX_POLICY_PLATFORM,
@@ -819,6 +868,95 @@ def reconcile_alpha_wireguard_peers_once(
         ownership=ownership,
         platform=NG3_LINUX_POLICY_PLATFORM,
     )
+
+
+def build_alpha_availability_ownership_dependencies(
+    prepared: AlphaPreparedPolicy,
+    wireguard_result: WireGuardPeerRuntimeResult | None,
+) -> dict[ProbePolicyOwner, ProbeOwnershipDependency]:
+    if prepared.last_probe_assembly is None:
+        raise AlphaRuntimeError(
+            "availability dependencies require a current probe desired assembly"
+        )
+    realizations = (
+        {}
+        if wireguard_result is None
+        else {
+            realization.device_id: realization
+            for realization in wireguard_result.realizations
+        }
+    )
+    dependencies: dict[
+        ProbePolicyOwner,
+        ProbeOwnershipDependency,
+    ] = {}
+    for intent in prepared.last_probe_assembly.availability_intents:
+        owner = intent.owner
+        group_key = (owner.profile_id, owner.path_id.device_id)
+        if group_key not in prepared.current_config.wireguard_groups:
+            dependencies[owner] = ProbeOwnershipDependency.not_applicable()
+            continue
+        realization = realizations.get(owner.path_id.device_id)
+        if (
+            realization is None
+            or realization.problem is not None
+            or realization.generation is None
+        ):
+            dependencies[owner] = ProbeOwnershipDependency.unconfirmed()
+            continue
+        dependencies[owner] = ProbeOwnershipDependency.confirmed(
+            realization.generation
+        )
+    return dependencies
+
+
+def reconcile_alpha_availability_wireguard_once(
+    prepared: AlphaPreparedPolicy,
+    managed_realizations: tuple[ManagedDeviceRealization, ...],
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    runner: SubprocessNftRunner,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> tuple[
+    LinuxAvailabilityCycleResult,
+    WireGuardPeerRuntimeResult | None,
+    str | None,
+]:
+    """Apply C.001 -> D.002 -> A.007 -> A.004 ordering in one normal trigger."""
+    preparation = prepare_alpha_availability_probe_plane_once(
+        prepared,
+        runner,
+    )
+    wireguard_result: WireGuardPeerRuntimeResult | None = None
+    wireguard_error: str | None = None
+    if preparation.confirmed:
+        try:
+            wireguard_result = reconcile_alpha_wireguard_peers_once(
+                prepared,
+                managed_realizations,
+                coordinator,
+                runner,
+                probe_driver,
+                ownership,
+            )
+            wireguard_error = _wireguard_peer_problem(wireguard_result)
+        except Exception as exc:
+            wireguard_error = (
+                "WireGuard peer reconciliation failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+    dependencies = build_alpha_availability_ownership_dependencies(
+        prepared,
+        wireguard_result,
+    )
+    availability_result = reconcile_alpha_availability_after_probe_plane_once(
+        prepared,
+        preparation,
+        dependencies,
+        runner,
+        probe_driver,
+    )
+    return availability_result, wireguard_result, wireguard_error
 
 
 def _wireguard_peer_problem(
@@ -1188,38 +1326,23 @@ def run_alpha_runtime(
             )
             return host_cleanup, None, stopped
 
-        availability_start = reconcile_alpha_availability_once(
+        (
+            availability_start,
+            wireguard_start,
+            wireguard_start_error,
+        ) = reconcile_alpha_availability_wireguard_once(
             prepared,
+            managed_realizations_holder["current"],
+            wireguard_peer_runtime,
             runner,
             probe_driver,
+            wireguard_peer_ownership,
         )
-        wireguard_start: WireGuardPeerRuntimeResult | None = None
-        wireguard_start_error: str | None = None
-        if (
-            availability_start.probe_routing is not None
-            and availability_start.probe_routing.confirmed
-        ):
-            try:
-                wireguard_start = reconcile_alpha_wireguard_peers_once(
-                    prepared,
-                    managed_realizations_holder["current"],
-                    wireguard_peer_runtime,
-                    runner,
-                    probe_driver,
-                    wireguard_peer_ownership,
-                )
-                status_agent.confirm_wireguard_peers(
-                    wireguard_start.realizations
-                )
-                wireguard_start_error = _wireguard_peer_problem(
-                    wireguard_start
-                )
-            except Exception as exc:
-                status_agent.confirm_wireguard_peers(())
-                wireguard_start_error = (
-                    "WireGuard peer reconciliation failed: "
-                    f"{type(exc).__name__}: {exc}"
-                )
+        status_agent.confirm_wireguard_peers(
+            ()
+            if wireguard_start is None
+            else wireguard_start.realizations
+        )
         if (
             not availability_start.confirmed
             or wireguard_start_error is not None
@@ -1299,45 +1422,28 @@ def run_alpha_runtime(
                 domain_spec,
                 runner,
             )
-            availability_result = (
-                reconcile_alpha_availability_once(
+            if result.ready:
+                (
+                    availability_result,
+                    wireguard_result,
+                    wireguard_error,
+                ) = reconcile_alpha_availability_wireguard_once(
                     prepared,
+                    managed_realizations,
+                    wireguard_peer_runtime,
                     runner,
                     probe_driver,
+                    wireguard_peer_ownership,
                 )
-                if result.ready
-                else None
+            else:
+                availability_result = None
+                wireguard_result = None
+                wireguard_error = None
+            status_agent.confirm_wireguard_peers(
+                ()
+                if wireguard_result is None
+                else wireguard_result.realizations
             )
-            wireguard_result = None
-            wireguard_error = None
-            if (
-                availability_result is not None
-                and availability_result.probe_routing is not None
-                and availability_result.probe_routing.confirmed
-            ):
-                try:
-                    wireguard_result = reconcile_alpha_wireguard_peers_once(
-                        prepared,
-                        managed_realizations,
-                        wireguard_peer_runtime,
-                        runner,
-                        probe_driver,
-                        wireguard_peer_ownership,
-                    )
-                    status_agent.confirm_wireguard_peers(
-                        wireguard_result.realizations
-                    )
-                    wireguard_error = _wireguard_peer_problem(
-                        wireguard_result
-                    )
-                except Exception as exc:
-                    status_agent.confirm_wireguard_peers(())
-                    wireguard_error = (
-                        "WireGuard peer reconciliation failed: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-            if wireguard_result is None:
-                status_agent.confirm_wireguard_peers(())
             return (
                 result,
                 availability_result,

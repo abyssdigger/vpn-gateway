@@ -1834,7 +1834,11 @@ Architectural decisions
 8. `Готовность управляемого WireGuard не равна привязке`
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
-**Пробел материализации:** Текущая реализация не получает подтвержденное поколение WireGuard peer-realization и поэтому еще не умеет использовать его как дополнительное условие готовности пути или как основание структурной потребности управляемого Device.
+**Пробел материализации:** broad edge R8 остается [`partial`] в A.004 только потому,
+что A.004 владеет effective path-order projection, а не D.002 realization currentness.
+Подтвержденное D.002 generation теперь входит в A.007 context до fresh observation; A.004
+получает уже пересчитанную projection и не должен иметь отдельную прямую зависимость от
+WireGuard generation. Отдельного незакрытого A.004 implementation gap для R8.R6 нет.
 
 ## [A.005] PayloadPolicyCalculator
 
@@ -1928,7 +1932,7 @@ Agent ongoing availability observation. Он управляет расписан
 
 **Implements:**
 - `VPNG-U003-R3.R6` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`none`]
+- `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R1` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`full`]
 - `VPNG-U003-R3.R6.R3` — [`full`]
@@ -1964,21 +1968,21 @@ Architectural decisions
 6. `Ownership generation precedes evidence acceptance`
    *Для A.007 subject, зависящего от recoverable WireGuard group, один normal reconciliation обязан сначала подтвердить полный C.001 probe-routing lower state, затем выполнить D.002 reconciliation и получить applicable confirmed D.002 generation, и только после этого синхронизировать A.007 context, принимать fresh A.007 evidence и сходить основанный на нем route-priority state. Недопустимо сначала применить A.007 verdict к effective order, затем подтвердить смену D.002 owner и оставить этот verdict действующим до следующего timer tick. Эквивалентная реализация через немедленную invalidate+fresh re-observe допустима только если между D.002 confirmation и повторным A.007 postcondition продукт не публикует и не использует state, опирающийся на старое evidence.*
 
-**Материализация:** production alpha теперь получает A.007 intents как semantic subset одного
-полного A.007+D.002 probe-plane desired union. Нижний runtime сначала materializes полный
-accepted union, а A.007 observation запрашивает scoped readiness только своих
-`ProbePolicyOwner` и конфигурирует `AvailabilityProbeRuntime` только этими intents; peer/group
-owners поэтому не превращаются в A.007 evidence даже при физически совпадающем target.
+**Материализация:** production alpha получает A.007 intents как semantic subset одного
+полного A.007+D.002 probe-plane desired union. Нижний runtime сначала materializes и
+fresh-confirm полный C.001 probe-routing union, после чего alpha выполняет D.002 reconciliation
+до A.007 context synchronization. `ProbeObservationContext` содержит typed ownership
+dependency: обычный/non-D.002 subject получает `not_applicable`, применимый managed-WireGuard
+subject без подтвержденной D.002 realization получает `unconfirmed`, а подтвержденная
+realization — exact Device-wide D.002 generation. Смена generation при неизменных
+`LogicalPathId`, ifname и ifindex меняет immutable A.007 context, сбрасывает confirmation
+state в `AvailabilityManager` и делает прежнее evidence неприменимым. `unconfirmed`
+dependency синхронизирует новый current context, но блокирует remote attempt/evidence только
+для затронутого subject; independent non-D.002 subjects продолжают наблюдаться. После fresh
+A.007 observation сходится A.004 route-priority state; ordinary/reserve stickiness остаётся
+отдельным Manager state и не превращается в старое evidence.
 
-**Evidence:** `EV-00210`.
-
-**Пробел материализации:** Текущий A.007 context generation ещё не включает применимое
-D.002 realization generation, а `linux_availability_cycle.py` пока выполняет A.007
-observation/priority до D.002 trigger alpha runtime. Для R8.R6 implementation должна разделить
-full probe-routing preparation от A.007 observation: accepted ordering —
-`C.001 probe-routing prepare -> D.002 reconcile/generation -> A.007 context sync + fresh
-observation -> A.004 priority convergence`. Поэтому прежнее Profile evidence пока ещё не
-обязано стать stale атомарно относительно подтвержденной смены group owner.
+**Evidence:** `EV-00210`, `EV-00280`.
 
 ## [A.008] RuntimeStatusAgent
 
@@ -2395,10 +2399,11 @@ Availability cycle проверяет A.007 subset через
 stale/conflict boundary. Legacy A.007-only direct test/experiment seam сохранен без изменения
 whole-scope semantics.
 
-**Пробел материализации:** combined lower convergence/readiness runtime закрыт `EV-00210`,
-но D.002 Manager ещё не получает periodic/explicit production reconciliation trigger и не
-публикует runtime status. После этого остается обязательная привязка current A.007 evidence к
-D.002 generation. Поэтому R8/R8.R1 остаются [`partial`].
+**Пробел материализации:** broad edges R8/R8.R1 остаются [`partial`] в C.001 только потому,
+что C.001 владеет общим lower probe-policy/convergence/readiness contribution, а peer/group
+selection, generation и Profile-evidence semantics принадлежат D.002/A.007. Full-union lower
+runtime, scoped readiness и ordering `C.001 prepare -> D.002 -> A.007 -> A.004` теперь
+материализованы; отдельного незакрытого C.001 implementation gap для R8.R6 нет.
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2893,7 +2898,7 @@ Manager изменяемой peer/group realization одного явно упр
 подтвержденное либо проблемное состояние.
 
 **Implements:**
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3` — [`full`]
@@ -2903,7 +2908,7 @@ Manager изменяемой peer/group realization одного явно упр
 - `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`, `EV-00240`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`, `EV-00240`, `EV-00280`
 
 API
 
@@ -2975,21 +2980,20 @@ owner-scoped C.001 readiness. Group endpoint readiness наблюдается п
 current path удаляет retained Manager state; confirmed no-owner realization остается
 отличимой от local/unconfirmed runtime problem.
 
-Alpha runtime теперь вызывает retained coordinator после подтвержденной full-union C.001
-probe-routing convergence: один initial trigger выполняется до READY, periodic audit повторяет
-его на каждом normal reconciliation, а protective-mode normal-release check использует тот же
-explicit reconciliation path. Authoritative D.002 realizations передаются A.008 перед
-publication. Confirmed no-owner остается валидным current state и не является local runtime
-failure; D.002 problem дает DEGRADED, сохраняя подтвержденный unrelated effective state.
-Если новый D.002 trigger не состоялся, старая status projection не сохраняется как current.
+Alpha runtime вызывает retained coordinator после подтвержденной full-union C.001
+probe-routing preparation и до A.007 observation/priority: один initial trigger выполняется до
+READY, periodic audit повторяет тот же ordered path, а protective-mode normal-release check
+использует его же. Authoritative D.002 realizations передаются A.008 перед publication.
+Confirmed no-owner остается валидным current state с non-null generation и не является local
+runtime failure; D.002 problem или local reconciliation exception дают применимым A.007
+subjects typed `unconfirmed` dependency, поэтому прежнее Profile evidence теряет current
+force до A.004 priority convergence. Если generation меняется за тем же `wg0`, A.007 context
+меняется до fresh remote attempt. D.003 split-group kernel acceptance закрыт EV-00190.
 
-**Пробел материализации:** runtime trigger/status composition закрыта `EV-00240`. Общий R8
-остается [`partial`] только из-за `VPNG-U001-R1.R3.R8.R6`: A.007 availability evidence
-еще не включает применимое D.002 generation в currentness identity. Для закрытия принят
-ordering `C.001 probe-routing prepare -> D.002 reconcile/generation -> A.007 context sync +
-fresh observation -> A.004 priority convergence`; неподтвержденная применимая D.002
-generation должна блокировать принятие A.007 evidence, а отсутствие D.002 dependency является
-отдельным нормальным случаем. D.003 split-group kernel acceptance закрыт EV-00190.
+**Пробел материализации:** edge `VPNG-U003-R3.R6.R2` остается [`partial`] только потому,
+что D.002 переиспользует общий bounded probe mechanism для peer/group technical evidence, но не
+является владельцем общей A.007 availability-attempt semantics. Эта общая semantics
+материализована A.007/C.008; отдельного незакрытого R8 implementation gap у D.002 больше нет.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 

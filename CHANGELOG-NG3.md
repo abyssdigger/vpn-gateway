@@ -5,6 +5,21 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-25 — WireGuard ownership changes now invalidate stale Profile availability evidence
+
+Generalized managed-WireGuard recovery now closes the remaining R8.R6 currentness gap. The
+runtime first confirms the complete shared probe plane, then reconciles D.002 group ownership,
+then binds A.007 availability context to the resulting Device-wide ownership generation before
+accepting fresh Profile evidence or converging effective route priority.
+
+The dependency is explicit: ordinary/non-D.002 paths remain independent, an applicable but
+unconfirmed WireGuard ownership realization cannot contribute current remote evidence, and a
+confirmed no-owner state still has a valid generation. Changing ownership behind the same
+`LogicalPathId` and unchanged `wg0` ifindex invalidates previous A.007 confirmation without
+conflating that evidence with A.004 routing stickiness. Runtime evidence is recorded as
+`EV-00280`; unchanged-interface split ownership remains established by `EV-00190`.
+
+
 ## 2026-11-25 — Explicitly managed Device base lifecycle materialized
 
 Release-1 runtime now accepts canonical `managed_vpn` intent and composes A.012 over the
