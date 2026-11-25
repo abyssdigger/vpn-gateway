@@ -30,6 +30,7 @@ from rou.probe_precondition import (
     ProbeExecutionPrecondition,
     require_probe_execution_context,
     verify_probe_execution_precondition,
+    verify_probe_execution_precondition_scoped,
 )
 from rou.structural_policy_mutation import StructuralPolicyPhysicalSnapshot
 from rou.structural_routing_inventory import (
@@ -274,6 +275,172 @@ class ProbeExecutionPreconditionTests(unittest.TestCase):
         self.assertFalse(result.confirmed)
         self.assertTrue(result.routing.confirmed)
         self.assertEqual(len(result.local.missing), 2)
+
+
+class ProbeScopedExecutionPreconditionTests(unittest.TestCase):
+    @staticmethod
+    def _peer_owner():
+        return WireGuardPeerProbeOwner("device", "edge-a")
+
+    @staticmethod
+    def _rule(owner, priority, table):
+        return ProbeRuleSpec(
+            owner=owner,
+            priority=priority,
+            process_uid=4242,
+            endpoint=EP,
+            target=TARGET,
+            table=table,
+        )
+
+    @staticmethod
+    def _locals(owner):
+        return (
+            ProbeLocalRuleSpec(
+                owner=owner,
+                hook=ProbeLocalHook.OUTPUT,
+                endpoint=EP,
+                target=TARGET,
+                conntrack_mark=0x20000001,
+                process_uid=4242,
+            ),
+            ProbeLocalRuleSpec(
+                owner=owner,
+                hook=ProbeLocalHook.INPUT,
+                endpoint=EP,
+                target=TARGET,
+                conntrack_mark=0x20000001,
+            ),
+        )
+
+    @staticmethod
+    def _observed(rule):
+        return ObservedManagedRule(
+            priority=rule.priority,
+            table=rule.table,
+            ingress=None,
+            destination=IPv4Network(f"{rule.target}/32"),
+            uid_start=rule.process_uid,
+            uid_end=rule.process_uid,
+            ipproto=1,
+            egress=rule.endpoint,
+        )
+
+    def _full_desired(self):
+        peer_owner = self._peer_owner()
+        profile_rule = self._rule(OWNER, 0x2000, 0xC0000000)
+        peer_rule = self._rule(peer_owner, 0x2001, 0xC0000001)
+        return (
+            peer_owner,
+            profile_rule,
+            peer_rule,
+            ProbeNetworkPolicyDesiredState(
+                (),
+                (profile_rule, peer_rule),
+                self._locals(OWNER) + self._locals(peer_owner),
+            ),
+        )
+
+    def test_exact_siblings_confirm_each_owner_and_share_physical_local_rules(self):
+        peer_owner, profile_rule, peer_rule, desired = self._full_desired()
+        current = snapshot(
+            routing_rules=(
+                self._observed(profile_rule),
+                self._observed(peer_rule),
+            ),
+            local_exact=True,
+        )
+
+        profile = verify_probe_execution_precondition_scoped(
+            current,
+            desired,
+            frozenset({OWNER}),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        peer = verify_probe_execution_precondition_scoped(
+            current,
+            desired,
+            frozenset({peer_owner}),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+
+        self.assertTrue(profile.confirmed)
+        self.assertTrue(peer.confirmed)
+        self.assertEqual(profile.owners, frozenset({OWNER}))
+        self.assertEqual(peer.owners, frozenset({peer_owner}))
+        self.assertEqual(len(profile.local.confirmed), 1)
+        self.assertEqual(len(peer.local.confirmed), 1)
+
+    def test_missing_sibling_does_not_block_requested_owner_but_legacy_union_fails(self):
+        peer_owner, profile_rule, _peer_rule, desired = self._full_desired()
+        current = snapshot(
+            routing_rules=(self._observed(profile_rule),),
+            local_exact=True,
+        )
+
+        scoped = verify_probe_execution_precondition_scoped(
+            current,
+            desired,
+            frozenset({OWNER}),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        legacy = verify_probe_execution_precondition(
+            current,
+            desired,
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+
+        self.assertTrue(scoped.confirmed)
+        self.assertFalse(legacy.confirmed)
+        self.assertEqual(scoped.routing.missing_rules, ())
+        self.assertEqual(len(legacy.routing.missing_rules), 1)
+        self.assertIn(peer_owner, legacy.owners)
+
+    def test_missing_requested_owner_blocks_scoped_readiness(self):
+        peer_owner, _profile_rule, peer_rule, desired = self._full_desired()
+        current = snapshot(
+            routing_rules=(self._observed(peer_rule),),
+            local_exact=True,
+        )
+
+        scoped = verify_probe_execution_precondition_scoped(
+            current,
+            desired,
+            frozenset({OWNER}),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+
+        self.assertFalse(scoped.confirmed)
+        self.assertEqual(len(scoped.routing.missing_rules), 1)
+        self.assertNotIn(peer_owner, scoped.owners)
+
+    def test_unknown_reserved_sibling_state_blocks_every_scoped_owner(self):
+        peer_owner, profile_rule, peer_rule, desired = self._full_desired()
+        unknown_rule = self._rule(
+            WireGuardPeerProbeOwner("device", "unknown"),
+            0x2002,
+            0xC0000002,
+        )
+        current = snapshot(
+            routing_rules=(
+                self._observed(profile_rule),
+                self._observed(peer_rule),
+                self._observed(unknown_rule),
+            ),
+            local_exact=True,
+        )
+
+        for requested in (OWNER, peer_owner):
+            with self.subTest(requested=requested):
+                scoped = verify_probe_execution_precondition_scoped(
+                    current,
+                    desired,
+                    frozenset({requested}),
+                    NG3_LINUX_POLICY_PLATFORM,
+                )
+                self.assertFalse(scoped.confirmed)
+                self.assertEqual(len(scoped.routing.stale_rules), 1)
+
 
 
 if __name__ == "__main__":

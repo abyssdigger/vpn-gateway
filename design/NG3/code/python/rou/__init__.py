@@ -426,6 +426,7 @@ from .probe_precondition import (
     ProbeExecutionContextKey,
     ProbeExecutionPrecondition,
     verify_probe_execution_precondition,
+    verify_probe_execution_precondition_scoped,
 )
 from .probe_routing_compare import (
     ProbeRoutingComparison,
@@ -840,6 +841,7 @@ __all__ = [
     "resolve_availability_probe_intents",
     "build_probe_desired_assembly",
     "verify_probe_execution_precondition",
+    "verify_probe_execution_precondition_scoped",
     "execute_probe_attempt_once",
     "project_availability_routing",
     "run_availability_observation_tick",
