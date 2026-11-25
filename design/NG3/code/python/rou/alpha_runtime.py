@@ -1106,12 +1106,14 @@ def run_alpha_runtime(
                     raise AlphaRuntimeError(problem)
             except Exception as exc:
                 managed_cleanup_error = f"{type(exc).__name__}: {exc}"
+            if managed_cleanup_error is not None:
+                return host_cleanup, managed_cleanup_error, None
             stopped = stop_controller_once(
                 startup.session,
                 domain_spec,
                 runner,
             )
-            return host_cleanup, managed_cleanup_error, stopped
+            return host_cleanup, None, stopped
 
         availability_start = reconcile_alpha_availability_once(
             prepared,
@@ -1140,12 +1142,17 @@ def run_alpha_runtime(
                 diagnostic=availability_start.diagnostic,
                 host_cleanup=host_cleanup.status.value,
                 managed_device_cleanup_error=managed_cleanup_error,
-                managed_cleanup=stopped.status.value,
+                managed_cleanup=(
+                    stopped.status.value
+                    if stopped is not None
+                    else "not_attempted"
+                ),
             )
             return (
                 1
                 if host_cleanup.confirmed
                 and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
@@ -1232,12 +1239,17 @@ def run_alpha_runtime(
                 diagnostic=host_start.diagnostic,
                 host_cleanup=host_cleanup.status.value,
                 managed_device_cleanup_error=managed_cleanup_error,
-                managed_cleanup=stopped.status.value,
+                managed_cleanup=(
+                    stopped.status.value
+                    if stopped is not None
+                    else "not_attempted"
+                ),
             )
             return (
                 1
                 if host_cleanup.confirmed
                 and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
@@ -1287,12 +1299,17 @@ def run_alpha_runtime(
                 diagnostic=f"{type(exc).__name__}: {exc}",
                 host_cleanup=host_cleanup.status.value,
                 managed_device_cleanup_error=managed_cleanup_error,
-                managed_cleanup=stopped.status.value,
+                managed_cleanup=(
+                    stopped.status.value
+                    if stopped is not None
+                    else "not_attempted"
+                ),
             )
             return (
                 1
                 if host_cleanup.confirmed
                 and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
@@ -1436,6 +1453,7 @@ def run_alpha_runtime(
         if (
             host_cleanup.confirmed
             and managed_cleanup_error is None
+            and stopped is not None
             and stopped.status is ControllerStopStatus.STOPPED
         ):
             status_agent.mark_stopped()
@@ -1446,7 +1464,7 @@ def run_alpha_runtime(
                     "shutdown cleanup is not confirmed: "
                     f"host={host_cleanup.status.value}, "
                     f"managed_devices={managed_cleanup_error or 'confirmed'}, "
-                    f"managed={stopped.status.value}"
+                    f"managed={stopped.status.value if stopped is not None else 'not_attempted'}"
                 ),
             )
         status_publisher.publish(status_agent.snapshot())
@@ -1455,22 +1473,32 @@ def run_alpha_runtime(
                 OperationalLogLevel.INFO
                 if host_cleanup.confirmed
                 and managed_cleanup_error is None
+                and stopped is not None
                 and stopped.status is ControllerStopStatus.STOPPED
                 else OperationalLogLevel.ERROR
             ),
             LIFE_LOG_TAG,
             "stop_complete",
-            status=stopped.status.value,
+            status=(
+                stopped.status.value
+                if stopped is not None
+                else "managed_device_cleanup_failed"
+            ),
             host_publication_cleanup=host_cleanup.status.value,
             host_publication_error=host_cleanup.diagnostic,
             managed_device_cleanup_error=managed_cleanup_error,
-            cleanup_error=stopped.cleanup_error,
-            lock_error=stopped.lock_error,
+            cleanup_error=(
+                stopped.cleanup_error if stopped is not None else None
+            ),
+            lock_error=(
+                stopped.lock_error if stopped is not None else None
+            ),
         )
         return (
             0
             if host_cleanup.confirmed
             and managed_cleanup_error is None
+            and stopped is not None
             and stopped.status is ControllerStopStatus.STOPPED
             else 2
         )
