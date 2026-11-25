@@ -86,3 +86,5 @@ ADD_TAG	ng3-snapshot-trace-model-hygiene-source	79bc3b4cd25b2804d6bc7147e20f8532
 DEL_BRANCH	ng3-trace-model-hygiene-cdc-20261125
 ADD_TAG	ng3-snapshot-managed-device-r7-closure-source	944ef02d847c3b34e93ec60c5e8f46dbcd787886	Managed Device R7 base-lifecycle requirement branch accepted closed.
 DEL_BRANCH	ng3-managed-device-r7-closure-cdc-20261125
+ADD_TAG	ng3-snapshot-generalized-r8-requirement-closure-source	b371ca8e65cdd121f1ea3a16fdbd6d0af7621f7c	Generalized managed WireGuard R8 requirement family accepted closed.
+DEL_BRANCH	ng3-wireguard-r8-requirement-closure-cdc-20261125
