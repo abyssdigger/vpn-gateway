@@ -23,9 +23,9 @@ rejected at configuration load rather than silently ignored.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
-from ipaddress import IPv4Address, IPv4Interface
+from ipaddress import IPv4Address, IPv4Interface, IPv4Network
 import os
 from pathlib import Path
 import signal
@@ -92,7 +92,10 @@ from .linux_availability_cycle import (
 from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_protective_payload_gate import LinuxProtectivePayloadGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
+from .managed_device_demand import project_final
 from .managed_device_manager import (
+    ManagedDeviceConvergence,
+    converge_managed_device_presence,
     ManagedDeviceDesiredState,
     ManagedDeviceManager,
     ManagedDeviceRealization,
@@ -101,7 +104,11 @@ from .managed_wireguard_adapter import (
     LinuxManagedWireGuardAdapter,
     ManagedWireGuardState,
 )
-from .wireguard_peer_ownership import WireGuardPeerOwnershipEnforcer
+from .wireguard_peer_ownership import (
+    WireGuardPeerAllowedIPs,
+    WireGuardPeerOwnershipDesired,
+    WireGuardPeerOwnershipEnforcer,
+)
 from .wireguard_peer_runtime import (
     WireGuardPeerRuntimeCoordinator,
     WireGuardPeerRuntimeResult,
@@ -224,6 +231,7 @@ class AlphaPreparedPolicy:
     binding_state: DeviceBindingState
     current_config: CurrentConfig
     config: Release1Config
+    confirmed_managed_interfaces: frozenset[InterfaceIdentity] | None = None
     last_bindings: tuple[PathBinding, ...] = ()
     last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
@@ -278,6 +286,20 @@ class AlphaPreparedPolicy:
             for rule in (self.config.devices[device_id].firewall or ())
         )
 
+    def eligible_interfaces(
+        self, interfaces: tuple[InterfaceIdentity, ...]
+    ) -> tuple[InterfaceIdentity, ...]:
+        if self.confirmed_managed_interfaces is None:
+            return interfaces
+        managed_names = {
+            device.interface for device in self.current_config.managed_vpns.values()
+        }
+        return tuple(
+            endpoint for endpoint in interfaces
+            if endpoint.ifname not in managed_names
+            or endpoint in self.confirmed_managed_interfaces
+        )
+
     def build_current(
         self,
         host_boundary: InterfaceIdentity,
@@ -291,7 +313,7 @@ class AlphaPreparedPolicy:
         projection = project_device_bindings(
             self.config.structural.device_binding_intents,
             self.binding_state,
-            interfaces,
+            self.eligible_interfaces(interfaces),
         )
         self.binding_state = projection.next_state
 
@@ -510,6 +532,125 @@ def _managed_device_problem(
         ):
             return f"managed Device {item.device_id!r} absence is not confirmed"
     return None
+
+
+def _observe_presence_bindings(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    *,
+    eligible_only: bool = False,
+) -> tuple[PathBinding, ...]:
+    interfaces = LinuxVpnPathAdapter(
+        runner, domain_spec.namespace
+    ).observe_interfaces().interfaces
+    if eligible_only:
+        interfaces = prepared.eligible_interfaces(interfaces)
+    # A tentative read-only projection does not commit C.004 slot changes.
+    return project_device_bindings(
+        prepared.config.structural.device_binding_intents,
+        prepared.binding_state,
+        interfaces,
+    ).bindings
+
+
+def converge_alpha_managed_device_presence(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+) -> ManagedDeviceConvergence:
+    convergence = converge_managed_device_presence(
+        prepared.current_config,
+        manager,
+        lambda: _observe_presence_bindings(prepared, domain_spec, runner),
+    )
+    prepared.confirmed_managed_interfaces = convergence.confirmed_interfaces
+    return convergence
+
+
+def release_alpha_undemanded_devices(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    convergence: ManagedDeviceConvergence,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    *,
+    dependencies_confirmed: bool,
+) -> tuple[tuple[ManagedDeviceRealization, ...], bool]:
+    """Stop only after exact replacement policy and peer-dependency removal."""
+    pending = tuple(
+        item for item in convergence.realizations if item.waiting_for_dependencies
+    )
+    if not dependencies_confirmed or not pending:
+        return convergence.realizations, False
+    desired = convergence.projection.desired_device_ids
+    # In particular, a replacement disappearing since policy convergence
+    # must not cause release of a still-needed reserve.
+    try:
+        fresh = _observe_presence_bindings(
+            prepared, domain_spec, runner, eligible_only=True
+        )
+        if project_final(prepared.current_config, fresh).desired_device_ids != desired:
+            return convergence.realizations, False
+    except Exception:
+        return convergence.realizations, False
+
+    safe_ids: set[str] = set()
+    problems: dict[str, str] = {}
+    for item in pending:
+        try:
+            config = prepared.current_config.managed_vpns[item.device_id]
+            if item.confirmed_interface is None:
+                raise AlphaRuntimeError("retiring interface identity is unconfirmed")
+            # C.001 no longer references this path. Remove D.003 payload
+            # ownership too, retaining only D.001's permanent probe identities.
+            peer_desired = WireGuardPeerOwnershipDesired(
+                item.device_id,
+                item.confirmed_interface,
+                tuple(sorted(
+                    WireGuardPeerAllowedIPs(
+                        peer.public_key,
+                        (IPv4Network(f"{peer.probe_target}/32"),),
+                    )
+                    for peer in config.peers
+                )),
+            )
+            result = ownership.converge(peer_desired)
+            if not result.confirmed:
+                raise AlphaRuntimeError(result.diagnostic or "peer release unconfirmed")
+            safe_ids.add(item.device_id)
+        except Exception as exc:
+            problems[item.device_id] = f"dependency release: {type(exc).__name__}: {exc}"
+    if safe_ids:
+        # Recheck after D.003 mutations, immediately before authorizing D.001.
+        try:
+            fresh = _observe_presence_bindings(
+                prepared, domain_spec, runner, eligible_only=True
+            )
+            if project_final(prepared.current_config, fresh).desired_device_ids != desired:
+                safe_ids.clear()
+        except Exception:
+            safe_ids.clear()
+    if safe_ids:
+        absent = manager.reconcile_undemanded(
+            prepared.current_config,
+            desired_device_ids=desired,
+            dependency_free_device_ids=frozenset(safe_ids),
+        )
+        realizations = tuple(sorted(
+            tuple(item for item in convergence.realizations if item.device_id in desired)
+            + absent,
+            key=lambda item: item.device_id,
+        ))
+    else:
+        realizations = convergence.realizations
+    return tuple(
+        replace(item, waiting_for_dependencies=False, problem=problems[item.device_id])
+        if item.device_id in problems else item
+        for item in realizations
+    ), bool(safe_ids)
 
 
 def _release_alpha_managed_device_dependencies(
@@ -1128,6 +1269,7 @@ def run_alpha_runtime(
     managed_realizations_holder: dict[str, tuple[ManagedDeviceRealization, ...]] = {
         "current": ()
     }
+    managed_convergence_holder: dict[str, ManagedDeviceConvergence] = {}
     probe_driver = LinuxIcmpProbeDriver(
         runner=SubprocessProbeCommandRunner(),
         namespace=ALPHA_NAMESPACE,
@@ -1231,15 +1373,14 @@ def run_alpha_runtime(
             )
         if current_domain_spec.namespace != domain_spec.namespace:
             raise AlphaRuntimeError("managed Device preparation namespace mismatch")
-        realizations = managed_device_manager.reconcile(
-            prepared.current_config,
-            desired_device_ids=frozenset(prepared.current_config.managed_vpns)
-            & prepared.config.structural.active_device_ids,
+        convergence = converge_alpha_managed_device_presence(
+            prepared, current_domain_spec, runner, managed_device_manager
         )
-        managed_realizations_holder["current"] = realizations
-        problem = _managed_device_problem(realizations)
-        if problem is not None:
-            raise AlphaRuntimeError(problem)
+        managed_realizations_holder["current"] = convergence.realizations
+        managed_convergence_holder["current"] = convergence
+        for problem in convergence.attempt_problems:
+            log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
+                device_id=problem.device_id, diagnostic=problem.problem)
 
     try:
         startup = start_controller_once(
@@ -1343,6 +1484,25 @@ def run_alpha_runtime(
             probe_driver,
             wireguard_peer_ownership,
         )
+        if availability_start.confirmed and wireguard_start_error is None:
+            realizations, released = release_alpha_undemanded_devices(
+                prepared, domain_spec, runner, managed_device_manager,
+                managed_convergence_holder["current"], wireguard_peer_ownership,
+                dependencies_confirmed=True,
+            )
+            managed_realizations_holder["current"] = realizations
+            status_agent.confirm_managed_devices(realizations)
+            if released:
+                payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
+                if payload.ready:
+                    (availability_start, wireguard_start, wireguard_start_error) = (
+                        reconcile_alpha_availability_wireguard_once(
+                            prepared, realizations, wireguard_peer_runtime,
+                            runner, probe_driver, wireguard_peer_ownership,
+                        )
+                    )
+                else:
+                    wireguard_start_error = payload.diagnostic or "post-release payload unconfirmed"
         status_agent.confirm_wireguard_peers(
             ()
             if wireguard_start is None
@@ -1404,26 +1564,33 @@ def run_alpha_runtime(
             )
 
         def reconcile_normal_once_unlocked():
-            managed_realizations = managed_device_manager.reconcile(
-                prepared.current_config,
-                desired_device_ids=frozenset(prepared.current_config.managed_vpns)
-                & prepared.config.structural.active_device_ids,
-            )
+            try:
+                convergence = converge_alpha_managed_device_presence(
+                    prepared, domain_spec, runner, managed_device_manager
+                )
+            except Exception as exc:
+                diagnostic = f"managed presence observation failed: {type(exc).__name__}: {exc}"
+                try:
+                    containment = converge_forwarding_gate_once(
+                        LinuxForwardingGateDriver(runner, domain_spec.namespace),
+                        ForwardingGateState.DISABLED,
+                    )
+                    diagnostic += f"; containment confirmed={containment.confirmed}"
+                except Exception as containment_exc:
+                    diagnostic += f"; containment failed: {containment_exc}"
+                status_agent.confirm_managed_devices(())
+                status_agent.confirm_wireguard_peers(())
+                managed_realizations_holder["current"] = ()
+                return (
+                    AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic=diagnostic),
+                    None, None, None,
+                )
+            managed_realizations = convergence.realizations
             managed_realizations_holder["current"] = managed_realizations
             status_agent.confirm_managed_devices(managed_realizations)
-            managed_problem = _managed_device_problem(managed_realizations)
-            if managed_problem is not None:
-                status_agent.confirm_wireguard_peers(())
-                return (
-                    AlphaReconcileResult(
-                        AlphaReconcileStatus.FAILED,
-                        None,
-                        diagnostic=managed_problem,
-                    ),
-                    None,
-                    None,
-                    None,
-                )
+            for problem in convergence.attempt_problems:
+                log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
+                    device_id=problem.device_id, diagnostic=problem.problem)
             result = reconcile_alpha_payload_once(
                 prepared,
                 domain_spec,
@@ -1446,6 +1613,31 @@ def run_alpha_runtime(
                 availability_result = None
                 wireguard_result = None
                 wireguard_error = None
+            if (
+                result.ready
+                and availability_result is not None
+                and availability_result.confirmed
+                and wireguard_error is None
+            ):
+                managed_realizations, released = release_alpha_undemanded_devices(
+                    prepared, domain_spec, runner, managed_device_manager,
+                    convergence, wireguard_peer_ownership,
+                    dependencies_confirmed=True,
+                )
+                managed_realizations_holder["current"] = managed_realizations
+                status_agent.confirm_managed_devices(managed_realizations)
+                if released:
+                    result = reconcile_alpha_payload_once(prepared, domain_spec, runner)
+                    if result.ready:
+                        (availability_result, wireguard_result, wireguard_error) = (
+                            reconcile_alpha_availability_wireguard_once(
+                                prepared, managed_realizations, wireguard_peer_runtime,
+                                runner, probe_driver, wireguard_peer_ownership,
+                            )
+                        )
+                    else:
+                        availability_result = None
+                        wireguard_result = None
             status_agent.confirm_wireguard_peers(
                 ()
                 if wireguard_result is None
@@ -1534,6 +1726,9 @@ def run_alpha_runtime(
             prepared.last_profiles,
             prepared.last_bindings,
         )
+        managed_problem = _managed_device_problem(managed_realizations_holder["current"])
+        if managed_problem is not None:
+            status_agent.mark_degraded(problem=managed_problem)
         if availability_start.observation is not None:
             status_agent.confirm_availability(
                 availability_start.observation.projection.problem_owners
@@ -1649,6 +1844,9 @@ def run_alpha_runtime(
                     status_agent.confirm_availability(
                         availability_result.observation.projection.problem_owners
                     )
+                managed_problem = _managed_device_problem(managed_realizations_holder["current"])
+                if managed_problem is not None:
+                    status_agent.mark_degraded(problem=managed_problem)
             elif (
                 result.ready
                 and availability_result is not None
