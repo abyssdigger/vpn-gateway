@@ -1671,6 +1671,7 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
@@ -1723,8 +1724,8 @@ Architectural decisions
 10. `Секреты нормализуются как ссылки`
    *ConfigurationAdapter проверяет только каноническое написание абсолютных ссылок на файлы секретов и не читает значение секрета. Проверка типа файла, владельца, прав доступа и свежего содержимого принадлежит D.001 непосредственно перед изменением базовой реализации. Нормализованные контракты и отчет о состоянии не содержат значения секрета.*
 
-11. `Конфигурационно заданное число присутствующих путей`
-   *Profile должен нормализовать одну семантическую цель `0 | N | all`: ни одного, заданное конечное число либо все разрешенные пути. Отсутствие будущего явного переопределения означает `all` и сохраняет прежнее поведение. Точное имя пользовательского поля не является свойством этой компонентной границы до отдельного решения о каноническом представлении.*
+11. `Конфигурационно заданное число теплых обычных путей`
+   *Profile нормализует canonical current field `warm_paths` как `0 | positive N | "all"`. Цель относится только к ordinary memberships; `:reserve` не входит в warm capacity. Отсутствие поля означает `"all"` для ordinary memberships. Конечное N больше суммарной configured ordinary capacity enabled memberships отклоняется до runtime mutation.*
 
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
@@ -1744,10 +1745,11 @@ typed `CurrentConfig.wireguard_groups` напрямую, поэтому преж
 между A.002 и D.002 больше нет. Дальнейшие gaps принадлежат D.002/C.001/runtime composition,
 а не configuration normalization.
 
-По `VPNG-U001-R1.R3.R7.R3` вклад A.002 пока [`partial`]: текущая конфигурация не имеет
-нормализованной цели `0 | N | all`, поэтому существующий parser фактически реализует только
-случай `all`. Каноническое имя пользовательского поля и его нормализация остаются текущим
-configuration frontier.
+По `VPNG-U001-R1.R3.R7.R3` вклад A.002 остается [`partial`], а архитектурный контракт
+`VPNG-U001-R1.R3.R7.R3.R1` закрыт полностью: current surface использует `warm_paths = 0 | N | "all"`,
+при этом frozen Release-1 parser не обязан приобретать новое поле. Current ConfigurationAdapter
+должен снять `warm_paths` до вызова historical Release-1 normalization и опубликовать отдельный
+typed warm-target contract.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -1812,6 +1814,7 @@ policy.
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
@@ -1855,7 +1858,7 @@ Architectural decisions
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
 9. `Политика полезного трафика не создает потребность в VPN`
-   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Такая потребность определяется отдельной конфигурационно заданной проекцией.*
+   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией.*
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
@@ -2225,6 +2228,7 @@ Manager текущей базовой VPN-реализации только дл
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 
 API
 
@@ -2242,8 +2246,8 @@ Architectural decisions
 1. `Только явное включение управления`
    *Manager вообще не создает управляемое состояние для Device без явного нормализованного намерения управления. Внешний Device продолжает появляться только через наблюдение и привязку C.004, как до введения R7.*
 
-2. `Потребность задается конфигурацией, а не трафиком`
-   *A.012 получает уже вычисленный desired set управляемых Devices. Его источник должен учитывать заданное Profile число присутствующих разрешенных путей `0 | N | all` и свежее присутствие endpoints, но не пользовательские пакеты, первый пакет, время простоя или availability outcome. A.012 не вычисляет эту Profile policy самостоятельно.*
+2. `Потребность задается warm-конфигурацией, а не трафиком`
+   *A.012 получает нормализованную warm policy и использует A.013 для вычисления desired managed-Device set по свежему C.004 presence. `warm_paths` считает только ordinary memberships; payload, idle и availability outcome не являются входами lifecycle demand.*
 
 3. `Поколение базовой реализации задано явно`
    *Manager различает желаемое поколение конфигурации и подтвержденное D.001 поколение фактической реализации. Команда запуска или сам факт существования службы не превращаются в подтвержденное поколение.*
@@ -2266,6 +2270,12 @@ Architectural decisions
 9. `Один Device агрегирует потребность всех Profiles`
    *В A.012 поступает один итоговый desired verdict на Device. Снятие потребности одним Profile не разрешает остановку, пока тот же Device требуется другому Profile. Выбор минимального набора managed Devices при дефиците и сохранение уже присутствующих подходящих путей относятся к вычислению demand, а не к lifecycle actuation A.012.*
 
+10. `Regular before reserve; reserve before release`
+   *Один reconciliation сначала получает fresh presence, вычисляет ordinary demand через A.013 и converges недостающие ordinary managed Devices через D.001, не снимая уже действующий reserve только из-за промежуточной фазы. После fresh повторного C.004 observation A.013 заново вычисляет regular deficit и окончательный reserve exception. Только этот второй verdict может добавить reserve либо снять его demand. Поэтому startup не будит reserve одновременно с еще не испробованным regular, а recovery не выключает reserve до подтверждения ordinary replacement.*
+
+11. `Независимый отказ кандидата не запрещает reserve fallback`
+   *Problem одного ordinary managed candidate остается диагностикой этого Device и не превращается в глобальный запрет продолжить fresh reconciliation для остальных candidates и reserve exception. Успех каждого D.001 действия по-прежнему требует собственного подтвержденного postcondition.*
+
 **Evidence:** `EV-00080`, `EV-00090`.
 
 **Материализация:** Текущий `ManagedDeviceManager` использует
@@ -2284,10 +2294,12 @@ problem-state и не вызывает `converge_absent`, пока caller не �
 
 Текущая alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
 portal, но до первого fresh C.004/VPN-path observation; каждый normal reconciliation снова
-начинается с A.012 fresh convergence до зависимой path/policy observation. Для нового numeric
-warm-target принята другая целевая последовательность: fresh C.004 endpoint observation без
-commit binding state → pure demand projection → A.012/D.001 convergence → повторное fresh
-C.004 observation и обычная binding projection. При общей остановке
+начинается с A.012 fresh convergence до зависимой path/policy observation. Для current `warm_paths`
+принята двухфазная последовательность: fresh C.004 endpoint observation без commit binding
+state → A.013 ordinary-demand projection → ordinary A.012/D.001 convergence с удержанием
+существующего reserve → повторное fresh C.004 observation → A.013 final reserve-exception
+projection → final A.012/D.001 convergence → еще одно fresh C.004 observation и обычная
+binding projection. При общей остановке
 A.001 сначала закрывает forwarding и подтвержденно снимает product-owned payload policy и
 return-affinity dependencies, затем передает все управляемые Devices как
 `dependency_free_device_ids`, требует confirmed A.012 absence и только после этого начинает
@@ -2297,6 +2309,64 @@ teardown Private network не начинается и stop остается fail
 тот же stop/start path является текущей materialization restart semantics. Current
 `ManagedDeviceRealization` передается A.008. Kernel integration EV-00090 подтверждает этот
 порядок на production D.001 WireGuard Adapter.
+
+## [A.013] ManagedDeviceDemandCalculator
+
+Pure Calculator конфигурационно заданной востребованности managed Devices. Он получает
+normalized `warm_paths`, Profile-local ordinary/reserve membership roles, fresh current
+PathBinding/presence и ownership mode Devices и возвращает per-Profile warm deficit плюс
+детерминированные ordinary/reserve managed-Device demands. Он не запускает VPN, не наблюдает
+Linux самостоятельно и не владеет lifecycle.
+
+**Implements:**
+- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
+
+API
+
+    @project_regular(config, fresh_presence) — вернуть per-Profile ordinary target/presence/deficit и aggregate ordinary managed Device demand без reserve actuation.
+    @project_final(config, fresh_presence) — после ordinary convergence вернуть тот же ordinary demand плюс минимальный reserve-exception demand для сохраняющегося regular deficit.
+    <ManagedDeviceDemandProjection> — immutable result: desired ordinary/reserve Device sets, per-Profile counts and diagnostics.
+
+Architectural decisions
+
+1. `Warm считает только ordinary paths`
+   *Для Profile regular target равен numeric `warm_paths` либо суммарной configured capacity ordinary enabled memberships при `"all"`. Reserve memberships не входят ни в target, ни в regular-present count.*
+
+2. `Fresh external и managed presence равноправны для удовлетворения warm`
+   *Fresh current ordinary PathBinding любого ownership mode уменьшает regular deficit. Ownership влияет только на возможность actuation: Calculator никогда не превращает external Device в managed subject.*
+
+3. `Numeric target не означает proactive rebalance`
+   *Если текущие ordinary paths уже удовлетворяют numeric target, отсутствующий более предпочтительный ordinary managed Device не запускается только ради замены живого lower-baseline path. При избытке present managed ordinary memberships Calculator оставляет минимальный детерминированный набор, предпочитая baseline order среди действительно присутствующих candidates.*
+
+4. `Дефицит заполняется baseline-порядком`
+   *Если ordinary presence меньше target, уже присутствующие ordinary managed Devices сохраняют demand, затем отсутствующие managed ordinary memberships выбираются в `Profile.device_order -> Device.expected_interfaces` baseline до покрытия недостающей configured capacity. Один Device может неизбежно дать capacity больше точного дефицита; lifecycle granularity остается Device-level.*
+
+5. `Reserve — exception, а не warm`
+   *Final projection рассматривает reserve только при сохраняющемся после ordinary convergence regular deficit. Уже присутствующие reserve paths могут покрывать аварийную reserve-support потребность, но никогда не уменьшают regular deficit. Недостающие managed reserve memberships выбираются baseline-порядком только до configured capacity, достаточной для этого дефицита.*
+
+6. `Regular recovery demand сохраняется одновременно с reserve`
+   *Появление reserve path не снимает ordinary demand. Поэтому более предпочтительный regular Device продолжает восстанавливаться обычным lifecycle, а после его появления следующий final projection естественно снимает ставший лишним reserve demand без отдельной failback state machine.*
+
+7. `Shared Device агрегируется через OR`
+   *Per-Profile ordinary и reserve demands объединяются по Device. Device остается demanded, пока хотя бы один enabled Profile требует его в любой своей роли. Роль Device остается Profile-local: один Device может быть ordinary в одном Profile и reserve в другом.*
+
+8. `Availability и payload отсутствуют во входном контракте`
+   *Calculator не получает packet activity, idle timers или availability verdicts. Его current-state input ограничен конфигурацией и fresh structural presence.*
+
+9. `Impossible numeric target rejected earlier`
+   *A.013 вправе считать accepted config корректной: A.002 отклоняет numeric `warm_paths`, превышающий суммарную configured ordinary path capacity enabled memberships. Runtime absence такой capacity является deficit/problem, а не config error.*
+
+Implementation
+
+    Current reference implementation pending in design/NG3/code/python/rou/managed_device_demand.py.
+
+**Материализация:** none на момент принятия архитектуры. Current A.012 по-прежнему
+материализует только прежний always-demanded referenced-Device subcase; отдельный Calculator,
+current-surface `warm_paths` normalization и двухфазная alpha composition являются
+следующим implementation block.
 
 # Annex B. Ordinary-side transition components
 
@@ -2571,7 +2641,9 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 - `VPNG-U001-R1.R3.R4.R3` — [`full`]
 - `VPNG-U001-R1.R3.R4.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R4.R4` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R2` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
 - `VPNG-D001-R1.R1.R3` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
 
@@ -2875,7 +2947,8 @@ Direct Adapter от нормализованного намерения упра
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
 
 API
 

@@ -237,3 +237,27 @@ Current implementation gaps are expected and localized:
    desired state; exact presentation is a separate diagnostic review.
 
 No packet queue, traffic observer, idle timer or wake-trigger mechanism is needed.
+
+
+## Product decision update — 2026-11-25: reserve is not warm
+
+Later projectholder clarification refined §§2–8 without invalidating the configuration-driven
+direction:
+
+- `warm_paths` is the canonical current Profile field;
+- its target counts only ordinary memberships;
+- `:reserve` capacity does not enter the warm target and a present reserve path never reduces
+  regular deficit;
+- current external and managed ordinary paths both satisfy warm presence;
+- A.012 first attempts/converges ordinary demand while retaining any already-needed reserve,
+  then re-observes presence;
+- only a still-present regular deficit after that phase may create a temporary reserve
+  exception;
+- regular demand remains active while reserve is present, so ordinary recovery automatically
+  removes the reason for reserve without a separate lifecycle failback state machine;
+- reserve release still waits for the existing dependency-release safety contract.
+
+This update supersedes the earlier wording that treated every eligible membership uniformly
+for warm counting. The preserved earlier text remains useful for the general config-driven
+selection/aggregation conclusions. The accepted refined model is reviewed in
+`design/reviews/NG3-2026-11-25-warm-paths-reserve-model-review.md`.

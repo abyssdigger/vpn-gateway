@@ -985,6 +985,11 @@ reserve path currently occupies the active position and a more-preferred usable 
 recovered. For ordinary membership, a recovered path returns to its baseline position among
 standby paths but does not preempt a still-usable active path.
 
+For managed Device presence, `:reserve` has an additional and deliberately orthogonal meaning:
+it is excluded from `warm_paths`. A reserve Device may be brought up temporarily only while
+ordinary warm capacity is deficient after ordinary convergence; its presence does not satisfy
+the warm target and therefore cannot suppress continued recovery of ordinary Devices.
+
 Newly appearing runtime endpoints must not arbitrarily reorder surviving already-bound
 endpoints.
 
@@ -995,6 +1000,79 @@ endpoints.
 - `VPNG-U003-R3.R4.R1.R1`
 - `VPNG-U003-R3.R8`
 - `VPNG-U003-R3.R8.R1`
+
+## 5.4 warm_paths
+
+Current canonical Profile surface may select the number of **ordinary** paths that should be
+kept warm independently from payload activity:
+
+```toml
+[profile.corp]
+warm_paths = 2
+```
+
+Accepted values:
+
+```text
+0
+positive integer N
+"all"
+```
+
+Omitted `warm_paths` means `"all"`.
+
+The target counts only enabled ordinary Device memberships. A `:reserve` membership is
+explicitly excluded from warm capacity and from current warm satisfaction. Therefore:
+
+```text
+warm_paths = N
+regular_present = R
+
+regular_deficit = max(0, N - R)
+```
+
+For `"all"`, N is the sum of configured path capacity of all enabled ordinary memberships.
+A finite N larger than that configured ordinary capacity is a configuration error even when
+reserve capacity exists: reserve is not allowed to make an impossible warm target look valid.
+
+Fresh current ordinary paths from externally prepared and explicitly managed Devices both
+satisfy the target. The ownership difference begins only at actuation: VPN-GATE may start or
+stop only explicitly managed Devices.
+
+A numeric target is cardinality, not proactive identity rebalance. If enough ordinary paths
+are already present, an absent higher-baseline ordinary managed Device is not started merely
+to replace a present lower-baseline ordinary path. If ordinary paths are missing, additional
+managed ordinary Devices are selected deterministically by the existing baseline hierarchy.
+
+Reserve is a separate exception:
+
+```text
+ordinary convergence
+    -> fresh regular_deficit > 0
+        -> temporarily demand enough reserve capacity for the deficit
+        -> keep ordinary recovery demand unchanged
+    -> fresh regular_deficit == 0
+        -> reserve exception no longer creates Device demand
+```
+
+Already-present reserve paths may satisfy the temporary reserve-support amount, but they never
+reduce `regular_deficit`. This is what guarantees natural recovery: bringing reserve up does
+not make the missing ordinary Device cease to be demanded.
+
+A Device shared by multiple Profiles is present when at least one Profile demands it. The same
+Device may be ordinary in one Profile and reserve in another; membership role remains
+Profile-local.
+
+Payload activity, first packet, idle time and availability outcome do not participate in
+`warm_paths` demand. Availability retains its separate role as an effective-order modifier
+of existing paths.
+
+**Requirements:**
+- `VPNG-U001-R1.R3.R7.R3`;
+- `VPNG-U001-R1.R3.R7.R3.R1`;
+- `VPNG-U001-R1.R3.R7.R3.R2`;
+- `VPNG-U001-R1.R3.R7.R3.R3`;
+- `VPNG-U001-R1.R3.R7.R3.R4`.
 
 # 6. Profile runtime normalization
 

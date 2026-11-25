@@ -151,3 +151,16 @@ Exact runtime implementation is not accepted by this review.
 **PASS — configuration-driven warm presence is the correct active Device Manager frontier.
 R7.R3 must be reopened and A.012 downgraded to a partial contribution for that node; payload
 traffic and availability health remain outside managed-presence demand.**
+
+
+## Later product decision — reserve refinement
+
+After this review, projectholder clarified that Profile-local `:reserve` is not part of the
+warm set. Consequently F2–F5 remain valid only for **ordinary** memberships. Reserve paths are
+a temporary exception when ordinary convergence still leaves a regular deficit; reserve
+presence does not satisfy `warm_paths`, and ordinary recovery demand therefore remains active.
+
+The refined model, canonical `warm_paths` surface and two-phase ordinary→reserve convergence
+are accepted separately in
+`design/reviews/NG3-2026-11-25-warm-paths-reserve-model-review.md`.
+This note does not rewrite the historical verdict of the research question reviewed here.
