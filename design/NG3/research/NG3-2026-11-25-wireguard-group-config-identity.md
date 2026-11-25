@@ -134,9 +134,10 @@ WireGuardRecoverableGroupConfig:
 The availability description is reused only when it qualifies as an in-group group endpoint.
 The D.002 Manager need not know TOML or inspect Profile objects directly.
 
-The current `ManagedWireGuardConfig.shared_prefixes` one-group projection remains temporary
-prototype debt. Generalized normalization should replace it with typed group inputs rather than
-adding a second independent prefix list.
+The implementation now publishes typed `CurrentConfig.wireguard_groups` using this model.
+The old `ManagedWireGuardConfig.shared_prefixes` projection remains only as an explicit
+transitional bridge for the still one-group D.002 prototype; it is not user policy and should
+disappear when D.002 consumes typed groups.
 
 ## Compatibility
 

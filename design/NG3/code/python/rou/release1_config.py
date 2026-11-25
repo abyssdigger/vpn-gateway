@@ -189,13 +189,34 @@ class ManagedWireGuardConfig:
     private_key_file: str
     listen_port: int | None
     peers: tuple[ManagedWireGuardPeerConfig, ...]
+    # Transitional one-group projection consumed by the current D.002 prototype.
+    # Generalized callers use CurrentConfig.wireguard_groups instead.
     shared_prefixes: tuple[ipaddress.IPv4Network, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class WireGuardPeerMembershipConfig:
+    peer_id: str
+    reserve: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedWireGuardGroupConfig:
+    profile_id: str
+    device_id: str
+    prefixes: tuple[ipaddress.IPv4Network, ...]
+    peer_memberships: tuple[WireGuardPeerMembershipConfig, ...]
+    availability_check: AvailabilityCheckConfig | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class CurrentConfig:
     base: Release1Config
     managed_vpns: Mapping[str, ManagedWireGuardConfig]
+    wireguard_groups: Mapping[
+        tuple[str, str],
+        ManagedWireGuardGroupConfig,
+    ] = MappingProxyType({})
 
     @property
     def structural(self) -> StructuralConfig:
@@ -230,6 +251,9 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
     raw_devices = raw.get("device", {})
     if not isinstance(raw_devices, dict):
         raise CurrentConfigError("device must be a TOML table")
+    raw_profiles = raw.get("profile", {})
+    if not isinstance(raw_profiles, dict):
+        raise CurrentConfigError("profile must be a TOML table")
 
     transformed = dict(raw)
     transformed_devices: dict[str, Any] = {}
@@ -268,7 +292,27 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
 
         transformed_devices[device_id] = body
 
+    # device_membership is a current-surface extension. Strip it before the
+    # Release-1 parser so the older structural contract remains strict.
+    transformed_profiles: dict[str, Any] = {}
+    membership_details: dict[str, Mapping[str, Any]] = {}
+    for profile_id, raw_body in raw_profiles.items():
+        if not isinstance(raw_body, dict):
+            transformed_profiles[profile_id] = raw_body
+            continue
+        body = dict(raw_body)
+        details = body.pop("device_membership", None)
+        if body.get("enabled") is True and details is not None:
+            if not isinstance(details, dict):
+                raise CurrentConfigError(
+                    f"profile.{profile_id}.device_membership must be a TOML table"
+                )
+            membership_details[profile_id] = details
+        # Disabled placeholders deliberately ignore nested future detail.
+        transformed_profiles[profile_id] = body
+
     transformed["device"] = transformed_devices
+    transformed["profile"] = transformed_profiles
     try:
         base = _parse_release1_raw(transformed)
     except Release1ConfigError as exc:
@@ -276,6 +320,8 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
 
     managed: dict[str, ManagedWireGuardConfig] = {}
     for device_id, intent in managed_bases.items():
+        # Preserve the old one-group projection only for the current D.002
+        # prototype until that Manager consumes typed groups.
         shared = {
             network
             for profile in base.structural.profiles.values()
@@ -308,9 +354,63 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
             shared_prefixes=shared_prefixes,
         )
 
+    groups: dict[tuple[str, str], ManagedWireGuardGroupConfig] = {}
+    for profile_id, profile in base.structural.profiles.items():
+        if not profile.enabled:
+            continue
+        raw_detail = membership_details.get(profile_id, {})
+        unknown_detail_devices = sorted(set(raw_detail) - set(profile.device_order))
+        if unknown_detail_devices:
+            raise CurrentConfigError(
+                f"profile.{profile_id}.device_membership references Device(s) "
+                f"absent from device_order: {', '.join(unknown_detail_devices)}"
+            )
+
+        for device_id in profile.device_order:
+            intent = managed.get(device_id)
+            detail = raw_detail.get(device_id)
+            if detail is not None and intent is None:
+                raise CurrentConfigError(
+                    f"profile.{profile_id}.device_membership.{device_id} "
+                    "is only supported for an enabled managed WireGuard Device"
+                )
+            if intent is None:
+                continue
+
+            memberships = _parse_wireguard_group_peer_memberships(
+                detail,
+                intent,
+                f"profile.{profile_id}.device_membership.{device_id}",
+            )
+            prefixes = tuple(profile.destinations)
+            check = _resolved_profile_availability_for_device(
+                base,
+                profile_id,
+                device_id,
+            )
+            peer_targets = {peer.probe_target for peer in intent.peers}
+            group_check = None
+            if (
+                check is not None
+                and check.mechanism == "icmp"
+                and check.target is not None
+                and any(check.target in prefix_ for prefix_ in prefixes)
+                and check.target not in peer_targets
+            ):
+                group_check = check
+
+            groups[(profile_id, device_id)] = ManagedWireGuardGroupConfig(
+                profile_id=profile_id,
+                device_id=device_id,
+                prefixes=prefixes,
+                peer_memberships=memberships,
+                availability_check=group_check,
+            )
+
     return CurrentConfig(
         base=base,
         managed_vpns=MappingProxyType(managed),
+        wireguard_groups=MappingProxyType(groups),
     )
 
 
@@ -665,6 +765,68 @@ def _parse_managed_wireguard_peer(
         preshared_key_file=preshared_key_file,
     )
 
+
+
+_MANAGED_WG_GROUP_DETAIL_KEYS = frozenset({"peer_order"})
+
+
+def _parse_wireguard_group_peer_memberships(
+    value: Any,
+    intent: ManagedWireGuardConfig,
+    where: str,
+) -> tuple[WireGuardPeerMembershipConfig, ...]:
+    known_ids = tuple(peer.peer_id for peer in intent.peers)
+    if value is None:
+        return tuple(
+            WireGuardPeerMembershipConfig(peer_id)
+            for peer_id in known_ids
+        )
+    if not isinstance(value, dict):
+        raise CurrentConfigError(f"{where} must be a TOML table")
+    _reject_current_unknown(value, _MANAGED_WG_GROUP_DETAIL_KEYS, where)
+    raw_order = value.get("peer_order")
+    if not isinstance(raw_order, list) or not raw_order:
+        raise CurrentConfigError(f"{where}.peer_order must be a non-empty array")
+
+    memberships: list[WireGuardPeerMembershipConfig] = []
+    seen: set[str] = set()
+    known = set(known_ids)
+    for index, item in enumerate(raw_order):
+        item_where = f"{where}.peer_order[{index}]"
+        if not isinstance(item, str):
+            raise CurrentConfigError(f"{item_where} must be a string")
+        parts = item.split(":")
+        if len(parts) == 1:
+            peer_id, reserve = parts[0], False
+        elif len(parts) == 2 and parts[1] == "reserve":
+            peer_id, reserve = parts[0], True
+        else:
+            raise CurrentConfigError(
+                f"{item_where} has unsupported membership suffix; "
+                'only ":reserve" is supported'
+            )
+        if peer_id not in known:
+            raise CurrentConfigError(
+                f"{item_where} references unknown WireGuard peer {peer_id!r}"
+            )
+        if peer_id in seen:
+            raise CurrentConfigError(
+                f"{where}.peer_order contains duplicate peer {peer_id!r}"
+            )
+        seen.add(peer_id)
+        memberships.append(WireGuardPeerMembershipConfig(peer_id, reserve))
+    return tuple(memberships)
+
+
+def _resolved_profile_availability_for_device(
+    base: Release1Config,
+    profile_id: str,
+    device_id: str,
+) -> AvailabilityCheckConfig | None:
+    profile = base.profiles[profile_id]
+    if profile.availability_uses_device_default:
+        return base.devices[device_id].availability_check
+    return profile.availability_check
 
 def _parse_wireguard_public_key(value: Any, where: str) -> str:
     if not isinstance(value, str):

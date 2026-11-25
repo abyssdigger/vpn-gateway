@@ -1633,16 +1633,18 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R5` — [`full`]
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
-- `VPNG-U001-R1.R3.R8.R2` — [`none`]
+- `VPNG-U001-R1.R3.R8.R2` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2.C1` — [`full`]
-- `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
-- `VPNG-U001-R1.R3.R8.R4` — [`none`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`full`]
+- `VPNG-U001-R1.R3.R8.R4` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R2` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
+
+**Evidence:** `EV-00140`
 
 **Constrained by:**
 - `VPNG-U001-R4.R4.R6.R2.R5.C1`
@@ -1677,8 +1679,8 @@ Architectural decisions
 8. `Явное намерение управлять Device`
    *Нормализованное намерение управления VPN существует только при наличии канонической `[device.<id>.managed_vpn]`. Отсутствие таблицы означает прежнее внешнее управление. Для `kind = "wireguard"` Adapter получает намерение создать один точный интерфейс, базовый адрес, ссылки на секреты и упорядоченный набор пиров. `expected_interfaces` для такого Device выводится из `managed_vpn.interface`, а не задается повторно.*
 
-9. `Производные транспортные разрешения и текущая one-group WireGuard normalization`
-   *Для `kind = "wireguard"` намерения разрешить транспорт UDP выводятся из `endpoint` каждого пира; пользователь не повторяет их в `allow_vpn_client`. Одновременное задание этих двух источников отклоняется. Permanent `probe_target` каждого peer нормализуется как отдельный технический /32. Текущий parser materializes только one-group R8 subset, выводя один mutable payload bundle из `Profile.destinations`; generalized recoverable-group identities, group-local ordered peer memberships/reserve roles и optional group endpoint еще не имеют принятого TOML spelling и не должны угадываться Adapter'ом.*
+9. `Производные транспортные разрешения и Profile-derived WireGuard groups`
+   *Для `kind = "wireguard"` UDP transport intent выводится из `endpoint` каждого peer, permanent `probe_target` нормализуется как отдельный технический /32, а каждый enabled `(Profile, managed WireGuard Device)` membership нормализуется в typed recoverable group с bundle из `Profile.destinations`. Optional `device_membership.<device>.peer_order` задает ordered subset peers и group-local `:reserve`; при отсутствии override используются все peers в declaration order как ordinary. Qualifying Profile availability description может быть переиспользовано как group endpoint description, но не как общий evidence verdict.*
 
 10. `Секреты нормализуются как ссылки`
    *ConfigurationAdapter проверяет только каноническое написание абсолютных ссылок на файлы секретов и не читает значение секрета. Проверка типа файла, владельца, прав доступа и свежего содержимого принадлежит D.001 непосредственно перед изменением базовой реализации. Нормализованные контракты и отчет о состоянии не содержат значения секрета.*
@@ -1686,19 +1688,19 @@ Architectural decisions
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
 сохраняет внешний Device mode при отсутствии `managed_vpn`, выводит exact binding/UDP
-transport intent, нормализует ordered WireGuard peers, secret refs и permanent peer
-`probe_target /32`. Текущая R8 normalization реализует только один implicit payload group,
-выведенный из действующих `Profile.destinations`.
+transport intent, normalizes ordered WireGuard peers/secret refs/permanent `probe_target /32`
+и публикует typed `CurrentConfig.wireguard_groups`. Каждая group identity — точный
+`(profile_id, device_id)`; prefixes берутся из `Profile.destinations`; peer memberships
+получаются из optional `device_membership.<device>.peer_order` либо default all-peer order;
+qualifying Profile availability description нормализуется как optional group description.
+Invalid nonmember Device detail, unknown/duplicate peer и unknown membership suffix
+отклоняются до runtime materialization. Existing Profile overlap normalization закрывает
+R8.R2.C1.
 
-**Пробел материализации:** canonical generalized config теперь определяет group identity
-как `(Profile, managed WireGuard Device)`, bundle из `Profile.destinations` и optional
-`profile.<id>.device_membership.<device>.peer_order` с group-local `:reserve`. Текущий
-parser еще не normalizes эту membership detail, не строит typed per-Profile WireGuard groups и
-не reuses qualifying Profile availability description как optional group endpoint. Поэтому
-A.002 contribution к R8 остается [`partial`]; R8.R2/R8.R3.R1/R8.R4 остаются
-нематериализованными до parser/runtime normalization implementation. R8.R2.C1 уже [`full`]:
-existing Profile normalization rejects exact-prefix duplication and gives different-length
-overlap one deterministic most-specific interpretation, which derived groups inherit.
+`ManagedWireGuardConfig.shared_prefixes` временно сохраняется только как явно transitional
+one-group projection для еще не переписанного D.002 prototype и не является вторым
+user-facing source of truth. A.002 generalized R8 configuration responsibility теперь
+[`full`]; дальнейший gap принадлежит D.002/C.001/runtime consumers typed groups.
 
 ## [A.003] AvailabilityDescriptionResolver
 
