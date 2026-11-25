@@ -197,6 +197,23 @@ class FakePresenceLifecycle:
             path.endpoint if path else None,
         )
 
+    def confirm_present(self, device_id, desired):
+        self.actions.append(("confirm", device_id))
+        path = self.paths.get(device_id)
+        if path is None:
+            return ManagedWireGuardObservation(
+                device_id,
+                ManagedWireGuardState.ABSENT,
+            )
+        if path.endpoint.ifname != desired.interface:
+            raise RuntimeError("managed interface generation mismatch")
+        return ManagedWireGuardObservation(
+            device_id,
+            ManagedWireGuardState.PRESENT,
+            path.endpoint,
+            "gen-" + device_id,
+        )
+
     def converge_absent(self, device_id):
         self.actions.append(("absent", device_id))
         self.paths.pop(device_id, None)
@@ -230,7 +247,7 @@ class BoundedConvergenceTests(unittest.TestCase):
         lifecycle.fail.clear()
         lifecycle.actions.clear()
         recovered = converge_managed_device_presence(cfg, manager, lifecycle.fresh)
-        self.assertEqual(lifecycle.actions, [("present", "a")])
+        self.assertEqual(lifecycle.actions, [("present", "a"), ("confirm", "r")])
         self.assertEqual(recovered.projection.desired_device_ids, {"a"})
         waiting = next(x for x in recovered.realizations if x.device_id == "r")
         self.assertTrue(waiting.waiting_for_dependencies)
