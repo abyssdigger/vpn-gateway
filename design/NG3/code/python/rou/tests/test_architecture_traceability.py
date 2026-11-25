@@ -174,9 +174,9 @@ def component_requirement_edges(body: str) -> tuple[tuple[str, str], ...]:
             continue
         if not in_edges:
             continue
-        if line.startswith("- \\x60VPNG-"):
+        if line.startswith("- \x60VPNG-"):
             match = re.match(
-                r"^- \\x60(VPNG-[^\\x60]+)\\x60 — \\[\\x60(full|partial|none)\\x60\\]$",
+                r"^- \x60(VPNG-[^\x60]+)\x60 — \[\x60(full|partial|none)\x60\]$",
                 line,
             )
             if match is None:
@@ -196,13 +196,13 @@ def component_constraint_edges(body: str) -> tuple[str, ...]:
     for index, line in enumerate(lines):
         if not line.startswith("**Constrained by:**"):
             continue
-        result.extend(re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", line))
+        result.extend(re.findall(r"\x60(VPNG-[^\x60]+)\x60", line))
         if line.strip() != "**Constrained by:**":
             continue
         cursor = index + 1
-        while cursor < len(lines) and lines[cursor].startswith("- \\x60VPNG-"):
+        while cursor < len(lines) and lines[cursor].startswith("- \x60VPNG-"):
             match = re.fullmatch(
-                r"- \\x60(VPNG-[^\\x60]+)\\x60",
+                r"- \x60(VPNG-[^\x60]+)\x60",
                 lines[cursor],
             )
             if match is None:
@@ -227,7 +227,7 @@ def explicit_coverage_index_ids() -> frozenset[str]:
         if line.startswith("**Requirements:**"):
             in_requirements = True
             result.update(
-                re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", line)
+                re.findall(r"\x60(VPNG-[^\x60]+)\x60", line)
             )
             continue
         if not in_requirements:
@@ -235,7 +235,7 @@ def explicit_coverage_index_ids() -> frozenset[str]:
         if not line.strip():
             in_requirements = False
             continue
-        result.update(re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", line))
+        result.update(re.findall(r"\x60(VPNG-[^\x60]+)\x60", line))
     return frozenset(result)
 
 
@@ -247,12 +247,12 @@ def explicit_architecture_coverage_ids() -> frozenset[str]:
 
     architecture = ARCHITECTURE.read_text(encoding="utf-8")
     for match in re.finditer(
-        r"^\\*\\*Covers:\\*\\*(.+)$",
+        r"^\*\*Covers:\*\*(.+)$",
         architecture,
         re.MULTILINE,
     ):
         result.update(
-            re.findall(r"\\x60(VPNG-[^\\x60]+)\\x60", match.group(1))
+            re.findall(r"\x60(VPNG-[^\x60]+)\x60", match.group(1))
         )
     return frozenset(result)
 
@@ -270,8 +270,8 @@ def architecture_evidence_ids() -> tuple[str, ...]:
                 break
             payload += " " + lines[cursor].strip()
             cursor += 1
-        ids = re.findall(r"\\x60(EV-\\d{5})\\x60", payload)
-        remainder = re.sub(r"\\x60EV-\\d{5}\\x60", "", payload)
+        ids = re.findall(r"\x60(EV-\d{5})\x60", payload)
+        remainder = re.sub(r"\x60EV-\d{5}\x60", "", payload)
         remainder = remainder.translate(str.maketrans("", "", " ,.;"))
         if remainder.strip():
             raise AssertionError(
@@ -308,14 +308,14 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
     def test_stable_architecture_uses_only_stable_evidence_addresses(self):
         architecture = ARCHITECTURE.read_text(encoding="utf-8")
         self.assertIsNone(
-            re.search(r"\\bEXP-\\d+\\b", architecture),
+            re.search(r"\bEXP-\d+\b", architecture),
             "stable architecture must reference experiment evidence only through EV IDs",
         )
         ids = architecture_evidence_ids()
         self.assertTrue(ids)
         registered = set(
             re.findall(
-                r"^## (EV-\\d{5}) \\u2014 ",
+                r"^## (EV-\d{5}) \u2014 ",
                 EVIDENCE_INDEX.read_text(encoding="utf-8"),
                 re.MULTILINE,
             )
