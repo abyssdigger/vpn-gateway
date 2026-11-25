@@ -229,11 +229,38 @@ class WireGuardPeerProbeOwner:
             )
 
 
-ProbeSemanticOwner = ProbePolicyOwner | WireGuardPeerProbeOwner
+@dataclass(frozen=True, order=True, slots=True)
+class WireGuardGroupProbeOwner:
+    profile_id: str
+    device_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.profile_id, str) or not self.profile_id:
+            raise NetworkPolicyLayoutError(
+                "WireGuardGroupProbeOwner.profile_id must be non-empty"
+            )
+        if not isinstance(self.device_id, str) or not self.device_id:
+            raise NetworkPolicyLayoutError(
+                "WireGuardGroupProbeOwner.device_id must be non-empty"
+            )
+
+
+ProbeSemanticOwner = (
+    ProbePolicyOwner
+    | WireGuardPeerProbeOwner
+    | WireGuardGroupProbeOwner
+)
 
 
 def is_probe_semantic_owner(value: object) -> bool:
-    return isinstance(value, (ProbePolicyOwner, WireGuardPeerProbeOwner))
+    return isinstance(
+        value,
+        (
+            ProbePolicyOwner,
+            WireGuardPeerProbeOwner,
+            WireGuardGroupProbeOwner,
+        ),
+    )
 
 
 def probe_owner_sort_key(owner: ProbeSemanticOwner) -> tuple[object, ...]:
@@ -241,8 +268,10 @@ def probe_owner_sort_key(owner: ProbeSemanticOwner) -> tuple[object, ...]:
         return (0, owner.profile_id, owner.path_id)
     if isinstance(owner, WireGuardPeerProbeOwner):
         return (1, owner.device_id, owner.peer_id)
+    if isinstance(owner, WireGuardGroupProbeOwner):
+        return (2, owner.profile_id, owner.device_id)
     raise NetworkPolicyLayoutError(
-        "probe owner must be ProbePolicyOwner or WireGuardPeerProbeOwner"
+        "probe owner must be a supported ProbeSemanticOwner"
     )
 
 

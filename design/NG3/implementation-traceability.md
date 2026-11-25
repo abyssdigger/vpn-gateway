@@ -78,6 +78,7 @@ A production unit without a normal requirement path may appear only under `Archi
 
 ## Trace: `C.001`, `C.008`, `D.002`
 
+- `design/NG3/code/python/rou/wireguard_group_probe_executor.py`
 - `design/NG3/code/python/rou/wireguard_peer_probe_executor.py`
 
 ## Trace: `D.002`
@@ -103,6 +104,8 @@ A production unit without a normal requirement path may appear only under `Archi
 
 ## Trace: `C.001`
 
+- `design/NG3/code/python/rou/bound_probe_policy.py`
+- `design/NG3/code/python/rou/wireguard_group_probe_policy.py`
 - `design/NG3/code/python/rou/wireguard_peer_probe_policy.py`
 - `design/NG3/code/python/rou/device_firewall_compiler.py`
 - `design/NG3/code/python/rou/device_firewall_desired.py`

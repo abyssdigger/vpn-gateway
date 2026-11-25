@@ -338,3 +338,32 @@ missing sibling; a missing requested selector blocks; and an additional reserved
 outside the complete accepted union blocks every scoped owner. One physical nft INPUT/OUTPUT
 pair simultaneously satisfies both semantic owners when their lower physical identity is
 identical.
+
+## EV-00170 — WireGuard recoverable-group probe lower seam
+
+**Status:** accepted / full C.001 lower contribution to `VPNG-U001-R1.R3.R8.R3.R1`  
+**Scope:** stable `WireGuardGroupProbeOwner(profile_id, device_id)`; deterministic shared
+probe-resource allocation; group endpoint route/RPDB/local-admission projection; owner-scoped
+readiness compatibility; and production execution through the existing C.008 physical ICMP
+Driver only after an exact confirmed group context.  
+**Implementation:** `design/NG3/code/python/rou/network_policy_layout.py`,
+`design/NG3/code/python/rou/bound_probe_policy.py`,
+`design/NG3/code/python/rou/wireguard_group_probe_policy.py`,
+`design/NG3/code/python/rou/wireguard_group_probe_executor.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_network_policy_layout.py`,
+`design/NG3/code/python/rou/tests/test_wireguard_group_probe_policy.py`,
+`design/NG3/code/python/rou/tests/test_wireguard_group_probe_executor.py`,
+`design/NG3/code/python/rou/tests/test_probe_precondition.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-group-probe-seam-review.md`.  
+**Executable evidence:** GitHub Actions run `45575745380`, unit job
+`139073253482` — PASS on source
+`5816f965f666fa3296c3dcf40a89681de98cf75d`.
+
+The tests prove that the group owner participates in the same deterministic collision-free
+probe allocation as Profile and peer owners, projects a physically equivalent ICMP lower
+contract without creating a new logical path, is accepted by the scoped-readiness verifier,
+and cannot execute physical I/O without the exact confirmed
+`(group owner, ICMP, group target, InterfaceIdentity)` context. The executor rejects owner /
+group / Device mismatches and an out-of-group target before I/O. Peer and group projection
+share `bound_probe_policy.py`; the review therefore does not accept two divergent copies of
+the same physical projector.
