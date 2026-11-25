@@ -82,3 +82,5 @@ ADD_TAG	ng3-snapshot-wireguard-r8r6-runtime-ordering-source	a36598006753f45f4cc1
 DEL_BRANCH	ng3-wireguard-r8r6-runtime-ordering-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-r8-materialization-closure-source	844cb821db0a5d5d258626f402d73eac624a45d1	Generalized R8 component materialization statuses normalized after R8.R6 closure.
 DEL_BRANCH	ng3-wireguard-r8-materialization-closure-cdc-20261125
+ADD_TAG	ng3-snapshot-trace-model-hygiene-source	79bc3b4cd25b2804d6bc7147e20f853205948d79	Trace/model hygiene: canonical typed-edge grammar, coverage/evidence semantics, projectholder role identifier and stale-EV disposition.
+DEL_BRANCH	ng3-trace-model-hygiene-cdc-20261125
