@@ -291,3 +291,27 @@ reuse, and fail-closed rejection of detail for a nonmember Device, unknown/dupli
 unsupported membership suffixes. Existing whole-suite tests remain green. The legacy
 `shared_prefixes` field is retained only as a temporary internal bridge for the one-group
 D.002 prototype and is not part of the accepted generalized configuration contract.
+
+## EV-00150 — generalized D.002 recoverable-group Manager core
+
+**Status:** accepted / generalized group-selection core; D.002 overall remains partial  
+**Scope:** typed per-Profile WireGuard group input; independent simultaneous group -> peer
+ownership; ordinary sticky ownership; group-local reserve failback; shared fresh peer-health
+cache; peer-failure recovery; per-group no-owner state; complete split-group D.003 desired-state
+construction; and Device-wide generation publication only after fresh D.003 confirmation.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_manager.py`,
+`design/NG3/code/python/rou/release1_config.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_peer_manager.py`,
+`design/NG3/code/python/rou/tests/test_release1_config.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d002-groups-review.md`.  
+**Executable evidence:** GitHub Actions run `45571166454`, unit job
+`139058000826` — PASS on source
+`c93b98e256ac56eb74056d111f97ab46620da9cd`.
+
+The focused tests prove simultaneous different owners for two groups, one technical peer probe
+reused within one fresh reconciliation, ordinary stickiness, reserve failback, recovery of
+only groups affected by a failed peer, coexistence of a no-owner group with another confirmed
+group, invalidation on current-owner local error, and no generation publication on failed
+D.003 confirmation. The old `shared_prefixes` bridge is removed; D.002 receives the accepted
+A.002 typed group contract directly. Optional group-endpoint checking is deliberately rejected
+before I/O until its separate semantic owner/precondition is materialized.
