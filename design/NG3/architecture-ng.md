@@ -1866,19 +1866,20 @@ Architectural decisions
 9. `Политика полезного трафика не создает потребность в VPN`
    *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией. При этом current healthy non-reserve active path образует A.004-owned retirement protection: если удаление уже присутствующего managed path обошло бы `VPNG-U003-R3.R8`, A.004 запрещает destructive release до fresh изменения current routing state. Проверка выполняется пока candidate path еще находится в exact current structural membership; stale/unknown generation либо исчезновение, вызванное самой retirement-процедурой, не разрешают release. Для active reserve membership A.004 применяет accepted reserve-failback semantics: снятие reserve lifecycle demand не означает, что путь уже можно удалить, пока current effective policy не подтверждает подходящую разрешенную замену. Такой protection verdict может только удержать уже присутствующий ресурс и не является источником demand для запуска отсутствующего Device.*
 
-**Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
-он получает уже current A.007 availability projection после D.002-generation synchronization
-и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` вклад остается [`partial`]:
-конфигурационная проекция требуемого присутствия Devices материализована отдельно в A.013 и
-не принадлежит A.004. A.004 сохраняет structural membership/current active-path state и
-публикует отдельную retirement-protection projection для уже присутствующих managed paths.
-Selective lifecycle release обязан получить эту projection на fresh exact state **до**
-исключения retiring candidate из structural/effective membership и учитывать ее вместе с
-остальными owner-specific release gates; такая protection не изменяет A.013 demand и не дает
-A.004 права запускать отсутствующий Device. Current alpha implementation до RU-F1 correction
-не выполняет этот порядок полностью: undemanded managed endpoint может быть отфильтрован из
-normal binding projection до подтвержденной retirement protection; это implementation gap,
-а не альтернативная архитектурная семантика.
+**Материализация:** Текущий generalized-R8 effective-order path A.004 уже получает
+current A.007 availability projection после D.002-generation synchronization и сходится только
+по этой projection. RU-F1 расширяет cross-contract composition отдельной
+retirement-protection projection для уже присутствующих managed paths; **эта новая часть
+A.004 boundary пока не материализована полностью**. По `VPNG-U001-R1.R3.R7.R3` вклад
+остается [`partial`]: конфигурационная проекция требуемого присутствия Devices
+материализована отдельно в A.013 и не принадлежит A.004. Selective lifecycle release обязан
+получить A.004 retirement protection на fresh exact state **до** исключения retiring candidate
+из structural/effective membership и учитывать ее вместе с остальными owner-specific release
+gates; такая protection не изменяет A.013 demand и не дает A.004 права запускать отсутствующий
+Device. Current alpha implementation до RU-F1 correction не выполняет этот порядок полностью:
+undemanded managed endpoint может быть отфильтрован из normal binding projection до
+подтвержденной retirement protection; это implementation gap, а не альтернативная
+архитектурная семантика.
 
 **Evidence:** `EV-00280`.
 
