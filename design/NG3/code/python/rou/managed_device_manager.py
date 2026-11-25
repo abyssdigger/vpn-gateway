@@ -72,6 +72,13 @@ class ManagedDeviceLifecycleAdapter(Protocol):
     def observe(self, device_id: str) -> ManagedWireGuardObservation:
         """Fresh-observe current owned base realization."""
 
+    def confirm_present(
+        self,
+        device_id: str,
+        desired: ManagedWireGuardConfig,
+    ) -> ManagedWireGuardObservation:
+        """Fresh-confirm exact current owned base generation without mutation."""
+
     def converge_present(
         self,
         device_id: str,
@@ -158,6 +165,7 @@ class ManagedDeviceManager:
             projection = self._reconcile_absent(
                 device_id,
                 may_remove=device_id in dependency_free_device_ids,
+                desired=config.managed_vpns.get(device_id),
             )
             result.append(projection)
             if (
@@ -221,13 +229,15 @@ class ManagedDeviceManager:
         device_id: str,
         *,
         may_remove: bool,
+        desired: ManagedWireGuardConfig | None,
     ) -> ManagedDeviceRealization:
         try:
-            observation = (
-                self.lifecycle.converge_absent(device_id)
-                if may_remove
-                else self.lifecycle.observe(device_id)
-            )
+            if may_remove:
+                observation = self.lifecycle.converge_absent(device_id)
+            elif desired is not None:
+                observation = self.lifecycle.confirm_present(device_id, desired)
+            else:
+                observation = self.lifecycle.observe(device_id)
             if observation.state is ManagedWireGuardState.ABSENT:
                 return ManagedDeviceRealization(
                     device_id=device_id,
@@ -270,11 +280,17 @@ class ManagedDeviceConvergence:
 
     @property
     def confirmed_interfaces(self) -> frozenset[InterfaceIdentity]:
+        """Exact current interfaces safe to admit into structural projection.
+
+        This includes demanded Devices and still-authorized undemanded Devices
+        whose current D.001 base generation was confirmed read-only. Removed
+        management and unverified same-name links cannot enter this set.
+        """
         return frozenset(
             item.confirmed_interface
             for item in self.realizations
-            if item.desired_state is ManagedDeviceDesiredState.PRESENT
-            and item.confirmed_state is ManagedWireGuardState.PRESENT
+            if item.confirmed_state is ManagedWireGuardState.PRESENT
+            and item.confirmed_generation is not None
             and item.confirmed_interface is not None
             and item.problem is None
         )
