@@ -1,4 +1,4 @@
-"""Production runtime composition for D.002 WireGuard peer/group reconciliation.
+"""Runtime coordination seam for D.002 WireGuard peer/group reconciliation.
 
 Architecture: A.001 runtime composition, C.001 shared probe plane,
 D.001 managed base realization, D.002 WireGuardPeerManager, D.003 ownership enforcer.

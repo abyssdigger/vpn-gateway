@@ -2893,7 +2893,7 @@ Manager изменяемой peer/group realization одного явно упр
 - `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`
 
 API
 
@@ -2956,13 +2956,21 @@ groups уже относительно последнего exact ownership stat
 generation context, поэтому изменение target инвалидирует прежнюю realization. Peer и group
 executors используют принятые C.001 scoped-readiness/C.008 seams.
 
-**Пробел материализации:** D.002 component-local group endpoint semantics закрыты; C.001
-pure full-union composer закрыт `EV-00200`, production alpha lower convergence/scoped-A.007
-consumption — `EV-00210`, а A.008 уже способен хранить authoritative D.002 realization в
-semantic status snapshot (`EV-00220`). Общий R8 остается неполным до periodic/explicit
-production D.002 reconciliation trigger, передачи его результата в A.008 publication path и
-инвалидизации зависимого A.007 evidence после D.002 generation change. D.003 split-group
-kernel acceptance закрыт EV-00190.
+`wireguard_peer_runtime.py` материализует runtime-coordinator core: сохраняет один
+`WireGuardPeerManager` на текущий managed WireGuard Device, принимает только согласованное
+confirmed D.001 base generation и exact current path binding, сверяет D.002 typed owner union
+с принятым full C.001 desired и перед каждой peer/group physical attempt заново получает
+owner-scoped C.001 readiness. Group endpoint readiness наблюдается после D.003 convergence,
+поэтому post-transfer attempt не наследует pre-transfer readiness snapshot. Исчезновение
+current path удаляет retained Manager state; confirmed no-owner realization остается
+отличимой от local/unconfirmed runtime problem.
+
+**Пробел материализации:** coordinator core закрыт `EV-00230`, C.001 production lower
+convergence/scoped-A.007 consumption — `EV-00210`, а A.008 уже способен хранить
+authoritative D.002 realization в semantic status snapshot (`EV-00220`). Общий R8 остается
+неполным до вызова coordinator из periodic/explicit alpha reconciliation, передачи результата
+в A.008 publication path и инвалидизации зависимого A.007 evidence после D.002 generation
+change. D.003 split-group kernel acceptance закрыт EV-00190.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
