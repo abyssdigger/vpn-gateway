@@ -1231,7 +1231,11 @@ def run_alpha_runtime(
             )
         if current_domain_spec.namespace != domain_spec.namespace:
             raise AlphaRuntimeError("managed Device preparation namespace mismatch")
-        realizations = managed_device_manager.reconcile(prepared.current_config)
+        realizations = managed_device_manager.reconcile(
+            prepared.current_config,
+            desired_device_ids=frozenset(prepared.current_config.managed_vpns)
+            & prepared.config.structural.active_device_ids,
+        )
         managed_realizations_holder["current"] = realizations
         problem = _managed_device_problem(realizations)
         if problem is not None:
@@ -1302,6 +1306,7 @@ def run_alpha_runtime(
                 shutdown_config = CurrentConfig(prepared.config, {})
                 shutdown_realizations = managed_device_manager.reconcile(
                     shutdown_config,
+                    desired_device_ids=frozenset(),
                     dependency_free_device_ids=frozenset(
                         prepared.current_config.managed_vpns
                     ),
@@ -1400,7 +1405,9 @@ def run_alpha_runtime(
 
         def reconcile_normal_once_unlocked():
             managed_realizations = managed_device_manager.reconcile(
-                prepared.current_config
+                prepared.current_config,
+                desired_device_ids=frozenset(prepared.current_config.managed_vpns)
+                & prepared.config.structural.active_device_ids,
             )
             managed_realizations_holder["current"] = managed_realizations
             status_agent.confirm_managed_devices(managed_realizations)

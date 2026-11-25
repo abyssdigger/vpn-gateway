@@ -108,7 +108,9 @@ device_order = ["wg-main"]
             nonlocal current_realizations
             if candidate is not prepared or current_domain != domain:
                 raise AssertionError("startup preparation context changed")
-            current_realizations = manager.reconcile(prepared.current_config)
+            current_realizations = manager.reconcile(
+                prepared.current_config, desired_device_ids=frozenset({"wg-main"})
+            )
             problem = _managed_device_problem(current_realizations)
             if problem is not None:
                 raise AssertionError(problem)
@@ -165,6 +167,7 @@ device_order = ["wg-main"]
             )
             shutdown = manager.reconcile(
                 CurrentConfig(prepared.config, {}),
+                desired_device_ids=frozenset(),
                 dependency_free_device_ids=frozenset({"wg-main"}),
             )
             problem = _managed_device_problem(shutdown, require_absent=True)

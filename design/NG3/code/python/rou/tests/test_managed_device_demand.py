@@ -5,6 +5,12 @@ import unittest
 from rou.binding import LogicalPathId, PathBinding
 from rou.interface_identity import InterfaceIdentity
 from rou.managed_device_demand import project_final, project_regular
+from rou.managed_device_manager import (
+    ManagedDeviceDesiredState,
+    ManagedDeviceManager,
+    converge_managed_device_presence,
+)
+from rou.managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
 from rou.release1_config import (
     CurrentConfigError,
     Release1ConfigError,
@@ -162,6 +168,108 @@ class ManagedDeviceDemandTests(unittest.TestCase):
         result = project_final(cfg, (presence("ext"),))
         self.assertEqual(result.profiles[0].regular_deficit, 1)
         self.assertEqual(result.desired_device_ids, {"a"})
+
+
+class FakePresenceLifecycle:
+    def __init__(self):
+        self.paths = {}
+        self.fail = set()
+        self.actions = []
+
+    def desired_generation(self, device_id, desired):
+        return "gen-" + device_id
+
+    def converge_present(self, device_id, desired):
+        self.actions.append(("present", device_id))
+        if device_id in self.fail:
+            raise RuntimeError("failed " + device_id)
+        endpoint = InterfaceIdentity(desired.interface, len(self.actions) + 20)
+        self.paths[device_id] = PathBinding(LogicalPathId(device_id, 0, 0), endpoint)
+        return ManagedWireGuardObservation(
+            device_id, ManagedWireGuardState.PRESENT, endpoint, "gen-" + device_id
+        )
+
+    def observe(self, device_id):
+        path = self.paths.get(device_id)
+        return ManagedWireGuardObservation(
+            device_id,
+            ManagedWireGuardState.PRESENT if path else ManagedWireGuardState.ABSENT,
+            path.endpoint if path else None,
+        )
+
+    def converge_absent(self, device_id):
+        self.actions.append(("absent", device_id))
+        self.paths.pop(device_id, None)
+        return self.observe(device_id)
+
+    def fresh(self):
+        return tuple(self.paths.values())
+
+
+class BoundedConvergenceTests(unittest.TestCase):
+    def test_failed_ordinary_tries_next_before_reserve(self):
+        cfg = config(("a", "b", "r:reserve"), "1")
+        lifecycle = FakePresenceLifecycle()
+        lifecycle.fail.add("a")
+        result = converge_managed_device_presence(
+            cfg, ManagedDeviceManager(lifecycle), lifecycle.fresh
+        )
+        self.assertEqual(lifecycle.actions, [("present", "a"), ("present", "b")])
+        self.assertEqual(result.projection.desired_device_ids, {"b"})
+        self.assertEqual(tuple(x.device_id for x in result.attempt_problems), ("a",))
+
+    def test_reserve_recovery_requires_explicit_dependency_release(self):
+        cfg = config(("a", "r:reserve"), "1")
+        lifecycle = FakePresenceLifecycle()
+        lifecycle.fail.add("a")
+        manager = ManagedDeviceManager(lifecycle)
+        failed = converge_managed_device_presence(cfg, manager, lifecycle.fresh)
+        self.assertEqual(lifecycle.actions, [("present", "a"), ("present", "r")])
+        self.assertEqual(failed.projection.desired_device_ids, {"a", "r"})
+        self.assertEqual(failed.projection.profiles[0].regular_deficit, 1)
+        lifecycle.fail.clear()
+        lifecycle.actions.clear()
+        recovered = converge_managed_device_presence(cfg, manager, lifecycle.fresh)
+        self.assertEqual(lifecycle.actions, [("present", "a")])
+        self.assertEqual(recovered.projection.desired_device_ids, {"a"})
+        waiting = next(x for x in recovered.realizations if x.device_id == "r")
+        self.assertTrue(waiting.waiting_for_dependencies)
+        self.assertIn("r", lifecycle.paths)
+        released = manager.reconcile_undemanded(
+            cfg, desired_device_ids=frozenset({"a"}),
+            dependency_free_device_ids=frozenset({"r"}),
+        )
+        self.assertIs(next(x for x in released if x.device_id == "r").confirmed_state,
+                      ManagedWireGuardState.ABSENT)
+        self.assertEqual(lifecycle.actions[-1], ("absent", "r"))
+
+    def test_failed_start_with_matching_endpoint_does_not_hide_deficit(self):
+        cfg = config(("a", "r:reserve"), "1")
+        lifecycle = FakePresenceLifecycle()
+        lifecycle.paths["a"] = presence("a")
+        lifecycle.fail.add("a")
+        result = converge_managed_device_presence(
+            cfg, ManagedDeviceManager(lifecycle), lifecycle.fresh
+        )
+        self.assertEqual(result.projection.profiles[0].regular_deficit, 1)
+        self.assertEqual(result.projection.desired_device_ids, {"a", "r"})
+        self.assertNotIn(lifecycle.paths["a"].endpoint, result.confirmed_interfaces)
+
+    def test_shared_demand_preserves_reserve_owned_by_another_profile(self):
+        cfg = parse_current_config(
+            DEVICES + profile("corp", ("a", "r:reserve"), "1")
+            + profile("other", ("r",), "1", "10.78.0.0/24")
+        )
+        lifecycle = FakePresenceLifecycle()
+        result = converge_managed_device_presence(
+            cfg, ManagedDeviceManager(lifecycle), lifecycle.fresh
+        )
+        self.assertEqual(result.projection.desired_device_ids, {"a", "r"})
+        self.assertEqual(lifecycle.actions, [("present", "a"), ("present", "r")])
+        self.assertTrue(all(
+            x.desired_state is ManagedDeviceDesiredState.PRESENT
+            for x in result.realizations if x.device_id in {"a", "r"}
+        ))
 
 
 if __name__ == "__main__":

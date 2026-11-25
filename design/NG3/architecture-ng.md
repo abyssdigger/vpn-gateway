@@ -2279,13 +2279,13 @@ Architectural decisions
 
 **Evidence:** `EV-00080`, `EV-00090`.
 
-**Материализация:** Текущий `ManagedDeviceManager` использует
-`CurrentConfig.structural.active_device_ids`: каждый enabled managed Device, упомянутый хотя
-бы одним enabled Profile, считается требуемым. Это точно материализует только новый случай
-`all`, поэтому вклад A.012 в `VPNG-U001-R1.R3.R7.R3` теперь [`partial`]. Нормализация `0 | N | all` и чистый расчет per-Profile demand реализованы отдельно
-в A.002/A.013; свежий pre-A.012 учет уже присутствующих endpoints, передача
-агрегированного demand и последовательное расширение demand после неудачи кандидата
-еще отсутствуют в runtime composition.
+**Материализация:** `ManagedDeviceManager` принимает явный `desired_device_ids`.
+`converge_managed_device_presence` связывает A.013 с bounded D.001 attempts и fresh
+наблюдением через переданную функцию; failed candidate не считается подтвержденной
+managed capacity, а следующий candidate может быть рассмотрен в том же trigger.
+Промежуточные фазы не снимают зависимости и не останавливают Devices. Alpha пока
+передает прежний набор referenced managed Devices явно и не использует новую
+двухфазную композицию, поэтому вклад A.012 в R7.R3 остается [`partial`].
 
 В уже реализованной части A.012 получает `desired_generation` через D.001 до мутации,
 принимает только совпадающее подтвержденное поколение D.001, переводит ошибки lifecycle в
