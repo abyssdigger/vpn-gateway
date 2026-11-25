@@ -2317,7 +2317,7 @@ Architectural decisions
 
 **Материализация:** lower probe owner теперь различает A.007 `ProbePolicyOwner(profile_id, LogicalPathId)` и отдельный `WireGuardPeerProbeOwner(device_id, peer_id)`; общий resource layout сохраняет эти owner scopes раздельными. `wireguard_peer_probe_policy.py` проецирует permanent peer /32 через уже подтвержденный current path в ту же физическую route/RPDB/local-admission форму, что и A.007, не создавая нового `LogicalPathId`. Общий `ProbeExecutionPrecondition` и exact execution gate принимают этот отдельный semantic owner.
 
-**Пробел материализации:** peer-probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence, потому что D.002 Manager пока не создает current peer-probe demand. Поэтому component-local вклад C.001 в R8 остается [`partial`], несмотря на готовую owner/projection/precondition seam.
+**Пробел материализации:** peer-probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence. Production peer executor уже требует отдельный confirmed owner-subset precondition, но текущий availability cycle по-прежнему строит и проверяет только свой assembly. Runtime должен сходить A.007 и D.002 demand в общий lower convergence scope, сохранив раздельные readiness decisions, чтобы отказ peer-owner не блокировал несвязанный A.007 owner. Поэтому component-local вклад C.001 в R8 остается [`partial`].
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2812,7 +2812,7 @@ Manager изменяемой реализации пиров одного явн
 - `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`
 
 API
 
@@ -2849,9 +2849,9 @@ Architectural decisions
 9. `Текущие доказательства не требуют отдельного ограничения трафика на время переключения`
    *`EV-00050` не выявил потерь или передачи полезного трафика третьему пиру при проверенном переносе полного состояния. Поэтому отдельное защитное ограничение трафика не вводится без новых доказательств. Частично примененное или неоднозначное состояние никогда не считается новым подтвержденным поколением и переводит путь в problem/unconfirmed.*
 
-**Материализация:** `design/NG3/code/python/rou/wireguard_peer_manager.py` содержит current-only Manager core. Он принимает подтвержденный D.001 base generation и current path realization, использует отдельный peer-probe port с `WireGuardPeerProbeOwner`, сохраняет текущего владельца при его fresh `reply` без принудительного failback, после `no_reply` выбирает наиболее предпочтительный из fresh-confirmed пригодных пиров и передает D.003 полный desired `AllowedIPs` state. `local_error` текущего владельца не трактуется как подтвержденная непригодность и переводит current projection в problem/unconfirmed. Новое peer-realization generation вычисляется и публикуется только после confirmed D.003 postcondition; смена base generation, interface generation, ordered peer context, shared-prefix set либо владельца меняет generation. Наличие `problem` никогда не сохраняет прежнее generation как current evidence.
+**Материализация:** `design/NG3/code/python/rou/wireguard_peer_manager.py` содержит current-only Manager core. Он принимает подтвержденный D.001 base generation и current path realization, использует отдельный peer-probe port с `WireGuardPeerProbeOwner`, сохраняет текущего владельца при его fresh `reply` без принудительного failback, после `no_reply` выбирает наиболее предпочтительный из fresh-confirmed пригодных пиров и передает D.003 полный desired `AllowedIPs` state. `local_error` текущего владельца не трактуется как подтвержденная непригодность и переводит current projection в problem/unconfirmed. Новое peer-realization generation вычисляется и публикуется только после confirmed D.003 postcondition; смена base generation, interface generation, ordered peer context, shared-prefix set либо владельца меняет generation. Наличие `problem` никогда не сохраняет прежнее generation как current evidence. `design/NG3/code/python/rou/wireguard_peer_probe_executor.py` материализует production peer-probe port: он требует точный `WireGuardPeerProbeOwner`/target/current-interface key в отдельном confirmed C.001 precondition и только после этого вызывает общий C.008 physical ICMP Driver.
 
-**Пробел материализации:** D.002 core еще не подключен к alpha/runtime composition. Не материализованы: совместное добавление peer-probe demand в рабочий C.001 desired/convergence; production peer-probe port, который подтверждает C.001 precondition и вызывает C.008; периодический/explicit trigger D.002; публикация D.002 realization в A.008; и обязательная инвалидизация A.007 Profile-availability evidence при смене peer generation. Поэтому D.002 остается [`partial`] и R8 в целом не закрывается.
+**Пробел материализации:** D.002 core еще не подключен к alpha/runtime composition. Не материализованы: совместное добавление A.007 и peer-probe demand в один нижний C.001 convergence scope с раздельными owner-subset readiness decisions; периодический/explicit trigger D.002; публикация D.002 realization в A.008; и обязательная инвалидизация A.007 Profile-availability evidence при смене peer generation. Поэтому D.002 остается [`partial`] и R8 в целом не закрывается.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 

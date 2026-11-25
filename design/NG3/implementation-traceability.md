@@ -76,6 +76,10 @@ A production unit without a normal requirement path may appear only under `Archi
 
 - `design/NG3/code/python/rou/managed_device_manager.py`
 
+## Trace: `C.001`, `C.008`, `D.002`
+
+- `design/NG3/code/python/rou/wireguard_peer_probe_executor.py`
+
 ## Trace: `D.002`
 
 - `design/NG3/code/python/rou/wireguard_peer_manager.py`
