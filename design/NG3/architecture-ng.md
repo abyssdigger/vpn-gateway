@@ -1956,7 +1956,17 @@ Architectural decisions
 5. `Bounded scheduling state`
    *Timers, current generation tokens и bounded in-flight diagnostics допустимы; unbounded observation history и durable retry journal не требуются.*
 
-**Пробел материализации:** Текущий контекст availability не содержит поколение выбранного WireGuard-пира; после реализации D.002 его нужно включить в ключ актуальности свидетельства.
+**Материализация:** production alpha теперь получает A.007 intents как semantic subset одного
+полного A.007+D.002 probe-plane desired union. Нижний runtime сначала materializes полный
+accepted union, а A.007 observation запрашивает scoped readiness только своих
+`ProbePolicyOwner` и конфигурирует `AvailabilityProbeRuntime` только этими intents; peer/group
+owners поэтому не превращаются в A.007 evidence даже при физически совпадающем target.
+
+**Evidence:** `EV-00210`.
+
+**Пробел материализации:** Текущий A.007 context generation ещё не включает применимое
+D.002 realization generation. Поэтому после смены group -> peer ownership прежнее Profile
+availability evidence пока не обязано стать stale автоматически.
 
 ## [A.008] RuntimeStatusAgent
 
@@ -2365,15 +2375,20 @@ Profile/path membership, exact current `RoutePriorityPathRoute` для D.002 int
 уникальность semantic owner до allocation; physical lowering по-прежнему принадлежит одному
 `bound_probe_policy.py`, а не новому projector.
 
-**Evidence:** `EV-00160`, `EV-00170`, `EV-00200`.
+**Evidence:** `EV-00160`, `EV-00170`, `EV-00200`, `EV-00210`.
 
-**Пробел материализации:** pure full-union desired-state composition теперь существует, но
-рабочий alpha runtime все еще строит A.007-only `ProbeDesiredAssembly` и выполняет
-A.007-only availability cycle. Поэтому peer/group owners пока не входят в production
-runtime convergence/readiness. D.002 post-transfer group endpoint state machine уже отдельно
-закрыт `EV-00180`; остаются alpha/runtime invocation общего union, periodic/explicit D.002
-reconciliation trigger и status publication, а затем обязательная инвалидизация зависимого
-A.007 evidence при смене D.002 generation. Поэтому R8/R8.R1 остаются [`partial`].
+Production alpha materializes эту composition: current managed-WireGuard group memberships
+проецируются только на подтвержденные current Device paths; peer/group owners входят в тот же
+structural probe-local desired и в тот же probe-routing convergence, что A.007 owners.
+Availability cycle проверяет A.007 subset через
+`verify_probe_execution_precondition_scoped(...)`, сохраняя полный union как global
+stale/conflict boundary. Legacy A.007-only direct test/experiment seam сохранен без изменения
+whole-scope semantics.
+
+**Пробел материализации:** combined lower convergence/readiness runtime закрыт `EV-00210`,
+но D.002 Manager ещё не получает periodic/explicit production reconciliation trigger и не
+публикует runtime status. После этого остается обязательная привязка current A.007 evidence к
+D.002 generation. Поэтому R8/R8.R1 остаются [`partial`].
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2878,7 +2893,7 @@ Manager изменяемой peer/group realization одного явно упр
 - `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`
 
 API
 
@@ -2941,12 +2956,12 @@ groups уже относительно последнего exact ownership stat
 generation context, поэтому изменение target инвалидирует прежнюю realization. Peer и group
 executors используют принятые C.001 scoped-readiness/C.008 seams.
 
-**Пробел материализации:** D.002 component-local group endpoint semantics закрыты, а C.001
-pure full-union composer для A.007 + D.002 owners закрыт `EV-00200`. Общий R8 остается
-неполным, пока alpha/runtime не вызывает эту composition как production probe-plane
-convergence, не выполняет periodic/explicit D.002 reconciliation и status publication и не
-инвалидирует зависимое A.007 evidence после D.002 generation change. D.003 split-group kernel
-acceptance закрыт EV-00190.
+**Пробел материализации:** D.002 component-local group endpoint semantics закрыты; C.001
+pure full-union composer закрыт `EV-00200`, а его production alpha lower
+convergence/scoped-A.007 consumption — `EV-00210`. Общий R8 остается неполным до
+periodic/explicit production D.002 reconciliation trigger, truthful D.002 status publication и
+инвалидизации зависимого A.007 evidence после D.002 generation change. D.003 split-group
+kernel acceptance закрыт EV-00190.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 

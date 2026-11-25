@@ -436,3 +436,30 @@ failed the exhaustive production-code trace guard only; commit
 `8d905151b2f13c356585504f66c0de1e1c46380f` added the required
 `A.007 + C.001 + D.002` edge and the complete unit suite passed.
 
+## EV-00210 — production alpha combined probe-plane lower runtime
+
+**Status:** accepted / production combined lower convergence and A.007 scoped consumption;
+D.002 scheduling/status/generation coupling remain partial  
+**Scope:** projection of current managed-WireGuard peer/group probe demand onto accepted
+current paths, one production A.007+D.002 probe desired union, full-union local/routing
+materialization, and A.007-only execution readiness/evidence consumption.  
+**Implementation:** `design/NG3/code/python/rou/probe_plane_desired.py`,
+`design/NG3/code/python/rou/alpha_runtime.py`,
+`design/NG3/code/python/rou/linux_availability_cycle.py`,
+`design/NG3/code/python/rou/availability_observation_tick.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_alpha_runtime.py`,
+`design/NG3/code/python/rou/tests/test_availability_observation_tick.py`, plus the existing
+owner-scoped precondition suite.  
+**Review:** `design/reviews/NG3-2026-11-25-probe-plane-alpha-runtime-review.md`.  
+**Executable evidence:** GitHub Actions run `45583717575`, unit job
+`139100000005` — PASS on source
+`4ae8735965970103690780e134f93ee4e64deee3`.
+
+The alpha build-current test proves that one current managed WireGuard path contributes
+Profile, peer and recoverable-group owners to the same production probe plane and that only
+Profile intents enter `AvailabilityProbeRuntime`. The combined-tick test supplies a full union
+containing a D.002 peer owner and proves A.007 still attempts only its Profile owners.
+The runtime cycle converges the complete desired union and uses the previously accepted
+owner-scoped readiness verifier for exactly the A.007 owner subset. No D.002 peer/group probe
+is executed merely because its lower state is materialized.
+

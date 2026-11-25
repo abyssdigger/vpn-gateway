@@ -8,7 +8,7 @@ This manifest is the exhaustive code-to-architecture edge for the current Python
 
 A production unit without a normal requirement path may appear only under `Architecture debt` with an explicit reason. Such an entry is a visible finding, not an accepted substitute for requirements.
 
-## Trace: `A.001`, `A.011`, `A.012`, `E.001`
+## Trace: `A.001`, `A.007`, `A.011`, `A.012`, `C.001`, `D.002`, `E.001`
 
 - `design/NG3/code/python/rou/alpha_runtime.py`
 
@@ -42,7 +42,7 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/availability_manager.py`
 - `design/NG3/code/python/rou/availability_routing_state.py`
 
-## Trace: `A.004`, `A.007`, `C.001`, `C.003`
+## Trace: `A.004`, `A.007`, `C.001`, `C.003`, `D.002`
 
 - `design/NG3/code/python/rou/linux_availability_cycle.py`
 
