@@ -10,11 +10,16 @@ from rou.linux_policy_platform import (
     NG3_PROBE_LOCAL_PLATFORM,
 )
 from rou.network_policy_layout import (
+    ProbePolicyOwner,
     ProbeRoutingDemand,
     WireGuardPeerProbeOwner,
     allocate_network_policy_layout,
 )
 from rou.payload_routing_desired import ManagedRouteType
+from rou.probe_policy import (
+    AvailabilityProbeIntent,
+    build_probe_network_policy_desired_state,
+)
 from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.wireguard_peer_probe_policy import (
     WireGuardPeerProbeIntent,
@@ -67,6 +72,85 @@ class WireGuardPeerProbePolicyTests(unittest.TestCase):
         self.assertEqual(
             {item.owner for item in desired.local_rules},
             {OWNER},
+        )
+
+    def test_peer_projection_is_physically_equivalent_to_availability_probe(self):
+        route = RoutePriorityPathRoute(PATH, EP)
+
+        peer_layout = allocate_network_policy_layout(
+            (),
+            (ProbeRoutingDemand(OWNER),),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        peer = build_wireguard_peer_probe_policy_desired_state(
+            (WireGuardPeerProbeIntent(OWNER, TARGET, route),),
+            peer_layout,
+            NG3_LINUX_POLICY_PLATFORM,
+            NG3_PROBE_LOCAL_PLATFORM,
+        )
+
+        availability_owner = ProbePolicyOwner("corp", PATH)
+        availability_layout = allocate_network_policy_layout(
+            (),
+            (ProbeRoutingDemand(availability_owner),),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        availability = build_probe_network_policy_desired_state(
+            (AvailabilityProbeIntent(availability_owner, TARGET),),
+            availability_layout,
+            (route,),
+            NG3_LINUX_POLICY_PLATFORM,
+            NG3_PROBE_LOCAL_PLATFORM,
+        )
+
+        self.assertEqual(peer.routes, availability.routes)
+        self.assertEqual(
+            [
+                (
+                    item.priority,
+                    item.process_uid,
+                    item.endpoint,
+                    item.target,
+                    item.table,
+                    item.mechanism,
+                )
+                for item in peer.rules
+            ],
+            [
+                (
+                    item.priority,
+                    item.process_uid,
+                    item.endpoint,
+                    item.target,
+                    item.table,
+                    item.mechanism,
+                )
+                for item in availability.rules
+            ],
+        )
+        self.assertEqual(
+            [
+                (
+                    item.hook,
+                    item.endpoint,
+                    item.target,
+                    item.conntrack_mark,
+                    item.process_uid,
+                    item.mechanism,
+                )
+                for item in peer.local_rules
+            ],
+            [
+                (
+                    item.hook,
+                    item.endpoint,
+                    item.target,
+                    item.conntrack_mark,
+                    item.process_uid,
+                    item.mechanism,
+                )
+                for item in availability.local_rules
+            ],
         )
 
     def test_owner_device_must_match_current_path_device(self):
