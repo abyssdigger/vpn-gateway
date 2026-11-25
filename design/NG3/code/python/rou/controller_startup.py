@@ -101,6 +101,15 @@ class ControllerStopRequested(Protocol):
         """Return whether graceful stop has been requested; must not mutate network state."""
 
 
+class PrivateNetworkPreparation(Protocol):
+    def __call__(
+        self,
+        prepared: PreparedPayloadPolicy,
+        domain_spec: ManagedNetworkDomainSpec,
+    ) -> None:
+        """Converge pre-observation Private-network contributions or raise."""
+
+
 class ControllerStartupStatus(str, Enum):
     READY = "ready"
     STOPPED = "stopped"
@@ -110,6 +119,7 @@ class ControllerStartupStatus(str, Enum):
     DOMAIN_PREFLIGHT_FAILED = "domain_preflight_failed"
     POLICY_LOAD_FAILED = "policy_load_failed"
     DOMAIN_ENSURE_FAILED = "domain_ensure_failed"
+    PRIVATE_NETWORK_PREPARATION_FAILED = "private_network_preparation_failed"
     INTERFACE_OBSERVATION_FAILED = "interface_observation_failed"
     DESIRED_BUILD_FAILED = "desired_build_failed"
     HOST_ROUTING_BUILD_FAILED = "boundary_build_failed"
@@ -199,6 +209,7 @@ def start_controller_once(
     stop_requested: ControllerStopRequested | None = None,
     build_host_routing_contribution: HostRoutingContributionBuilder | None = None,
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
+    prepare_private_network: PrivateNetworkPreparation | None = None,
 ) -> ControllerStartupResult:
     """Run one bounded startup attempt with phase-boundary graceful-stop checkpoints."""
     requested = stop_requested or _never_stop_requested
@@ -229,6 +240,7 @@ def start_controller_once(
     boundary: ManagedL3BoundaryEnsureResult | None = None
     portal: OrdinarySidePortalVerification | None = None
     host_routing_contribution: HostRoutingContribution | None = None
+    private_network_prepared = False
 
     if requested():
         lock.release()
@@ -294,6 +306,50 @@ def start_controller_once(
         failure_status: ControllerStartupStatus | None = None,
         retain_lock: bool = False,
     ) -> ControllerStartupResult:
+        if private_network_prepared and not retain_lock:
+            stopped = cleanup_controller_owned_domain_once(
+                lock,
+                domain_spec,
+                runner,
+                host_routing_contribution,
+            )
+            if not stopped.stopped:
+                stopping = (
+                    ControllerStartupStoppingContext(lock=lock, stop=stopped)
+                    if lock.acquired
+                    else None
+                )
+                return ControllerStartupResult(
+                    status=ControllerStartupStatus.STOP_CLEANUP_FAILED,
+                    session=None,
+                    environment=environment,
+                    boundary=boundary,
+                    portal=portal,
+                    host_routing_contribution=host_routing_contribution,
+                    activation=activation,
+                    failure_containment=containment,
+                    failure_status=status,
+                    stop=stopped,
+                    stopping=stopping,
+                    diagnostic=(
+                        diagnostic
+                        + "; startup rollback after Private-network preparation "
+                        "is not confirmed"
+                    ),
+                )
+            return ControllerStartupResult(
+                status=status,
+                session=None,
+                environment=environment,
+                boundary=boundary,
+                portal=portal,
+                host_routing_contribution=host_routing_contribution,
+                activation=activation,
+                failure_containment=containment,
+                failure_status=failure_status,
+                stop=stopped,
+                diagnostic=diagnostic + "; startup rollback confirmed",
+            )
         if not retain_lock:
             lock.release()
         return ControllerStartupResult(
@@ -385,6 +441,54 @@ def start_controller_once(
     interrupted = interrupted_stop("ordinary-side portal ensure")
     if interrupted is not None:
         return interrupted
+
+    if prepare_private_network is not None:
+        try:
+            prepare_private_network(prepared, domain_spec)
+            private_network_prepared = True
+        except Exception as exc:
+            stopped = cleanup_controller_owned_domain_once(
+                lock,
+                domain_spec,
+                runner,
+                host_routing_contribution,
+            )
+            if not stopped.stopped:
+                stopping = (
+                    ControllerStartupStoppingContext(lock=lock, stop=stopped)
+                    if lock.acquired
+                    else None
+                )
+                return ControllerStartupResult(
+                    status=ControllerStartupStatus.STOP_CLEANUP_FAILED,
+                    session=None,
+                    environment=environment,
+                    boundary=boundary,
+                    portal=portal,
+                    failure_status=ControllerStartupStatus.PRIVATE_NETWORK_PREPARATION_FAILED,
+                    stop=stopped,
+                    stopping=stopping,
+                    diagnostic=(
+                        "Private-network pre-observation preparation failed: "
+                        f"{type(exc).__name__}: {exc}; rollback is not confirmed"
+                    ),
+                )
+            return ControllerStartupResult(
+                status=ControllerStartupStatus.PRIVATE_NETWORK_PREPARATION_FAILED,
+                session=None,
+                environment=environment,
+                boundary=boundary,
+                portal=portal,
+                stop=stopped,
+                diagnostic=(
+                    "Private-network pre-observation preparation failed: "
+                    f"{type(exc).__name__}: {exc}; rollback confirmed"
+                ),
+            )
+
+        interrupted = interrupted_stop("Private-network pre-observation preparation")
+        if interrupted is not None:
+            return interrupted
 
     if host_boundary is None:
         containment = _contain(domain_spec, runner)
