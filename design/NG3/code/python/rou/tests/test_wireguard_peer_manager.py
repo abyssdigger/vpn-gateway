@@ -10,6 +10,7 @@ from rou.probe_runtime import (
     ProbeTechnicalOutcome,
 )
 from rou.release1_config import (
+    AvailabilityCheckConfig,
     ManagedVpnKind,
     ManagedWireGuardConfig,
     ManagedWireGuardGroupConfig,
@@ -118,6 +119,19 @@ class Ownership:
             observation if self.confirmed else None,
             None if self.confirmed else (self.diagnostic or "not confirmed"),
         )
+
+
+class GroupProbe:
+    def __init__(self, outcomes):
+        self.outcomes = {
+            profile_id: list(values)
+            for profile_id, values in outcomes.items()
+        }
+        self.calls = []
+
+    def check(self, owner, group, path_route):
+        self.calls.append((owner, group.profile_id, path_route))
+        return self.outcomes[group.profile_id].pop(0)
 
 
 def allowed_by_key(desired):
@@ -363,9 +377,231 @@ class WireGuardPeerManagerTests(unittest.TestCase):
         )
         self.assertNotEqual(second.generation, first.generation)
 
-    def test_group_endpoint_is_rejected_before_probe_or_mutation(self):
-        from rou.release1_config import AvailabilityCheckConfig
+    def test_group_endpoint_reply_accepts_candidate_after_d003_confirmation(self):
+        groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"), membership("b")),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.1"),
+                ),
+            ),
+        )
+        ownership = Ownership()
+        group_probe = GroupProbe({"corp": [reply()]})
+        result = WireGuardPeerManager().reconcile(
+            "wg",
+            config(),
+            groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"a": [reply()]}),
+            ownership=ownership,
+            group_probe=group_probe,
+        )
 
+        self.assertTrue(result.ready)
+        self.assertEqual(result.owner_for("corp"), "a")
+        self.assertEqual(len(ownership.calls), 1)
+        self.assertEqual(len(group_probe.calls), 1)
+
+    def test_group_no_reply_moves_only_that_group_to_next_candidate(self):
+        groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"), membership("b")),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.1"),
+                ),
+            ),
+            group("storage", (STORAGE,), (membership("c"),)),
+        )
+        ownership = Ownership()
+        group_probe = GroupProbe({"corp": [no_reply(), reply()]})
+        result = WireGuardPeerManager().reconcile(
+            "wg",
+            config(),
+            groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({
+                "a": [reply()],
+                "b": [reply()],
+                "c": [reply()],
+            }),
+            ownership=ownership,
+            group_probe=group_probe,
+        )
+
+        self.assertEqual(result.owner_for("corp"), "b")
+        self.assertEqual(result.owner_for("storage"), "c")
+        self.assertEqual(len(ownership.calls), 2)
+        self.assertEqual(len(group_probe.calls), 2)
+        first = allowed_by_key(ownership.calls[0])
+        second = allowed_by_key(ownership.calls[1])
+        self.assertIn(CORP, first[A.public_key])
+        self.assertIn(STORAGE, first[C.public_key])
+        self.assertIn(CORP, second[B.public_key])
+        self.assertIn(STORAGE, second[C.public_key])
+
+    def test_group_local_error_after_transfer_is_problem_not_failover(self):
+        groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"), membership("b")),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.1"),
+                ),
+            ),
+        )
+        ownership = Ownership()
+        result = WireGuardPeerManager().reconcile(
+            "wg",
+            config(),
+            groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"a": [reply()]}),
+            ownership=ownership,
+            group_probe=GroupProbe({"corp": [local_error("icmp failed")]}),
+        )
+
+        self.assertIsNone(result.generation)
+        self.assertEqual(result.group_owners, ())
+        self.assertIn("unconfirmed", result.problem)
+        self.assertEqual(len(ownership.calls), 1)
+
+    def test_all_group_candidates_no_reply_converges_no_owner_state(self):
+        groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"), membership("b")),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.1"),
+                ),
+            ),
+        )
+        ownership = Ownership()
+        result = WireGuardPeerManager().reconcile(
+            "wg",
+            config(),
+            groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"a": [reply()], "b": [reply()]}),
+            ownership=ownership,
+            group_probe=GroupProbe({"corp": [no_reply(), no_reply()]}),
+        )
+
+        self.assertFalse(result.ready)
+        self.assertIsNone(result.owner_for("corp"))
+        self.assertIsNotNone(result.generation)
+        self.assertEqual(len(ownership.calls), 3)
+        final = allowed_by_key(ownership.calls[-1])
+        self.assertTrue(all(CORP not in allowed for allowed in final.values()))
+
+    def test_failed_preferred_ordinary_group_check_restores_live_reserve(self):
+        groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"), membership("b", reserve=True)),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.1"),
+                ),
+            ),
+        )
+        manager = WireGuardPeerManager()
+        first = manager.reconcile(
+            "wg",
+            config(),
+            groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"a": [no_reply()], "b": [reply()]}),
+            ownership=Ownership(),
+            group_probe=GroupProbe({"corp": [reply()]}),
+        )
+        self.assertEqual(first.owner_for("corp"), "b")
+
+        ownership = Ownership()
+        second = manager.reconcile(
+            "wg",
+            config(),
+            groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"b": [reply()], "a": [reply()]}),
+            ownership=ownership,
+            group_probe=GroupProbe({
+                "corp": [no_reply(), reply()],
+            }),
+        )
+
+        self.assertEqual(second.owner_for("corp"), "b")
+        self.assertEqual(len(ownership.calls), 2)
+        first_try = allowed_by_key(ownership.calls[0])
+        restored = allowed_by_key(ownership.calls[1])
+        self.assertIn(CORP, first_try[A.public_key])
+        self.assertIn(CORP, restored[B.public_key])
+
+    def test_group_endpoint_change_changes_device_generation(self):
+        first_groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"),),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.1"),
+                ),
+            ),
+        )
+        second_groups = (
+            group(
+                "corp",
+                (CORP,),
+                (membership("a"),),
+                availability_check=AvailabilityCheckConfig(
+                    "icmp",
+                    IPv4Address("10.77.0.2"),
+                ),
+            ),
+        )
+        manager = WireGuardPeerManager()
+        first = manager.reconcile(
+            "wg",
+            config(),
+            first_groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"a": [reply()]}),
+            ownership=Ownership(),
+            group_probe=GroupProbe({"corp": [reply()]}),
+        )
+        second = manager.reconcile(
+            "wg",
+            config(),
+            second_groups,
+            base_generation="base-a",
+            path_route=ROUTE,
+            probe=Probe({"a": [reply()]}),
+            ownership=Ownership(),
+            group_probe=GroupProbe({"corp": [reply()]}),
+        )
+
+        self.assertNotEqual(second.generation, first.generation)
+
+    def test_endpoint_group_requires_probe_port_before_any_io(self):
         groups = (
             group(
                 "corp",
@@ -379,10 +615,7 @@ class WireGuardPeerManagerTests(unittest.TestCase):
         )
         probe = Probe({"a": [reply()]})
         ownership = Ownership()
-        with self.assertRaisesRegex(
-            ValueError,
-            "group endpoint probing is not materialized",
-        ):
+        with self.assertRaisesRegex(ValueError, "group_probe is required"):
             WireGuardPeerManager().reconcile(
                 "wg",
                 config(),

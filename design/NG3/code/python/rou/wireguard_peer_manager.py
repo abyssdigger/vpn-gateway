@@ -7,11 +7,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import json
 from typing import Protocol
 
-from .network_policy_layout import WireGuardPeerProbeOwner
+from .network_policy_layout import (
+    WireGuardGroupProbeOwner,
+    WireGuardPeerProbeOwner,
+)
 from .probe_runtime import (
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
@@ -149,6 +152,16 @@ class WireGuardPeerProbePort(Protocol):
         """Fresh-check one peer after its exact C.001 precondition is confirmed."""
 
 
+class WireGuardGroupProbePort(Protocol):
+    def check(
+        self,
+        owner: WireGuardGroupProbeOwner,
+        group: ManagedWireGuardGroupConfig,
+        path_route: RoutePriorityPathRoute,
+    ) -> ProbeTechnicalObservation:
+        """Fresh-check one group endpoint after D.003 confirms its owner."""
+
+
 class WireGuardPeerOwnershipPort(Protocol):
     def converge(
         self,
@@ -202,6 +215,7 @@ class WireGuardPeerManager:
         path_route: RoutePriorityPathRoute,
         probe: WireGuardPeerProbePort,
         ownership: WireGuardPeerOwnershipPort,
+        group_probe: WireGuardGroupProbePort | None = None,
     ) -> WireGuardPeerRealization:
         context = self._validated_context(
             device_id,
@@ -210,6 +224,14 @@ class WireGuardPeerManager:
             base_generation,
             path_route,
         )
+        if (
+            any(group.availability_check is not None for group in context.groups)
+            and group_probe is None
+        ):
+            raise WireGuardPeerManagerError(
+                "group_probe is required for endpoint-bearing groups"
+            )
+
         same_context = self._context == context
         current_owners = (
             {
@@ -222,6 +244,10 @@ class WireGuardPeerManager:
 
         records: list[WireGuardPeerProbeRecord] = []
         probe_cache: dict[str, ProbeTechnicalObservation] = {}
+        rejected: dict[str, set[str]] = {
+            group.profile_id: set()
+            for group in context.groups
+        }
 
         def observe(peer_id: str) -> ProbeTechnicalObservation:
             cached = probe_cache.get(peer_id)
@@ -233,61 +259,115 @@ class WireGuardPeerManager:
             records.append(WireGuardPeerProbeRecord(peer_id, observation))
             return observation
 
-        desired_owners: list[WireGuardGroupOwnershipRecord] = []
+        owners: dict[str, str | None] = {}
         for group in context.groups:
-            current_owner = current_owners.get(group.profile_id)
             owner, diagnostic = self._select_group_owner(
                 group,
-                current_owner,
+                current_owners.get(group.profile_id),
                 observe,
+                rejected[group.profile_id],
             )
             if diagnostic is not None:
                 return self._problem(context, records, diagnostic)
-            desired_owners.append(
-                WireGuardGroupOwnershipRecord(group.profile_id, owner)
-            )
+            owners[group.profile_id] = owner
 
-        desired_owner_tuple = tuple(desired_owners)
-        desired = self._ownership_desired(context, desired_owner_tuple)
-        result = ownership.converge(desired)
-        if not isinstance(result, WireGuardPeerOwnershipResult):
-            return self._problem(
-                context,
-                records,
-                "D.003 returned invalid result type",
+        while True:
+            desired_owner_tuple = tuple(
+                WireGuardGroupOwnershipRecord(
+                    group.profile_id,
+                    owners[group.profile_id],
+                )
+                for group in context.groups
             )
-        if not result.confirmed:
-            return self._problem(
-                context,
-                records,
-                "D.003 owner-state confirmation failed"
-                + (
-                    f": {result.diagnostic}"
-                    if result.diagnostic
-                    else ""
-                ),
+            result = ownership.converge(
+                self._ownership_desired(context, desired_owner_tuple)
             )
+            if not isinstance(result, WireGuardPeerOwnershipResult):
+                return self._problem(
+                    context,
+                    records,
+                    "D.003 returned invalid result type",
+                )
+            if not result.confirmed:
+                return self._problem(
+                    context,
+                    records,
+                    "D.003 owner-state confirmation failed"
+                    + (
+                        f": {result.diagnostic}"
+                        if result.diagnostic
+                        else ""
+                    ),
+                )
 
-        generation = _generation_token(context, desired_owner_tuple)
-        self._context = context
-        self._confirmed_group_owners = desired_owner_tuple
-        self._confirmed_generation = generation
-        return self._projection(
-            context,
-            desired_owner_tuple,
-            generation,
-            tuple(records),
-        )
+            changed = False
+            for group in context.groups:
+                owner_id = owners[group.profile_id]
+                if group.availability_check is None or owner_id is None:
+                    continue
+                assert group_probe is not None
+                observation = self._group_probe(
+                    group,
+                    context,
+                    group_probe,
+                )
+                if observation.outcome is ProbeTechnicalOutcome.REPLY:
+                    continue
+                if observation.outcome is ProbeTechnicalOutcome.LOCAL_ERROR:
+                    return self._problem(
+                        context,
+                        records,
+                        (
+                            f"group {group.profile_id!r} endpoint check through "
+                            f"{owner_id!r} is unconfirmed"
+                            + (
+                                f": {observation.diagnostic}"
+                                if observation.diagnostic
+                                else ""
+                            )
+                        ),
+                    )
+
+                rejected[group.profile_id].add(owner_id)
+                replacement, diagnostic = self._select_group_owner(
+                    group,
+                    current_owners.get(group.profile_id),
+                    observe,
+                    rejected[group.profile_id],
+                )
+                if diagnostic is not None:
+                    return self._problem(context, records, diagnostic)
+                owners[group.profile_id] = replacement
+                changed = True
+                break
+
+            if changed:
+                continue
+
+            generation = _generation_token(
+                context,
+                desired_owner_tuple,
+            )
+            self._context = context
+            self._confirmed_group_owners = desired_owner_tuple
+            self._confirmed_generation = generation
+            return self._projection(
+                context,
+                desired_owner_tuple,
+                generation,
+                tuple(records),
+            )
 
     @staticmethod
     def _select_group_owner(
         group: ManagedWireGuardGroupConfig,
         current_owner: str | None,
         observe,
+        rejected: set[str],
     ) -> tuple[str | None, str | None]:
         memberships = group.peer_memberships
 
-        if current_owner is not None:
+        if current_owner is not None and current_owner not in rejected:
             current_observation = observe(current_owner)
             if current_observation.outcome is ProbeTechnicalOutcome.LOCAL_ERROR:
                 return (
@@ -312,10 +392,8 @@ class WireGuardPeerManager:
                 if not current_membership.reserve:
                     return current_owner, None
 
-                # A usable reserve owner can be displaced only by a
-                # more-preferred usable ordinary candidate.
                 for membership in memberships[:current_index]:
-                    if membership.reserve:
+                    if membership.reserve or membership.peer_id in rejected:
                         continue
                     observation = observe(membership.peer_id)
                     if observation.outcome is ProbeTechnicalOutcome.REPLY:
@@ -323,7 +401,10 @@ class WireGuardPeerManager:
                 return current_owner, None
 
         for membership in memberships:
-            if membership.peer_id == current_owner:
+            if (
+                membership.peer_id == current_owner
+                or membership.peer_id in rejected
+            ):
                 continue
             observation = observe(membership.peer_id)
             if observation.outcome is ProbeTechnicalOutcome.REPLY:
@@ -355,6 +436,33 @@ class WireGuardPeerManager:
             return ProbeTechnicalObservation(
                 ProbeTechnicalOutcome.LOCAL_ERROR,
                 "peer probe port returned invalid observation type",
+            )
+        return value
+
+    def _group_probe(
+        self,
+        group: ManagedWireGuardGroupConfig,
+        context: _PeerContext,
+        group_probe: WireGuardGroupProbePort,
+    ) -> ProbeTechnicalObservation:
+        try:
+            value = group_probe.check(
+                WireGuardGroupProbeOwner(
+                    group.profile_id,
+                    context.device_id,
+                ),
+                group,
+                context.path_route,
+            )
+        except Exception as exc:
+            return ProbeTechnicalObservation(
+                ProbeTechnicalOutcome.LOCAL_ERROR,
+                f"{type(exc).__name__}: {exc}",
+            )
+        if not isinstance(value, ProbeTechnicalObservation):
+            return ProbeTechnicalObservation(
+                ProbeTechnicalOutcome.LOCAL_ERROR,
+                "group probe port returned invalid observation type",
             )
         return value
 
@@ -447,10 +555,6 @@ class WireGuardPeerManager:
                 raise WireGuardPeerManagerError(
                     "recoverable group Device differs from managed WireGuard Device"
                 )
-            if group.availability_check is not None:
-                raise WireGuardPeerManagerError(
-                    "group endpoint probing is not materialized by D.002 yet"
-                )
             if not group.prefixes:
                 raise WireGuardPeerManagerError(
                     "recoverable group prefix bundle must not be empty"
@@ -477,6 +581,26 @@ class WireGuardPeerManager:
                 raise WireGuardPeerManagerError(
                     f"recoverable group references unknown peer {unknown[0]!r}"
                 )
+            check = group.availability_check
+            if check is not None:
+                if (
+                    check.mechanism != "icmp"
+                    or not isinstance(check.target, IPv4Address)
+                ):
+                    raise WireGuardPeerManagerError(
+                        "recoverable group endpoint check must be concrete ICMP"
+                    )
+                if not any(check.target in prefix for prefix in group.prefixes):
+                    raise WireGuardPeerManagerError(
+                        "recoverable group endpoint target is outside group prefixes"
+                    )
+                if any(
+                    check.target == peer.probe_target
+                    for peer in config.peers
+                ):
+                    raise WireGuardPeerManagerError(
+                        "recoverable group endpoint target collides with peer probe target"
+                    )
             for prefix in group.prefixes:
                 if not isinstance(prefix, IPv4Network):
                     raise WireGuardPeerManagerError(
@@ -587,6 +711,14 @@ def _generation_token(
                     }
                     for membership in group.peer_memberships
                 ],
+                "availability_check": (
+                    None
+                    if group.availability_check is None
+                    else {
+                        "mechanism": group.availability_check.mechanism,
+                        "target": str(group.availability_check.target),
+                    }
+                ),
             }
             for group in context.groups
         ],
