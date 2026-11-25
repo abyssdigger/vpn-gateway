@@ -44,3 +44,5 @@ ADD_TAG	ng3-snapshot-binding-release-compatibility-source	34a202113bf01485119069
 DEL_BRANCH	ng3-compatibility-wg-groups-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-recoverable-groups-source	ae33615f08b5ebd69e8c9e6be001c31640fc84e6	WireGuard recoverable network-group requirement and architecture design.
 DEL_BRANCH	ng3-wireguard-recoverable-groups-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-profile-group-config-source	99d6504df63e6adb6c697926f7c65dc1fd5a19a0	Profile-derived WireGuard recoverable-group configuration design.
+DEL_BRANCH	ng3-wireguard-group-config-cdc-20261125
