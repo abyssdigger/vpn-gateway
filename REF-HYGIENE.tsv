@@ -64,3 +64,5 @@ ADD_TAG	ng3-snapshot-probe-plane-union-composition-source	1162cf16faddb8dd019ca0
 DEL_BRANCH	ng3-probe-plane-runtime-composition-cdc-20261125
 ADD_TAG	ng3-snapshot-probe-plane-alpha-runtime-source	6bdadfa6d1abdd47788ac24d7dc108faaf0f7220	Production combined A.007 + D.002 lower probe-plane runtime wiring.
 DEL_BRANCH	ng3-probe-plane-alpha-runtime-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d002-runtime-status-source	2b60751de9620e66b8462cd283cbbef8a8b9abc5	A.008 semantic status carrier for authoritative D.002 realization.
+DEL_BRANCH	ng3-wireguard-d002-runtime-cdc-20261125
