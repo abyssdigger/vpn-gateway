@@ -60,3 +60,5 @@ ADD_TAG	ng3-snapshot-wireguard-d002-group-endpoint-source	829c999e424bf8e769f0c0
 DEL_BRANCH	ng3-wireguard-d002-group-endpoint-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-d003-split-ownership-source	00a5d8bba45e612d7fbf69d30d9406faed934981	Production D.003 split-group WireGuard ownership kernel acceptance.
 DEL_BRANCH	ng3-wireguard-d003-split-kernel-cdc-20261125
+ADD_TAG	ng3-snapshot-probe-plane-union-composition-source	1162cf16faddb8dd019ca0b224708404518fcf0b	Combined A.007 + D.002 pure probe-plane desired composition.
+DEL_BRANCH	ng3-probe-plane-runtime-composition-cdc-20261125
