@@ -534,3 +534,25 @@ when no authoritative realization exists. Code-path review confirms the same nor
 reconciliation function is used by periodic audit and protective-mode explicit normal-release
 checks, while startup performs an initial D.002 trigger before READY.
 
+## EV-00250 — typed architecture traceability and stable evidence-address gate
+
+**Status:** accepted  
+**Scope:** Requirement/Constraint-typed component trace edges; closed architecture coverage from
+structured direct references plus complete-child aggregation instead of arbitrary prose
+mentions; EV-only stable architecture Evidence fields with registry validation; and explicit
+current executable Python reference-implementation trace terminology.  
+**Requirements/model:** `VPNG-D001-R1.R1.R6`, `VPNG-D001-R1.R1.R6.R1`;
+`design/requirements-model.md` §14.  
+**Implementation/evidence:** `design/NG3/code/python/rou/tests/test_architecture_traceability.py`,
+`design/NG3/architecture-ng.md`, `design/NG3/implementation-traceability.md`.  
+**Review:** `design/reviews/NG3-2026-11-25-typed-trace-evidence-gates-review.md`.  
+**Executable evidence:** GitHub Actions run `45594591421`, unit job
+`139137371221` — PASS on source
+`ede2432af7dd2cbf32e8b13084bff37a14ec5e83`; actual-main lineage run
+`45594591509` — PASS.
+
+The strengthened gate itself exposed a previously hidden structured-coverage gap for
+`VPNG-D001-R1.R1.R8` and `VPNG-D001-R1.R1.R8.R3` after their false E.002
+`Constrained by` edges were removed. Their actual owner, architecture §2.9.3, now carries
+the explicit direct coverage.
+
