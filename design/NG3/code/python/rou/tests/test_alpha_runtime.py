@@ -30,13 +30,9 @@ device_order = ["ovpn"]
 
 
 class AlphaPreparedPolicyTests(unittest.TestCase):
-    def test_managed_vpn_is_recognized_and_rejected_before_runtime(self):
-        with self.assertRaisesRegex(
-            AlphaRuntimeError,
-            "managed_vpn configuration is recognized.*wg-main",
-        ):
-            AlphaPreparedPolicy.from_text(
-                """
+    def test_managed_vpn_is_retained_for_runtime_materialization(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            """
 [device.wg-main]
 enabled = true
 use_outbound_nat = true
@@ -59,8 +55,16 @@ direction = "outbound"
 destinations = ["10.253.0.0/16"]
 device_order = ["wg-main"]
 """,
-                local_address=IPv4Address("198.19.255.2"),
-            )
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertEqual(
+            tuple(prepared.current_config.managed_vpns),
+            ("wg-main",),
+        )
+        self.assertEqual(
+            prepared.config.structural.devices["wg-main"].expected_interfaces[0].value,
+            "wg0",
+        )
 
     def test_external_device_still_uses_current_parser_compatibility_path(self):
         prepared = AlphaPreparedPolicy.from_text(

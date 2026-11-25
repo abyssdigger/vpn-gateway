@@ -10,6 +10,11 @@ from unittest.mock import patch
 from rou.binding import LogicalPathId, PathBinding
 from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
+from rou.managed_device_manager import (
+    ManagedDeviceDesiredState,
+    ManagedDeviceRealization,
+)
+from rou.managed_wireguard_adapter import ManagedWireGuardState
 from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
 from rou.release1_config import parse_release1_config
@@ -157,6 +162,30 @@ availability_check = "default"
         self.assertEqual(
             agent.snapshot().availability_state[0].state,
             "unconfirmed",
+        )
+
+    def test_status_carries_authoritative_managed_device_realization(self):
+        agent = RuntimeStatusAgent(self.configured())
+        agent.confirm_managed_devices(
+            (
+                ManagedDeviceRealization(
+                    device_id="ovpn",
+                    desired_state=ManagedDeviceDesiredState.PRESENT,
+                    desired_generation="desired-a",
+                    confirmed_state=ManagedWireGuardState.PRESENT,
+                    confirmed_generation="desired-a",
+                ),
+            )
+        )
+
+        snapshot = agent.snapshot()
+        self.assertEqual(len(snapshot.managed_device_realizations), 1)
+        item = snapshot.managed_device_realizations[0]
+        self.assertEqual(item.desired_generation, "desired-a")
+        self.assertEqual(item.confirmed_generation, "desired-a")
+        self.assertEqual(
+            snapshot.to_dict()["managed_device_realizations"][0]["confirmed_state"],
+            ManagedWireGuardState.PRESENT,
         )
 
     def test_confirmed_effective_state_reports_current_order_and_endpoint(self):
