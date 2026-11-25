@@ -5,6 +5,20 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-25 — Future-possibilities registry established
+
+A project-level non-normative registry now preserves reusable ideas, superseded mechanisms and
+negative results without turning them into backlog or release promises. Every entry carries a
+short Russian human-facing “Смысл” that states what was wanted and why, while technical detail
+remains in linked research/experiment/review material.
+
+The initial pass records traffic-driven managed-Device presence, inbound multipath affinity,
+netkit L3, cross-boundary Profile metadata carriers, superseded host-side return/behavior lanes
+and the rejected universal SystemdDriver abstraction. The traffic-demand research is explicitly
+reclassified as optional future work: current Device Manager development returns to
+configuration-driven redundancy and desired Device presence.
+
+
 ## 2026-11-25 — Generalized managed-WireGuard recovery requirement family closed
 
 The complete `VPNG-U001-R1.R3.R8*` family is now accepted as architecture-closed. The
