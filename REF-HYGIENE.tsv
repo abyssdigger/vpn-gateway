@@ -62,3 +62,5 @@ ADD_TAG	ng3-snapshot-wireguard-d003-split-ownership-source	00a5d8bba45e612d7fbf6
 DEL_BRANCH	ng3-wireguard-d003-split-kernel-cdc-20261125
 ADD_TAG	ng3-snapshot-probe-plane-union-composition-source	1162cf16faddb8dd019ca0b224708404518fcf0b	Combined A.007 + D.002 pure probe-plane desired composition.
 DEL_BRANCH	ng3-probe-plane-runtime-composition-cdc-20261125
+ADD_TAG	ng3-snapshot-probe-plane-alpha-runtime-source	6bdadfa6d1abdd47788ac24d7dc108faaf0f7220	Production combined A.007 + D.002 lower probe-plane runtime wiring.
+DEL_BRANCH	ng3-probe-plane-alpha-runtime-cdc-20261125
