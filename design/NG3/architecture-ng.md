@@ -1752,7 +1752,7 @@ policy.
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`full`]
-- `VPNG-U001-R1.R3.R8` — [`none`]
+- `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
 - `VPNG-M001-R2.R1.R2` — [`full`]
@@ -2881,7 +2881,7 @@ Architectural decisions
 5. `Наблюдение не превращается в заявление об атомарности`
    *Текущие доказательства позволяют применять полное состояние без отдельного защитного ограничения трафика, но не объявляют `wg set` универсально транзакционным. Архитектурная гарантия строится на границе свежего подтверждения, а не на предположении о неделимости команды.*
 
-**Пробел материализации:** Рабочий Enforcer полного состояния `AllowedIPs` с обязательным свежим подтверждением отсутствует.
+**Материализация:** `design/NG3/code/python/rou/wireguard_peer_ownership.py` содержит production-shaped bounded Enforcer полного desired `AllowedIPs` state: перед мутацией fresh-проверяет D.001-owned interface identity, не принимает неожиданный/неполный peer set, применяет один полный `wg set` state и считает успехом только свежо наблюденное точное postcondition. Командная ошибка сама по себе не определяет verdict: если fresh post-state exact, результат confirmed; неоднозначное или несовпадающее состояние остается unconfirmed. Kernel integration этого production Enforcer еще не выполнен, поэтому component-local materialization остается [`partial`].
 
 # Annex E. VPN-GATE-managed host state components
 
