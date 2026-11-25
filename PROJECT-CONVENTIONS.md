@@ -424,6 +424,9 @@ Release cycle начинается с release-specific product decision, а не
 - разрешенные требованиями omissions, которыми для этого выпуска решено воспользоваться;
 - разрешенные omissions, которыми решено **не** пользоваться;
 - release-specific commitments projectholder, не противоречащие нормативным требованиям;
+- compatibility role выпуска: `binding` или `non-binding`, причем до первого явно
+  назначенного `binding release` отсутствие такого назначения не может интерпретироваться
+  как возникновение compatibility guarantee;
 - известные release evidence/deployment boundaries, если они являются частью решения о scope;
 - дата/контекст projectholder approval.
 
@@ -447,6 +450,27 @@ Release cycle начинается с release-specific product decision, а не
 
 Для релизных версий используется Semantic Versioning 2.0.0 в форме
 `MAJOR.MINOR.PATCH`. До объявления стабильной совместимости допустимы версии `0.x.y`.
+
+Compatibility obligation возникает не из факта публикации версии, а из явного release-specific
+решения projectholder:
+
+- до первого выпуска, назначенного `binding`, опубликованные версии являются
+  `non-binding` относительно межверсионной обратной совместимости, если projectholder явно
+  не установил иное;
+- первый `binding release` создает исходный compatibility baseline для поддерживаемых
+  внешних контрактов, попавших под compatibility guarantee;
+- после появления такого baseline последующие выпуски той же major-линии должны сохранять
+  обратную совместимость этих контрактов согласно `VPNG-M001-R4`;
+- переход к новой major-версии может содержать намеренные несовместимые изменения, но они
+  должны быть явно перечислены в утвержденном `RELEASE-SCOPE.md`, а применимые последствия
+  и migration path должны быть документированы до release decision;
+- контракт, явно исключенный из compatibility guarantee нормативным требованием или
+  утвержденным release scope, не получает гарантию только потому, что присутствовал в
+  предыдущем выпуске.
+
+Если compatibility guarantee уже действует, release QA/fulfillment обязаны рассматривать ее
+как часть обычного requirements + approved release scope frontier; несовместимое изменение,
+не разрешенное новой major-границей и утвержденным scope, является release blocker.
 
 После scope gate при подготовке конкретного выпуска:
 
