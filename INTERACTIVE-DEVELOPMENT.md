@@ -1,69 +1,47 @@
-# INTERACTIVE DEVELOPMENT (ID) RULES
+# INTERACTIVE EXECUTION (ID) OVERLAY
 
-**Scope:** live-dialog execution extension for an already active Continuous Development (CD)
-session.
+**Scope:** live-dialog / external-lane interaction semantics for an active continuous execution
+loop.
 
-Interactive Development (ID) does not activate CD, grant repository/GitHub authorization,
-change the CD clock or redefine CD stop conditions. Those rules remain owned by
-`AGENTS.md` and `CONTINUOUS-DEVELOPMENT.md`.
+The established filename is retained for compatibility, but ID is no longer a development-only
+mechanism.
 
-ID exists only to make execution inside one active dialog turn explicit and mechanically
-continuous: after each local operation the agent must continue through the parent CD execution
-gates instead of treating conversational completion as an implicit stop.
+ID does not grant repository/GitHub authorization, select a work-mode overlay, reset/change the
+loop clock or redefine generic stop conditions. Those remain owned by `AGENTS.md`,
+`EXECUTION-LOOP.md` and the active work-mode overlays.
 
 ## 1. Entering ID
 
-ID applies only when the projectholder explicitly requests interactive/in-dialog development
-for an active CD session, or explicitly resumes such an ID execution.
+ID applies when the projectholder explicitly requests/resumes interactive/in-dialog execution,
+including the established `ID` / `IDC` shorthand.
+
+Under `EXECUTION-LOOP.md`, explicit ID/IDC is a composite shorthand that starts/resumes the
+generic loop with this interaction overlay. It does **not** imply development.
 
 Before interactive work continues:
 
-1. establish that CD is currently active under `CONTINUOUS-DEVELOPMENT.md`;
-2. read this document if it has not already been read unchanged in the active context;
-3. preserve the parent CD `CYCLE_START_TIME`, branch and authorization boundary;
-4. identify the current review unit/work frontier;
+1. establish the generic loop clock/control state;
+2. read this document if not already read unchanged in active context;
+3. identify the current work-mode overlay(s) and active unit/frontier;
+4. preserve the existing authorization boundary;
 5. when an external message/event lane is used, establish the last **processed** semantic
-   frontier rather than a fresh read snapshot.
+   frontier rather than a fresh-read snapshot.
 
-Reading this document does not activate or resume CD.
-
-### ID control marker
-
-At ID entry and after every parent `EXEC_NEXT` transition, maintain a compact execution marker
-in the active dialog/control context:
-
-```text
-ID_STATE: WORK | WAIT | STOPPING
-ACTIVE_UNIT: <current review unit/work frontier>
-NEXT: <concrete next operation or awaited event>
-PROCESSED_FRONTIER: <last processed external-input frontier, when applicable>
-STOP_BASIS: <empty unless STOPPING>
-```
-
-The marker is execution control state, not a repository artifact and not a source of
-authorization. It need not be published unless an independent communication protocol requires
-a lifecycle record.
+At ID entry and after every `EXEC_NEXT` transition, keep the generic loop control marker
+current, especially `NEXT`, `PROCESSED_FRONTIER` and `STOP_BASIS`.
 
 ## 2. Live-turn continuation
 
-ID uses the general `EXEC_NEXT` gate from `CONTINUOUS-DEVELOPMENT.md` after every bounded local
+ID uses the generic `EXEC_NEXT` gate from `EXECUTION-LOOP.md` after every bounded local
 operation.
 
-- `WORK` means execute the next concrete authorized/safe operation and then return to
-  `EXEC_NEXT`.
-- `WAIT` means enter an applicable bounded event/input wait and then return to `EXEC_NEXT`
-  when it returns.
-- `STOP` is invalid until the parent `PRE_FINAL_GATE` succeeds.
+- `WORK` executes the next concrete authorized/safe operation, then returns to `EXEC_NEXT`;
+- `WAIT` enters an applicable bounded event/input wait, then returns to `EXEC_NEXT`;
+- `STOP` is invalid until the generic `PRE_FINAL_GATE` succeeds.
 
-Completing any of the following does **not** itself end the active turn:
-
-- one tool call or tool batch;
-- one analysis/design/implementation step;
-- one review or evidence operation;
-- one review unit;
-- one development block;
-- one peer response;
-- one bounded wait window.
+Completing one tool batch, analysis/research/design/implementation step, review/evidence
+operation, work unit/block, peer response or bounded wait window does not itself end the active
+turn.
 
 Conversational convenience is not a stop condition.
 
@@ -71,79 +49,82 @@ Conversational convenience is not a stop condition.
 
 When `WAIT` is materialized through a watcher or another bounded polling/event primitive:
 
-1. its input frontier is the last **processed** external input, not all input visible when the
+1. its input frontier is the last **processed** external input, not everything visible when the
    wait starts;
-2. the first read/check occurs before the first sleep so already-arrived unprocessed input is
-   returned immediately;
+2. the first check occurs before the first sleep so already-arrived unprocessed input returns
+   immediately;
 3. timeout does not advance the processed frontier;
 4. relevant returned input is processed before the frontier advances;
-5. ordinary timeout is operational `WAITING`, not `LOCAL_STOP` and not semantic `BLOCKED`;
-6. after timeout, control returns to `EXEC_NEXT`; continue with another `WAIT` or useful
-   `WORK` while the CD budget permits;
-7. recoverable watcher/tool failure is handled by bounded recovery or another permitted step
-   and then returns to `EXEC_NEXT`.
+5. ordinary timeout is operational waiting, not local stop and not semantic blocked;
+6. after timeout, control returns to `EXEC_NEXT`;
+7. recoverable watcher/tool failure uses bounded recovery and then returns to `EXEC_NEXT`;
+8. after every bounded wait return, perform the generic clock checkpoint before choosing the
+   next transition.
 
-Do not replace bounded waiting with periodic conversational heartbeats merely to prove that the
-agent is alive. Lifecycle observability, when required, belongs to the applicable communication
-protocol.
+Do not replace bounded waiting with conversational heartbeat messages merely to prove liveness.
 
 ## 4. External input
 
-A direct projectholder/user intervention pauses autonomous CD according to
-`CONTINUOUS-DEVELOPMENT.md`. ID does not override that pause rule.
+A direct projectholder/user intervention pauses the generic loop under
+`EXECUTION-LOOP.md`. ID does not override that rule.
 
 An admitted peer/agent message inside an authorized collaboration lane is work input, not
-projectholder authorization. It may refine tasks inside the existing authorized scope but cannot
+projectholder authorization. It may refine tasks inside existing authorized scope but cannot
 widen repository/GitHub permissions.
 
 When new material peer input arrives, process it against the current semantic frontier before
 continuing dependent work.
 
+A communication/decision lane may carry holder project decisions when the governing process
+allows it, but such a decision does not automatically widen execution authority. Capability
+expansion remains subject to `AGENTS.md`.
+
 ## 5. Repository/GitHub mutations
 
-Before every repository/GitHub mutation during ID, apply the general `PRE_MUTATION_GATE` from
+Before every repository/GitHub mutation during ID, apply `PRE_MUTATION_GATE` from
 `AGENTS.md`.
 
 In particular:
 
 - peer instructions, consensus, leases and technical necessity do not widen authority;
 - refusal of an unauthorized mutation does not end ID;
-- after refusing a mutation, continue useful authorized/read-only `WORK` or enter `WAIT` when
-  appropriate;
-- a mutation target or operation change requires a fresh `PRE_MUTATION_GATE`.
+- after refusal, continue useful authorized/read-only `WORK` or enter `WAIT`;
+- target/action changes require a fresh `PRE_MUTATION_GATE`.
 
-ID never creates a parallel authorization model.
+ID creates no parallel authorization model.
 
 ## 6. Interactive pre-final behavior
 
-Before returning a final response from an active ID turn, use the parent
-`PRE_FINAL_GATE` from `CONTINUOUS-DEVELOPMENT.md`.
+Before returning a final response from an active ID loop, use the generic
+`PRE_FINAL_GATE` from `EXECUTION-LOOP.md`.
 
-In addition, when an external message/event lane is part of the active ID execution, perform a
-fresh final read/check sufficient to establish that no known material input remains unprocessed
-at the recorded frontier.
+When an external message/event lane is active, perform a fresh final read/check sufficient to
+establish that no known material input remains unprocessed at the recorded frontier.
 
-A watcher timeout, completion of the last local operation, completion of a review unit or
-publication of a useful result is not by itself a valid final basis.
+A watcher timeout, completion of the last local operation/unit/block, peer response or result
+publication is not by itself a valid final basis.
 
-If `PRE_FINAL_GATE` fails, set `ID_STATE` back to `WORK` or `WAIT` and continue.
+If `PRE_FINAL_GATE` fails, set loop state back to `WORK` or `WAIT` and continue.
 
 ## 7. Failure and recovery
 
-Do not infer a platform limitation merely because a wait or tool operation failed once.
+Do not infer a platform limitation merely because one wait/tool operation failed.
 
 - recoverable/transient failure -> bounded recovery, then `EXEC_NEXT`;
-- confirmed unrecoverable failure that prevents meaningful continuation -> parent CD may use
-  the applicable external-blocker stop basis;
-- ambiguous state after a context/turn loss -> on explicit resume, perform fresh semantic
-  replay and reconstruct the ID control marker before dependent work.
+- confirmed unrecoverable failure preventing meaningful continuation -> generic external-blocker
+  stop basis may apply;
+- ambiguous state after context/turn loss -> on explicit resume, replay durable external state
+  and reconstruct the processed frontier/control marker before dependent work.
 
-ID does not reset the parent CD clock on recovery/resume.
+Recovery does not reset the loop clock or widen authority.
 
 ## 8. Leaving ID
 
-ID ends only when the parent CD is paused/stopped under its own rules, the projectholder
-explicitly ends interactive execution, or `PRE_FINAL_GATE` confirms another valid CD stop basis.
+The ID overlay ends only when:
 
-Before leaving, produce the parent CD handoff/conclusion required for that stop basis. A later
-interactive continuation requires explicit resume under the same CD activation rules.
+- the generic loop stops/pauses under its own rules;
+- the projectholder explicitly removes/ends the interactive overlay; or
+- work continues in a non-interactive mode explicitly selected by the projectholder/process.
+
+Ending ID does not by itself end another active work-mode overlay. Ending another overlay does
+not by itself end ID if useful interactive work remains.

@@ -1,45 +1,36 @@
-# CONTINUOUS DESIGN AND DEVELOPMENT RULES
+# CONTINUOUS DEVELOPMENT (CD) OVERLAY
 
-**Scope:** autonomous continuous-development (CD) execution after the user explicitly starts
-or resumes a CD cycle.
+**Scope:** development semantics for an active continuous execution loop.
 
-This document owns the CD execution model, review/development-block cadence, session clock and
-handoff. It does not own repository write authorization, `main` publication, requirement
-semantics, component semantics, documentation conventions or Git-history policy.
+This document is a work-mode overlay on `EXECUTION-LOOP.md`. It owns development/review units,
+development progression, development-specific evidence/review, branch/publication behavior and
+development additions to the common handoff.
 
-Those subjects are owned by `AGENTS.md`, `design/requirements-model.md`,
-`design/component-model.md`, current-stage normative artifacts and
-`PROJECT-CONVENTIONS.md`.
+It does not own generic loop transitions/finalization, repository authorization, requirement
+semantics, component semantics or artifact conventions.
 
-`INTERACTIVE-DEVELOPMENT.md` is an optional execution extension for an already active CD when
-the user explicitly requests interactive/in-dialog development. It does not activate CD, reset
-or replace the CD clock, change CD stop semantics or widen repository/GitHub authorization.
+## 1. Entering development
 
-## 1. Entering CD
+Explicit projectholder `CD` / `CDC` start/resume/continue wording activates the generic loop
+and this development overlay under `AGENTS.md`.
 
-A CD cycle starts or resumes only after an explicit user instruction to start/resume/continue
-CD execution.
+A generic loop, ID/IDC or research-loop instruction does not activate development.
 
-Before any other CD preparation:
+Before development work:
 
-1. choose `CYCLE_INTERVAL`: the user-specified interval, otherwise **30 minutes**;
-2. obtain fresh real current time in UTC and record it as `CYCLE_START_TIME` using an explicit UTC offset (`Z` or `+00:00`);
-3. read this document if it has not already been read unchanged in the current response;
-4. apply the `AGENTS.md` reading gate to the actual CD task and read only the relevant
-   normative/project documents;
-5. create/select the dedicated CD working branch.
+1. establish the generic loop state and clock from `EXECUTION-LOOP.md`;
+2. read this document if not already read unchanged in the active context;
+3. apply the `AGENTS.md` reading gate to the actual development scope;
+4. create/select the dedicated CD working branch when mutation is authorized by the active CD;
+5. identify the current review unit/development frontier.
 
-If fresh real UTC time cannot be obtained, do not begin autonomous CD mutation.
-
-The clock starts before mandatory reading or preparation. Commit timestamps are not a
-substitute for `CYCLE_START_TIME`. Local timezone, inferred location and changes of either
-during the session do not participate in the CD clock.
+All repository/GitHub mutations still pass `PRE_MUTATION_GATE` from `AGENTS.md`.
 
 ## 2. Review units and development blocks
 
 Work proceeds in coherent **review units**.
 
-A review unit is the smallest change that can be independently:
+A review unit is the smallest development change that can independently be:
 
 - traced to the accepted need that justifies it;
 - designed when design is required;
@@ -50,12 +41,11 @@ A review unit is the smallest change that can be independently:
 
 A review unit may contain only requirements/design work and no code.
 
-A **development block** is one or more review units that together produce one completed
-logical result. A CD time window is not automatically a review-unit or development-block
-boundary.
+A **development block** is one or more review units that together produce one completed logical
+development result. A loop time window is not automatically a review-unit or
+development-block boundary.
 
-`main` snapshot rules for completed development blocks are owned exclusively by
-`AGENTS.md`.
+`main` snapshot rules remain owned exclusively by `AGENTS.md`.
 
 ## 3. Normal development flow
 
@@ -71,72 +61,41 @@ accepted need
     -> accepted fixes
 ```
 
-Only the phases relevant to the current unit are performed. A documentation-only or
+Only phases relevant to the current unit are performed. A documentation-only or
 requirement-only unit need not manufacture implementation/evidence phases that do not apply.
 
 If a later phase exposes an earlier insufficiency, return to the earliest insufficient owner
 instead of inventing semantics locally.
 
-### Mandatory execution transition gate
-
-After every bounded local operation that returns execution control to the agent, perform
-`EXEC_NEXT` before deciding whether to continue or finish the active turn.
-
-A local operation includes, for example:
-
-- a tool/read/write batch;
-- a commit/publication or its verification;
-- a validation/test/review result;
-- completion of one analysis/design/implementation step;
-- completion of a review unit or development block;
-- return from a bounded external-event wait.
-
-`EXEC_NEXT` must choose exactly one transition:
-
-- `WORK` — a concrete, sufficiently defined, authorized and safe next step exists; execute it;
-- `WAIT` — progress depends on an external event/input and the active execution mode provides
-  an applicable bounded wait mechanism; enter that wait, then return to `EXEC_NEXT` when it
-  returns for input, timeout or recoverable error;
-- `STOP` — continuation is not permitted/appropriate under a currently true CD stop basis;
-  enter `PRE_FINAL_GATE` before ending the turn.
-
-Completion of a local operation, review unit, originally mentioned subsystem or development
-block is not by itself a `STOP` basis. A bounded wait timeout is likewise not a `STOP` basis.
-
-When active CD is running under `INTERACTIVE-DEVELOPMENT.md`, that document defines the
-live-dialog mechanics for `WAIT` and continuation but does not change these transition
-semantics.
+After every bounded development operation, return to the generic `EXEC_NEXT` gate.
 
 ### Requirement work
 
-For requirement semantics, refinement, constraints, requirement status and requirement-tree
-maintenance, follow `design/requirements-model.md` and the relevant current-stage
-Requirement/Constraint ancestry.
+Requirement semantics, refinement, constraints, statuses and requirement-tree maintenance follow
+`design/requirements-model.md` and the relevant current-stage Requirement/Constraint ancestry.
 
 CD adds no parallel requirement model.
 
 ### Component/architecture work
 
-For component roles, interaction semantics and decomposition, follow
-`design/component-model.md` and the relevant current-stage architecture.
+Component roles, interactions and decomposition follow `design/component-model.md` and the
+relevant current architecture.
 
 CD adds no parallel component model.
 
 ### Implementation gate
 
-Implementation may proceed only when the relevant requirement and architecture decisions are
+Implementation may proceed only when relevant requirement and architecture decisions are
 sufficient for that implementation scope.
 
-For a non-trivial materialization, the gate also requires the applicable checks from
-`design/requirements-model.md` and `design/component-model.md`: the affected-obligation
-impact frontier, semantic composition of component contracts and partial-transition semantics
-where the implementation contains multi-step state-changing behavior. This includes inherited
-architecture whose consequences first become observable in the current unit.
+For a non-trivial materialization, also apply the affected-obligation frontier, semantic
+composition and partial-transition checks required by `design/requirements-model.md` and
+`design/component-model.md`.
 
-If the implementation would have to choose new product semantics, ownership, observable
-behavior or an unresolved architecture contract, return to the governing normative artifact.
+If implementation would have to choose new product semantics, ownership, observable behavior or
+an unresolved architecture contract, return to the governing normative artifact.
 
-## 4. Classification of discoveries
+## 4. Development discoveries and research composition
 
 Classify discoveries by their real owner:
 
@@ -144,12 +103,15 @@ Classify discoveries by their real owner:
 | --- | --- |
 | product meaning/scope is insufficient | return to requirements |
 | component responsibility/interaction is insufficient | return to architecture/component design |
-| external/kernel/protocol fact is unknown | run the cheapest sufficient technical experiment/evidence |
+| external/kernel/protocol/platform fact is unknown | enter/apply the research overlay and obtain the cheapest sufficient evidence |
 | implementation violates an accepted contract | fix implementation and evidence |
-| attractive new product idea without accepted need | keep it out of the current unit until separately accepted |
+| attractive new product idea without accepted need | keep it outside the current unit until separately accepted |
 
-A technical experiment may establish facts. It must not decide what the product is supposed
-to mean.
+Entering a research unit inside active CD does not start a new loop, reset the clock or widen
+authority.
+
+A technical experiment may establish facts. It must not decide what the product is supposed to
+mean.
 
 ## 5. Evidence and experiments
 
@@ -166,192 +128,125 @@ safety decisions.
 Routine permanent automated tests do not need a separate dossier merely because they are
 evidence.
 
-Experiment artifact placement, historical-result preservation and result/disposition records
-follow `PROJECT-CONVENTIONS.md` and the experiment instructions referenced there.
+Research/evidence classification follows `RESEARCH.md` when that overlay is active.
+Experiment artifact placement and historical-result preservation follow
+`PROJECT-CONVENTIONS.md` and the experiment instructions referenced there.
 
 ## 6. Expert review
 
-A non-trivial review unit must receive an expert review appropriate to its scope before it is
+A non-trivial review unit must receive an expert review appropriate to its scope before being
 treated as accepted.
 
-Review the actual unit against its governing requirements/contracts and evidence. Do not
-reconstruct unrelated parts of the project merely to perform a local review.
+Review the actual unit against governing requirements/contracts and evidence. Do not reconstruct
+unrelated project areas merely to perform a local review.
 
 Within the same review unit, perform two analytical directions:
 
-1. **contract-conformance pass** — does the actual design/implementation satisfy the accepted
+1. **contract-conformance pass** — does the actual design/implementation satisfy accepted
    contracts and claimed postconditions;
 2. **counterexample pass** — in what permitted state, event ordering, execution context or
-   failure point can the implementation violate an accepted obligation even when its main
-   local operations behave as designed.
+   failure point can the implementation violate an accepted obligation even when main local
+   operations behave as designed.
 
 For stateful multi-step mechanisms the counterexample pass includes partial execution after
-material side effects, using the transition rules from `design/component-model.md`.
+material side effects under `design/component-model.md`.
+
 Evidence claims remain limited to properties actually tested under
-`design/requirements-model.md`; a successful steady-state path does not silently prove a
-different startup/recovery/failure context. Current-state documentation whose truth depends on
-the change is checked under `PROJECT-CONVENTIONS.md`.
+`design/requirements-model.md`; steady-state success does not silently prove startup/recovery/
+failure behavior.
 
-These are two directions of one expert review, not two review units, two documents or a
-requirement to invoke a second reviewer/model.
+Every material finding receives an explicit disposition under `PROJECT-CONVENTIONS.md`.
 
-Every material finding receives an explicit disposition according to
-`PROJECT-CONVENTIONS.md`.
-
-If review changes the implementation/design materially, re-run the evidence invalidated by
-that change and review the changed scope again.
+If review materially changes design/implementation, re-run invalidated evidence and review the
+changed scope again.
 
 ## 7. Blocking, deferral and human decisions
 
-An unresolved problem blocks only the scope that depends on it.
+An unresolved development problem blocks only the scope depending on it.
 
 A temporary ambiguity is not automatically a project-wide deferral. Persistent accepted
-postponements belong in the project's deferral mechanism defined by the relevant project
-conventions/artifacts.
+postponements belong in the project's deferral mechanism.
 
-When the governing requirements/model require a human product decision, stop the dependent
-scope and ask. Before escalating, apply the real-ambiguity check from
-`design/requirements-model.md`: do not ask the human to choose among alternatives already
-excluded by accepted obligations or alternatives that exist only by introducing a new,
-unaccepted constraint. Continue independent unblocked work when useful and allowed by the
-active CD.
+When governing requirements/model require a human product decision, stop the dependent scope
+and apply the real-ambiguity check from `design/requirements-model.md`. Continue independent
+unblocked work when useful and permitted.
 
-The global process-correction gate and all repository/Git authorization rules are owned by
-`AGENTS.md`, not this document.
+If no meaningful unblocked work remains, the generic loop may use a human-decision/external-
+blocker stop basis or `WAIT` when an active interaction overlay provides an applicable lane.
 
 ## 8. CD branch and publication discipline
 
-All CD commits use the dedicated working branch for the cycle/current continuation.
+All CD commits use the dedicated working branch for the active development cycle/continuation.
 
-Commit publication, remote-publication verification, publication-failure behavior, `main`
-protection and snapshot rules are defined only by `AGENTS.md`.
+Commit publication, remote verification, `main` protection and snapshots are owned by
+`AGENTS.md`.
 
 Failure to publish a commit, failure to confirm the expected remote ref, or ambiguous remote
-state is therefore an immediate CD stop condition.
+publication state is an immediate development stop condition.
 
-A failed CI/test/review/evidence result after an unambiguously successful publication is not
-itself a CD stop condition. Diagnose it before further mutation and, when `AGENTS.md` permits
-a bounded corrective change within the current accepted scope, fix and re-validate it as part
-of the same CD.
+A failed CI/test/review/evidence result after successful publication is not itself a stop
+condition. Diagnose read-only first and, when `AGENTS.md` permits a bounded corrective change
+inside current accepted scope, fix and revalidate it.
 
-## 9. Time checks
+## 9. Development clock checkpoints
 
-After **every commit**, and at development-block/handoff boundaries, obtain fresh real current
-time in UTC and compare that UTC instant with the UTC `CYCLE_START_TIME`. All recorded CD
-clock-check timestamps use an explicit UTC offset (`Z` or `+00:00`).
+The generic clock and safety reserve are owned by `EXECUTION-LOOP.md`.
 
-Do not reset `CYCLE_START_TIME` because:
+In addition to its generic checkpoints, obtain fresh real UTC time:
 
-- a development block completed;
-- the user sent a message;
-- the cycle branch changed for a continuation;
-- a snapshot was published.
+- after **every commit**;
+- at every development-block boundary;
+- immediately before a development handoff/snapshot decision.
 
-The cycle interval is a session-safety boundary, not a logical-development boundary.
+Do not reset `CYCLE_START_TIME` because a development block completes, the branch changes or a
+snapshot is published.
 
-## 10. User intervention pauses CD
-
-Any new user intervention pauses autonomous CD writes immediately.
-
-Handle the new instruction/question first. Resume autonomous CD only after an explicit
-resume/continue instruction.
-
-If the intervention explicitly requests one repository change, that instruction authorizes
-only that change under `AGENTS.md`; completing it does not resume the rest of CD.
-
-The original CD clock remains unchanged while paused.
-
-## 11. Continuation across development blocks
+## 10. Continuation across development blocks
 
 When a development block completes:
 
-1. perform the required review/evidence for that block;
-2. publish its completed state according to the `AGENTS.md` snapshot rules applicable to
-   the active CD;
-3. obtain fresh current time.
+1. perform required review/evidence;
+2. publish its completed state according to applicable `AGENTS.md` snapshot rules;
+3. perform the development clock checkpoint;
+4. return to generic `EXEC_NEXT`.
 
-If fewer than **3 minutes** remain before `CYCLE_INTERVAL`, finish the cycle with a handoff.
+If the session-safety reserve has been reached, use the generic stop/handoff path.
 
-Otherwise select the next highest-priority sufficiently defined and unblocked development
-block from the current project frontier, preferring logically adjacent work when priority is
-otherwise equal.
+Otherwise select the next highest-priority sufficiently defined and unblocked development block
+from the current project frontier, preferring logically adjacent work when priority is otherwise
+equal. The loop may also enter another applicable work-mode overlay, such as research, without
+starting a new cycle.
 
-A CD does not end merely because the originally mentioned subsystem finished.
+A development cycle does not end merely because the originally mentioned subsystem finished.
 
-Early stop before the session boundary is appropriate only when:
+Do not manufacture work merely to fill the clock.
 
-- a required human decision blocks meaningful continuation;
-- an external blocker prevents further meaningful work;
-- there is no sufficiently defined unblocked development block;
-- publication fails or remote publication state is ambiguous;
-- a validation failure cannot be safely corrected within the current authorized and accepted
-  scope without a human decision or exceptional repository recovery;
-- the remaining session margin is insufficient for safe work plus handoff.
+## 11. Development handoff additions
 
-Do not manufacture work just to fill the clock.
+The common handoff is defined by `EXECUTION-LOOP.md`.
 
-## 12. Session-safety stop and handoff
+When development is active, additionally include:
 
-As the cycle approaches `CYCLE_INTERVAL`, prefer a safe technical stopping point and a
-usable handoff over squeezing in another change.
-
-Do not intentionally run materially beyond the interval to finish a block.
-
-### Mandatory pre-final gate
-
-Before ending an active CD turn or returning a final/handoff response, perform
-`PRE_FINAL_GATE`.
-
-The gate must:
-
-1. name the exact currently applicable stop basis from this document (for example user
-   intervention pause, required human decision/external blocker, publication ambiguity, no
-   sufficiently defined unblocked work, or the session-safety boundary);
-2. verify that basis against current observable facts rather than inference from completion of
-   the last local operation;
-3. verify that the active work frontier has no safer permitted `WORK` transition and, when an
-   applicable bounded waiting mechanism exists, no required `WAIT` transition;
-4. prepare the required truthful handoff/conclusion for the actual stop basis.
-
-If no permitted stop basis is currently true, `STOP` is invalid: do not return a final
-response; return to `EXEC_NEXT` and choose `WORK` or `WAIT`.
-
-At the stop:
-
-- leave all verified published commits on the working branch;
-- do not create an artificial completion commit;
-- do not publish a snapshot merely because the time window ended;
-- accurately distinguish published/verified work from any unverified work;
-- provide the handoff in chat, not as a repository artifact unless it independently belongs
-  in the project.
-
-The handoff contains only what is needed to resume cheaply:
-
-- `CYCLE_INTERVAL` and UTC `CYCLE_START_TIME`;
 - active branch and current verified head;
 - base/`main` snapshot when relevant;
 - completed review units/development blocks;
-- exact unfinished work and current technical state;
-- tests/experiments/reviews that are green, red or pending;
-- short plan for the **current unfinished development block**;
-- decisions genuinely requiring human agreement;
+- current unfinished development block and technical state;
+- development tests/experiments/reviews that are green, red or pending;
 - current accumulated requirement-state inventory relevant to the work:
-  active/resolved `decomp` links, active `unreal`, active `broken`, and
-  `rejected_closure` nodes.
+  active/resolved `decomp`, active `unreal`, active `broken`, and `rejected_closure`.
 
-After a handoff, autonomous development remains stopped until the user explicitly starts or
-resumes CD again.
+Do not create an artificial completion commit or snapshot merely because the session boundary
+was reached.
 
-## 13. Completion of a development scope
+## 12. Completion of development scope
 
-A scope is complete only when its required product behavior is represented by accepted
-requirements, its material architecture/implementation is traceable to them, required
-evidence has passed, and review has no unresolved finding that can materially affect
-correctness, safety or required behavior.
+A development scope is complete only when required product behavior is represented by accepted
+requirements, material architecture/implementation is traceable to them, required evidence has
+passed, and review has no unresolved finding materially affecting correctness, safety or
+required behavior.
 
-Completion of a CD scope or development block is not a release decision and does not by itself
-create a release candidate. Release preparation, fulfillment review, version accounting and
-publication follow the project release methodology in `PROJECT-CONVENTIONS.md`.
+Completion of a development scope/block is not a release decision and does not by itself create
+a release candidate. Release preparation and publication follow `PROJECT-CONVENTIONS.md`.
 
 If final review finds a material issue, fix it and re-review the affected changed baseline.
 Repeated clean reviews without intervening changes are not required.

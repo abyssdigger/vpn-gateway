@@ -25,14 +25,25 @@ Normal subject owners:
 - current-stage architecture — accepted architectural realization;
 - experiment/review artifacts — only when their evidence/history is relevant.
 
-`CONTINUOUS-DEVELOPMENT.md` is **not** a general prerequisite. Read it when the user
-explicitly starts/resumes CD, or when the task itself edits/reviews CD process.
-Do not read `CONTINUOUS-DEVELOPMENT.md` merely because a task resembles CD work; reading or
-planning under that document must not itself activate CD.
+`EXECUTION-LOOP.md` is **not** a general prerequisite. Read it when the projectholder
+explicitly starts/resumes a continuous execution loop, when an explicitly activated overlay
+(`CD/CDC`, `ID/IDC`, or a research loop) composes with that loop, or when the task itself
+edits/reviews loop process. Reading it must not activate or resume a loop.
+
+`CONTINUOUS-DEVELOPMENT.md` is **not** a general prerequisite. Read it when the projectholder
+explicitly starts/resumes CD/CDC, when an active execution loop enters the development overlay,
+or when the task itself edits/reviews development process. Reading or planning under it must
+not itself activate CD.
 
 `INTERACTIVE-DEVELOPMENT.md` is likewise **not** a general prerequisite. Read it only when
-the projectholder explicitly starts/resumes interactive/in-dialog execution of active CD, or
-when the task edits/reviews the ID process itself. Reading it must not activate or resume CD.
+the projectholder explicitly starts/resumes ID/IDC or another interactive/in-dialog execution
+of an active loop, or when the task edits/reviews the ID process itself. Reading it must not
+activate or resume the loop.
+
+`RESEARCH.md` is likewise **not** a general prerequisite. Read it when the projectholder
+explicitly starts/resumes a continuous research loop, when an active loop enters a research
+unit, or when the task edits/reviews research process. Ordinary one-shot investigation does
+not become a continuous loop merely because this document is relevant.
 
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into
@@ -93,6 +104,14 @@ The following do **not** start or resume CD:
 
 If explicit CD activation wording is absent, treat CD as inactive and apply the outside-CD
 authorization rules, even when the requested work is substantial or experimental.
+
+Explicit CD/CDC activation starts or resumes the generic execution loop from
+`EXECUTION-LOOP.md` with the development overlay active. It does **not** automatically activate
+the interactive or research overlay.
+
+Conversely, starting/resuming a generic loop, ID/IDC or a research loop without CD does not
+grant repository/GitHub write authority. Outside active CD, the ordinary outside-CD
+authorization rules below remain fully applicable.
 
 The agent must not convert an ordinary task into CD on the user's behalf.
 
@@ -300,34 +319,43 @@ If the remote head changes after approval, stop and re-review.
 
 ## 6. Process-correction gate
 
-A governing process/Git/snapshot/CD rule is changed only after read-only diagnosis, an
-explicit explanation of the proposed replacement and affected process artifacts, and explicit
-user agreement. Then change only the agreed scope under the normal write gate.
+A governing process/Git/snapshot/execution-loop/development/interactive/research rule is changed
+only after read-only diagnosis, an explicit explanation of the proposed replacement and affected
+process artifacts, and explicit user agreement. Then change only the agreed scope under the
+normal write gate.
 
 Ordinary implementation/test defects do not use this gate unless they change governing
 process.
 
 ## 7. Responsibility split between operating documents
 
-The four top-level operating documents have deliberately non-overlapping responsibilities:
+The top-level operating documents have deliberately non-overlapping responsibilities:
 
-1. `AGENTS.md` contains **general rules for the agent's work with the repository**:
-   reading discipline, write authorization and the general pre-mutation authorization gate,
-   working-branch publication, `main` protection, snapshots, exceptional Git-history
-   operations, process-correction gate and ownership of the other governing documents.
-2. `CONTINUOUS-DEVELOPMENT.md` contains **only the machinery required to keep an explicitly
-   requested CD session continuous and safe in time**: cycle start, real-time clock,
-   continuation across work, execution-transition/finalization gates, pause/resume, session
-   boundary and handoff. It must not duplicate general repository policy,
-   requirement/component methodology or artifact-format rules.
-3. `INTERACTIVE-DEVELOPMENT.md` contains **only the live-dialog specialization of active CD**:
-   continuation inside one active dialog turn, bounded event waiting, processing-frontier
-   discipline and composition with the general CD/repository gates. It must not activate CD,
-   widen repository authorization or duplicate CD timing/stop semantics.
-4. `PROJECT-CONVENTIONS.md` contains **only project-artifact maintenance conventions**:
+1. `AGENTS.md` contains **general repository/GitHub authority rules**:
+   reading discipline, write authorization and `PRE_MUTATION_GATE`, working-branch publication,
+   `main` protection, snapshots, exceptional Git-history operations, process-correction gate and
+   ownership of the other governing documents.
+2. `EXECUTION-LOOP.md` contains **generic continuous-execution machinery**:
+   cycle activation, clock/session boundary, `EXEC_NEXT`, generic `WORK/WAIT/STOP` semantics,
+   user pause/resume, `PRE_FINAL_GATE`, recovery and the common handoff core. It grants no
+   repository/GitHub authority and defines no development or research semantics.
+3. `CONTINUOUS-DEVELOPMENT.md` contains **the development overlay**:
+   development/review units and blocks, requirement/architecture/implementation/evidence/review
+   progression, development-specific blocking, branch/publication discipline and the development
+   additions to the common handoff. It must not duplicate generic loop mechanics or repository
+   authority rules.
+4. `INTERACTIVE-DEVELOPMENT.md` contains **the interactive (ID) overlay**:
+   live-dialog continuation, bounded event waiting, processed-frontier discipline, peer input and
+   final external-lane checks. It composes with any active work-mode overlay and is not restricted
+   to development.
+5. `RESEARCH.md` contains **the research overlay**:
+   research frontier, evidence classification, cheapest-sufficient-evidence discipline,
+   hypothesis boundaries and research-specific continuation/escalation semantics. It grants no
+   repository/GitHub authority.
+6. `PROJECT-CONVENTIONS.md` contains **project-artifact maintenance conventions**:
    language, formatting, review/experiment artifact handling, repository layout/lineage facts,
-   naming and CHANGELOG conventions. It must not define agent authorization, `main` write
-   policy, CD timing or requirement/component semantics.
+   naming and CHANGELOG conventions. It must not define agent authorization or execution-loop
+   timing.
 
 When a rule appears to belong to more than one document, keep the normative rule only in the
 owner above and use a short reference from the other document if needed.
@@ -336,11 +364,12 @@ owner above and use a short reference from the other document if needed.
 
 Do not restate detailed subject rules here.
 
+- generic continuous execution follows `EXECUTION-LOOP.md`;
 - requirement changes follow `design/requirements-model.md` and current-stage requirements;
 - component/interaction changes follow `design/component-model.md` and current architecture;
-- CD execution follows `CONTINUOUS-DEVELOPMENT.md`;
-- when active CD is explicitly run in interactive/in-dialog mode, its live-dialog execution
-  additionally follows `INTERACTIVE-DEVELOPMENT.md`;
+- development work follows `CONTINUOUS-DEVELOPMENT.md`;
+- interactive/in-dialog execution follows `INTERACTIVE-DEVELOPMENT.md`;
+- research work follows `RESEARCH.md`;
 - documentation/review/layout/lineage conventions follow `PROJECT-CONVENTIONS.md`.
 
 Implementation must not invent missing product semantics or silently convert implementation
