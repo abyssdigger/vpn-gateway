@@ -662,27 +662,67 @@ Device.
 `probe_target` нормализуется в постоянный `/32` соответствующего пира. Он является
 технической целью выбора WireGuard-пира и не заменяет `availability_check` Profile.
 
-### Текущая one-group форма payload-префиксов
+### Recoverable groups выводятся из Profile membership
 
-Текущий реализованный config/parser contract представляет только частный one-group случай
-`VPNG-U001-R1.R3.R8`: пользователь не повторяет mutable payload `AllowedIPs` в каждом
-пире, а один общий bundle выводится из `destinations` всех включенных Profiles, которые
-ссылаются на этот Device. Все peers этого Device являются кандидатами одного bundle.
+Для generalized `VPNG-U001-R1.R3.R8` отдельная пользовательская сущность с повторным списком
+payload-префиксов не вводится. Для каждого enabled Profile, использующего enabled managed
+WireGuard Device, создается recoverable group identity:
 
-Уточненный R8 требует несколько independently recoverable network groups с group-local
-candidate order/reserve role и optional group endpoint. Каноническое TOML spelling этой
-generalized формы еще не выбрано и **не должно** неявно выводиться из текущего parser API;
-до отдельного config-format review текущая реализация остается one-group materialization.
+```text
+(profile_id, device_id)
+```
 
-Каждый `probe_target` является зарезервированным техническим адресом конкретного пира.
+Ее payload bundle — ровно `Profile.destinations`. Поэтому несколько destinations одного
+Profile переключаются как одна группа, а разные Profiles на одном `wg0` могут одновременно
+принадлежать разным peers. Если наборы сетей должны переключаться независимо, они выражаются
+разными Profiles; отдельное cross-Profile group coupling не вводится без нового требования.
+
+Overlap не получает второй набор правил: уже каноническая Profile semantics запрещает один и
+тот же exact prefix в двух enabled Profiles и допускает different-length overlap только через
+deterministic most-specific classification. Для derived WireGuard groups это одновременно
+дает однозначный effective ownership: более специфичный `AllowedIPs` bundle имеет тот же
+most-specific смысл; дополнительная неоднозначная group-prefix декларация отсутствует.
+
+По умолчанию все peers из `managed_vpn.peers` являются разрешенными кандидатами группы в
+порядке их объявления и имеют ordinary role. Profile может уточнить policy конкретного
+Device membership:
+
+```toml
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16", "10.30.0.0/16"]
+device_order = ["wg-main", "oc-backup:reserve"]
+
+[profile.corp.device_membership.wg-main]
+peer_order = ["edge-a", "edge-b:reserve"]
+```
+
+`device_membership.wg-main` не создает membership и допустим только если `wg-main` уже
+ровно один раз присутствует в `device_order`. `peer_order` допустим только для explicitly
+managed WireGuard Device, является непустым ordered subset его peer IDs, не допускает
+повторения одного peer и использует тот же канонический suffix `:reserve`. Omitted peers не
+являются кандидатами этой группы. Отсутствие таблицы сохраняет default all-peer ordinary
+policy. Unknown membership fields/suffixes являются config error; таблица не является generic
+option bag.
+
+Optional Profile availability description одновременно является group end-to-end description
+для этого managed WireGuard membership только если она resolves в поддерживаемый ICMP target,
+лежащий внутри `Profile.destinations` и не совпадающий ни с одним permanent peer
+`probe_target`. Это переиспользование description не сливает A.007 и D.002 evidence:
+semantic owners/verdicts остаются раздельными. Если условие не выполнено, group endpoint
+отсутствует, но peer-failure recovery остается действующим.
+
+Каждый peer `probe_target` остается зарезервированным техническим адресом конкретного пира.
 Он может находиться внутри более широкого payload-префикса, включая `0.0.0.0/0`: постоянный
-`/32` намеренно остается более специфичным `AllowedIPs` и используется для раздельного
-наблюдения пиров. Пользователь не должен одновременно использовать тот же точный IPv4-адрес
-как payload/business availability target.
+`/32` намеренно остается более специфичным `AllowedIPs` и используется для peer health.
+Базовая конфигурация WireGuard содержит только эти permanent `/32`; payload prefixes
+появляются в `AllowedIPs` только через подтвержденную D.002 group ownership projection.
 
-Базовая конфигурация WireGuard содержит только постоянные проверочные `/32`. Mutable payload
-prefixes появляются в `AllowedIPs` только через подтвержденную D.002 ownership projection;
-в generalized форме разные groups могут одновременно принадлежать разным peers.
+Текущий parser/normalized `ManagedWireGuardConfig.shared_prefixes` пока материализует старый
+one-group subset и не принимает `device_membership.*.peer_order`. Поскольку binding release
+еще не существует, при реализации generalized parser этот внутренний pre-binding shape может
+быть заменен напрямую без compatibility alias.
 
 ### Транспортные разрешения не дублируются
 
