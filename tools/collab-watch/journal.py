@@ -152,8 +152,23 @@ def project_signals(cfg, rows, facts, receipts):
             'ignored_external': ignored}, [item for item in valid if item['receipt_refs']]
 
 
+def _raw_row(cfg, room, row):
+    cid, actor, body = read_comment(row)
+    return cid, actor, body, digest(canonical([actor, body]))
+
+
 def project_m(cfg, snapshots, previous=None):
     """Replay a complete stable v1 observation. Local state is derivative only."""
+    return _project_m(cfg, snapshots, previous, _raw_row)
+
+
+def project_m_compact(cfg, observation, previous=None):
+    """Replay trusted typed compact observations through the same reducer."""
+    from compact_observation import compact_snapshots, read_compact_row
+    return _project_m(cfg, compact_snapshots(cfg, observation), previous, read_compact_row)
+
+
+def _project_m(cfg, snapshots, previous, reader):
     validate_m_config(cfg)
     semantic_cfg = semantic_config(cfg)
     if previous is not None:
@@ -167,17 +182,20 @@ def project_m(cfg, snapshots, previous=None):
     require(all(isinstance(rows, list) for rows in snapshots.values()), 'snapshot is not a complete comment list')
     known = {spec['actor_id'] for spec in cfg['roles'].values()}
     seen, ledger, payloads, journal_rows, ignored, holder_inputs, holder_facts = {}, {}, {}, {}, [], {}, {}
+    opaque_refs = set()
     # Partition before admitting any fact, so payload references can resolve
     # regardless of physical comment order, including forward references.
     for room in rooms[:-1]:
         for row in snapshots[str(room)]:
-            cid, actor, body = read_comment(row)
+            cid, actor, body, key = reader(cfg, room, row)
             ref = physical_ref(room, cid)
-            key = digest(canonical([actor, body]))
             if ref in seen:
-                require(seen[ref] == key, f'conflicting physical comment: {ref}')
+                require(seen[ref] == key and (ref in opaque_refs) == (body is None),
+                        f'conflicting physical comment: {ref}')
                 continue
             seen[ref] = key
+            if body is None:
+                opaque_refs.add(ref)
             if room == cfg['projectholder']['room']:
                 if actor != cfg['projectholder']['actor_id']:
                     ignored.append(ref)
@@ -187,7 +205,7 @@ def project_m(cfg, snapshots, previous=None):
                 item = holder_input(cfg, ref, body)
                 holder_inputs[mid] = item
                 holder_facts[ref] = {'event': dict(item, event_id=mid), 'body_sha256': digest(body)}
-            elif is_journal(body):
+            elif body is not None and is_journal(body):
                 if actor not in known:
                     ignored.append(ref)
                     continue

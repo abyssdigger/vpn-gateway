@@ -192,3 +192,27 @@ requires a new preview; a separate mutation gate and actual remote
 verification remain necessary. The CLI never persists state, sends, wakes,
 deletes, or evaluates authority. It is not an actuator, and does not solve
 `WAKE_REQUIRED`. Live HTTP success remains an operator-side acceptance check.
+
+## Typed compact observation seam (pure, post-acquisition)
+
+`compact_observation.compact_observation(cfg, raw_snapshots)` accepts the same raw room
+rows only after the caller has established complete stable acquisition. It retains all
+journal-prefix task rows, holder-authored rows, and signal-room rows as exact raw text.
+Ordinary task payloads and ignored holder-room prose may become typed opaque rows with
+physical identity, actor, and SHA-256 of `canonical([actor, raw_body])`. It does not
+change the semantic ledger or invent an authority source.
+
+Use `encode_compact(cfg, observation)` and `decode_compact(cfg, text, expected_sha256)`
+for the closed `vpng-collab-compact-observation/1` wire format. The expected whole-wire
+SHA-256 must come from the trusted acquisition side. The format binds the full config;
+shape and allowed partitions are validated, and the projector checks physical duplicate
+conflicts. A digest does not authenticate the acquisition or establish completeness;
+a malicious encoder could misclassify omitted prose, and lost historical evidence cannot
+be reconstructed from this seam.
+
+`journal.project_m_compact`, `preflight_m.preflight_journal_fact_compact`, and
+`preflight_m.preflight_signal_compact` use the same internal reducer and binding logic
+as their raw counterparts. The existing raw APIs continue to require raw rows and do
+not accept opaque records. No network reader, CLI transport, publisher, credentials,
+workflow, wake or deletion capability is added. Run `python -m unittest -v
+ test_compact_observation` from this directory for seeded equivalence and gate tests.

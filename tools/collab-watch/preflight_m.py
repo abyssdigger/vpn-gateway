@@ -10,8 +10,8 @@ def _actor(cfg, actor):
     return known
 
 
-def _append(snapshots, room, actor, body):
-    cid = max([0, *(read_comment(row)[0] for rows in snapshots.values() for row in rows)]) + 1
+def _append(cfg, snapshots, room, actor, body, reader):
+    cid = max([0, *(reader(cfg, int(r), row)[0] for r, rows in snapshots.items() for row in rows)]) + 1
     proposed = dict(snapshots)
     proposed[str(room)] = [*snapshots[str(room)], {'id': cid, 'user': {'id': actor}, 'body': body}]
     return proposed, physical_ref(room, cid)
@@ -19,19 +19,37 @@ def _append(snapshots, room, actor, body):
 
 def preflight_journal_fact(cfg, snapshots, actor, body, previous=None):
     """Validate prospective journal replay; never send or persist a synthetic fact."""
-    _, state = project_m(cfg, snapshots, previous)
+    return _preflight_journal_fact(cfg, snapshots, actor, body, previous, project_m, _raw_read)
+
+
+def _raw_read(cfg, room, row):
+    return read_comment(row)
+
+
+def preflight_journal_fact_compact(cfg, observation, actor, body, previous=None):
+    """Preview a journal fact using an already acquired typed compact observation."""
+    from compact_observation import compact_snapshots, read_compact_row
+    from journal import _project_m
+    snapshots = compact_snapshots(cfg, observation)
+    def project(c, s, p):
+        return _project_m(c, s, p, read_compact_row)
+    return _preflight_journal_fact(cfg, snapshots, actor, body, previous, project, read_compact_row)
+
+
+def _preflight_journal_fact(cfg, snapshots, actor, body, previous, project, reader):
+    _, state = project(cfg, snapshots, previous)
     known = _actor(cfg, actor)
     candidate = framed(body, JOURNAL_MARKER)
     room = candidate.get('room')
     require(positive(room) and room in cfg['task_rooms'], 'outgoing journal room is not configured')
     for task_room in cfg['task_rooms']:
         for row in snapshots[str(task_room)]:
-            _, author, text = read_comment(row)
-            if author in known and is_journal(text):
+            _, author, text, *_ = reader(cfg, task_room, row)
+            if author in known and text is not None and is_journal(text):
                 require(framed(text, JOURNAL_MARKER)['event_id'] != candidate.get('event_id'),
                         'outgoing event ID already exists; reconcile delivery instead')
-    proposed, ref = _append(snapshots, room, actor, body)
-    _, prospective = project_m(cfg, proposed, state)
+    proposed, ref = _append(cfg, snapshots, room, actor, body, reader)
+    _, prospective = project(cfg, proposed, state)
     del prospective['ledger'][ref]
     return {'event_id': candidate['event_id'], 'kind': candidate['kind'],
             'journal_epoch': cfg['journal_epoch'], 'room': room,
@@ -46,7 +64,21 @@ def _semantic(projection):
 
 def preflight_signal(cfg, snapshots, actor, body, previous=None):
     """Validate a delivery hint to an already physically admitted journal fact."""
-    baseline, state = project_m(cfg, snapshots, previous)
+    return _preflight_signal(cfg, snapshots, actor, body, previous, project_m, _raw_read)
+
+
+def preflight_signal_compact(cfg, observation, actor, body, previous=None):
+    """Preview a signal through the same binding logic using typed observations."""
+    from compact_observation import compact_snapshots, read_compact_row
+    from journal import _project_m
+    snapshots = compact_snapshots(cfg, observation)
+    def project(c, s, p):
+        return _project_m(c, s, p, read_compact_row)
+    return _preflight_signal(cfg, snapshots, actor, body, previous, project, read_compact_row)
+
+
+def _preflight_signal(cfg, snapshots, actor, body, previous, project, reader):
+    baseline, state = project(cfg, snapshots, previous)
     known = _actor(cfg, actor)
     candidate = framed(body, SIGNAL_MARKER)
     room = cfg['signal_room']
@@ -60,8 +92,8 @@ def preflight_signal(cfg, snapshots, actor, body, previous=None):
             continue
         require(observed.get('signal_id') != candidate.get('signal_id'),
                 'outgoing signal ID already exists; reconcile delivery instead')
-    proposed, ref = _append(snapshots, room, actor, body)
-    after, new_state = project_m(cfg, proposed, state)
+    proposed, ref = _append(cfg, snapshots, room, actor, body, reader)
+    after, new_state = project(cfg, proposed, state)
     require(any(record['physical_ref'] == ref for record in after['signal_status']['valid']),
             'outgoing signal not admitted')
     require(state == new_state and _semantic(baseline) == _semantic(after),
