@@ -1,4 +1,0 @@
-<!-- vpng-collab-journal/1 -->
-```json
-{"closure_ref":"issue:34#issuecomment-7201038020","disposition":"CLOSED","event_id":"m-f1-a013-disposition-r1","from":"GUARD","incarnation":"guard-gpt56-sol-current","journal_epoch":"collab-m1-20261126","kind":"DISPOSITION","obligation":{"id":"M-F1-A013","revision":1},"payload_ref":"issue:34#issuecomment-7201038020","protocol":"vpng-collab/1","room":34,"to":["BUILDER"]}
-```
