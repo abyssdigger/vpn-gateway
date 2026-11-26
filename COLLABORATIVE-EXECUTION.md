@@ -53,8 +53,8 @@ journal**. Journal facts use the exact reserved first-line framing defined in §
 quoted examples and payload comments remain prose unless their first line is that reserved marker.
 
 The journal is canonical collaboration state. A journal fact is physically in the task room named
-by its semantic \`room\` field. Journal-framed comments are never reused as ordinary
-\`payload_ref\`/\`closure_ref\` material.
+by its semantic `room` field. Journal-framed comments are never reused as ordinary
+`payload_ref`/`closure_ref` material.
 
 ### Signal room
 
@@ -87,7 +87,7 @@ The helper may turn each exact projectholder comment into a synthetic material i
 without interpreting its prose.
 
 Ordinary PRODUCT-MANAGER input is routed to configured triage roles; the v1 default is
-\`GUARD\`.
+`GUARD`.
 
 An exact registered PROJECTHOLDER command is routed as one synthetic material input to **all
 configured worker roles**. Each worker independently acknowledges that command input through the
@@ -98,7 +98,7 @@ A comment beginning like a command but failing exact grammar/registry validation
 PRODUCT-MANAGER input; a helper may expose a diagnostic but must not partially execute/infer it.
 
 Ordinary PRODUCT-MANAGER input from this durable room does **not** pause an active collaboration
-cycle merely by arriving. It is routed as material work input. A registered \`STOP\` command is
+cycle merely by arriving. It is routed as material work input. A registered `STOP` command is
 the explicit collaboration-lane pause/stop primitive.
 
 A small versioned command registry is the only exception. A command is recognized only when the
@@ -107,23 +107,23 @@ PRODUCT-MANAGER input.
 
 Initial command forms are:
 
-\`\`\`text
+```text
 !COLLAB STOP cycle=<cycle-key>
 !COLLAB DENY capability=<capability-key> scope=<scope-key>
 !COLLAB ALLOW capability=<capability-key> scope=<scope-key> [condition=<condition-key>] [until=<utc-key>]
 !COLLAB MODEL role=<role-key> model=<model-key> scope=<scope-key>
-\`\`\`
+```
 
 Arguments are opaque identifiers resolved through the active collaboration configuration. They
 are not arbitrary paths, shell fragments or free-text conditions.
 
 Semantics:
 
-- \`STOP\` — stop/pause the addressed collaboration cycle; no authority grant;
-- \`DENY\` — restrict/revoke the named registered capability/scope;
-- \`ALLOW\` — projectholder authorization input for the exact registered capability/scope under
-  stated registered condition/expiry; actual use remains subject to \`AGENTS.md\`;
-- \`MODEL\` — permit the named role/model change in the registered scope; no repository/tool
+- `STOP` — stop/pause the addressed collaboration cycle; no authority grant;
+- `DENY` — restrict/revoke the named registered capability/scope;
+- `ALLOW` — projectholder authorization input for the exact registered capability/scope under
+  stated registered condition/expiry; actual use remains subject to `AGENTS.md`;
+- `MODEL` — permit the named role/model change in the registered scope; no repository/tool
   authority is implied.
 
 The registry is extensible only through normal process revision/review. Do not add natural-language
@@ -135,7 +135,7 @@ execution window does not automatically roll or truncate the journal.
 ### Artifact plane
 
 Large or version-sensitive results use repository artifacts and exact refs such as
-\`path@commit-SHA\`. Task-room prose or journal facts reference them rather than copying them.
+`path@commit-SHA`. Task-room prose or journal facts reference them rather than copying them.
 
 The signal room is only an optimization for delivery visibility. A future transport may derive
 equivalent delivery hints from other durable sources, but must preserve the separation between
@@ -171,35 +171,35 @@ Keep three semantic projections distinct:
 - **obligations** — work whose future result matters to readiness, closure or a gate;
 - **readiness** — derived answer to whether a role can do useful work now.
 
-\`READY\` is never stored as semantic truth. It is recomputed from durable journal/holder inputs and
+`READY` is never stored as semantic truth. It is recomputed from durable journal/holder inputs and
 current obligations. Current signal-room contents are not semantic input to this computation.
 
 Do not create an obligation merely to index every message. Create one only when losing the
 obligation could make the collaboration stop while work remains, lose a blocker, wake forever on
 resolved work, or mistake a stale/partial result for closure.
 
-Minimum v1 obligation state is projected from admitted journal facts. \`OPEN\` supplies:
+Minimum v1 obligation state is projected from admitted journal facts. `OPEN` supplies:
 
-\`\`\`text
+```text
 id
 revision
 kind
 assignee
 disposition_by
 subject/payload refs
-\`\`\`
+```
 
 Revision starts at 1. A later revision is current only after the previous revision has an explicit
-\`SUPERSEDED\` disposition.
+`SUPERSEDED` disposition.
 
-A result/receipt does not automatically close an obligation. \`INPUT\` may make another role
+A result/receipt does not automatically close an obligation. `INPUT` may make another role
 runnable while the obligation remains open.
 
-A terminal \`DISPOSITION\` is structurally accepted only when:
+A terminal `DISPOSITION` is structurally accepted only when:
 - it targets the exact current obligation revision;
-- its emitting role equals that obligation's \`disposition_by\`;
-- its state is \`CLOSED\`, \`CANCELLED\` or \`SUPERSEDED\`;
-- it carries an exact \`closure_ref\` to the already-published semantic disposition authored by
+- its emitting role equals that obligation's `disposition_by`;
+- its state is `CLOSED`, `CANCELLED` or `SUPERSEDED`;
+- it carries an exact `closure_ref` to the already-published semantic disposition authored by
   the DISPOSITION sender's admitted transport actor.
 
 This rule protects scheduler integrity; it does not make the helper an authority on whether the
@@ -207,7 +207,7 @@ referenced project/review disposition was substantively correct.
 
 A superseded/stale revision remains historical evidence and cannot mutate the replacement revision.
 
-A v1 \`HANDLED\` journal fact is a durable, content-bound receipt. For INPUT/holder targets it also
+A v1 `HANDLED` journal fact is a durable, content-bound receipt. For INPUT/holder targets it also
 clears that role's unhandled-mailbox readiness. For delivery-only targets such as OPEN or
 DISPOSITION it records consumption only and never removes the target's independent semantic effect.
 The exact receipt format and GC relationship are defined in §7.
@@ -261,7 +261,7 @@ from silence, timeout or a `DORMANT` claim.
 
 Control protocol v1 separates canonical collaboration facts from delivery hints.
 
-Legacy \`vpng-collab/0\` event-room streams are historical/transition evidence only. Their exact
+Legacy `vpng-collab/0` event-room streams are historical/transition evidence only. Their exact
 process remains recoverable from the repository version that created them. A v1 helper must not
 merge a legacy v0 event-room replay with a v1 journal epoch.
 
@@ -269,15 +269,15 @@ merge a legacy v0 event-room replay with a v1 journal epoch.
 
 A journal comment from a configured worker uses this exact first line:
 
-\`\`\`text
+```text
 <!-- vpng-collab-journal/1 -->
-\`\`\`
+```
 
-It is followed immediately by exactly one fenced \`json\` object and no trailing prose.
+It is followed immediately by exactly one fenced `json` object and no trailing prose.
 
 Common semantic fields are:
 
-\`\`\`json
+```json
 {
   "protocol": "vpng-collab/1",
   "journal_epoch": "opaque-journal-epoch",
@@ -289,17 +289,17 @@ Common semantic fields are:
   "incarnation": "opaque-role-incarnation",
   "payload_ref": "issue:34#issuecomment-123"
 }
-\`\`\`
+```
 
-The GitHub actor is transport identity. \`from\` and \`incarnation\` remain cooperative routing claims
+The GitHub actor is transport identity. `from` and `incarnation` remain cooperative routing claims
 and are not authentication or authority.
 
-\`journal_epoch\` is configured explicitly and is independent of command-registry cycle key and
+`journal_epoch` is configured explicitly and is independent of command-registry cycle key and
 signal-room identity. v1 begins with one persistent journal epoch; archival/compaction or journal
 epoch rollover requires a later explicit process design.
 
 For configured worker actors:
-- any comment whose first line begins \`<!-- vpng-collab-journal/\` is intended machine input;
+- any comment whose first line begins `<!-- vpng-collab-journal/` is intended machine input;
 - wrong marker version/protocol/epoch, malformed JSON/schema or invalid admission fails canonical
   replay closed;
 - there is no arbitrary ignore/legacy list for current v1 journal facts.
@@ -307,31 +307,31 @@ For configured worker actors:
 Machine-looking comments from unconfigured external actors are excluded from machine and ordinary
 payload admission and do not poison canonical replay.
 
-The physical journal comment must be in its semantic \`room\` task room. A journal-framed comment
-cannot be used as \`payload_ref\` or \`closure_ref\`.
+The physical journal comment must be in its semantic `room` task room. A journal-framed comment
+cannot be used as `payload_ref` or `closure_ref`.
 
 Accepted v1 semantic kinds are:
-- \`OPEN\` — create the first or explicitly superseding revision of a material obligation;
-- \`INPUT\` — addressed material request/result; optionally references an obligation/revision and
+- `OPEN` — create the first or explicitly superseding revision of a material obligation;
+- `INPUT` — addressed material request/result; optionally references an obligation/revision and
   never closes it by itself;
-- \`HANDLED\` — durable exact-content consumption receipt, with INPUT/holder mailbox semantics below;
-- \`BLOCK\` — current assignee blocks an obligation on one exact preallocated logical INPUT ID;
-- \`DISPOSITION\` — terminal \`CLOSED|CANCELLED|SUPERSEDED\` claim satisfying §5;
-- \`DORMANT\` — diagnostic self-passivation claim; never suppresses derived readiness;
-- \`PING\` — diagnostic communication-liveness probe addressed to exactly one peer role;
-- \`PONG\` — diagnostic response to one exact admitted PING.
+- `HANDLED` — durable exact-content consumption receipt, with INPUT/holder mailbox semantics below;
+- `BLOCK` — current assignee blocks an obligation on one exact preallocated logical INPUT ID;
+- `DISPOSITION` — terminal `CLOSED|CANCELLED|SUPERSEDED` claim satisfying §5;
+- `DORMANT` — diagnostic self-passivation claim; never suppresses derived readiness;
+- `PING` — diagnostic communication-liveness probe addressed to exactly one peer role;
+- `PONG` — diagnostic response to one exact admitted PING.
 
-\`CONFLICT\` is helper output/state, not an accepted journal kind.
+`CONFLICT` is helper output/state, not an accepted journal kind.
 
 ### 7.2. Payload and closure references
 
-An ordinary \`payload_ref\`:
+An ordinary `payload_ref`:
 - must identify an exact non-journal comment in the same task room;
 - is bound in canonical integrity state by physical ref, actor and exact body;
 - may be authored by an actor different from the journal fact sender;
 - never transfers payload authorship or authority to/from the fact sender.
 
-A \`closure_ref\` remains stricter in v1:
+A `closure_ref` remains stricter in v1:
 - it must identify exact non-journal task-room prose in the same task room;
 - its transport actor must equal the DISPOSITION sender's admitted transport actor.
 
@@ -341,7 +341,7 @@ Cross-task-room payload/closure refs remain invalid.
 
 A v1 HANDLED contains exact targets, not bare logical IDs:
 
-\`\`\`json
+```json
 "handled": [
   {
     "event_id": "x",
@@ -349,14 +349,14 @@ A v1 HANDLED contains exact targets, not bare logical IDs:
     "body_sha256": "<raw-whole-target-comment-sha256>"
   }
 ]
-\`\`\`
+```
 
 Rules:
-- HANDLED is self-addressed and the emitting \`from/incarnation\` is the consuming role/session;
+- HANDLED is self-addressed and the emitting `from/incarnation` is the consuming role/session;
 - every target must be an exact currently admitted physical journal fact addressed to that role,
   or an exact synthetic holder input addressed to that role;
 - journal receipt identity is logical event ID + physical ref + raw whole-body digest;
-- holder receipt identity is \`holder:<comment-id>\` + exact holder ref + raw whole-body digest;
+- holder receipt identity is `holder:<comment-id>` + exact holder ref + raw whole-body digest;
 - HANDLED may not target HANDLED;
 - HANDLED itself receives no SIGNAL.
 
@@ -374,13 +374,13 @@ destructive GC proof after local-ledger loss and physical target replacement/edi
 
 A configured signal-room worker comment uses exact first line:
 
-\`\`\`text
+```text
 <!-- vpng-collab-signal/1 -->
-\`\`\`
+```
 
 followed by exactly one fenced JSON object and no trailing prose:
 
-\`\`\`json
+```json
 {
   "protocol":"vpng-collab-signal/1",
   "journal_epoch":"opaque-journal-epoch",
@@ -392,7 +392,7 @@ followed by exactly one fenced JSON object and no trailing prose:
   "to":"BUILDER",
   "incarnation":"guard-gpt56-sol-current"
 }
-\`\`\`
+```
 
 One SIGNAL addresses exactly one recipient role. A canonical fact addressed to N recipients may
 have zero to N recipient-specific SIGNALs. Signal publication is optional for correctness.
@@ -439,11 +439,11 @@ obligations.
 
 A valid PING:
 - is addressed to exactly one configured worker role other than the sender;
-- carries \`ping_id\` equal to its own \`event_id\`;
+- carries `ping_id` equal to its own `event_id`;
 - carries no obligation/disposition semantics.
 
 A valid PONG:
-- carries the exact \`ping_id\` of one admitted PING;
+- carries the exact `ping_id` of one admitted PING;
 - is in the same task room;
 - reverses the exact sender/recipient roles of that PING.
 
@@ -458,21 +458,21 @@ During an active collaboration cycle, the observer may use the local 10/5-minute
 1. after 10 minutes with no newly observed valid peer journal fact, publish at most one outstanding
    PING journal fact and optionally one SIGNAL to the peer;
 2. wait up to 5 minutes for matching PONG or another new valid peer journal fact;
-3. if neither arrives, report \`COMMUNICATION_UNCONFIRMED(role, ping_id)\` once to the projectholder
+3. if neither arrives, report `COMMUNICATION_UNCONFIRMED(role, ping_id)` once to the projectholder
    lane;
 4. suppress repetition until peer liveness is restored or PROJECTHOLDER changes the situation.
 
 Elapsed live-session time is local observer state. Restart/replay never reconstructs elapsed time
 from durable comment timestamps.
 
-\`COMMUNICATION_UNCONFIRMED\` never declares a session ended, creates DORMANT, reassigns work,
+`COMMUNICATION_UNCONFIRMED` never declares a session ended, creates DORMANT, reassigns work,
 changes incarnation/model or widens/revokes authority.
 
 ### 7.7. Relation semantics
 
 For OPEN, the obligation object contains at least:
 
-\`\`\`json
+```json
 {
   "id": "O1",
   "revision": 1,
@@ -480,9 +480,9 @@ For OPEN, the obligation object contains at least:
   "assignee": "BUILDER",
   "disposition_by": "GUARD"
 }
-\`\`\`
+```
 
-For BLOCK, \`wait_for_event_id\` names the exact logical INPUT event whose admission satisfies the
+For BLOCK, `wait_for_event_id` names the exact logical INPUT event whose admission satisfies the
 blocker. Multiple BLOCK claims on one current revision remain monotone/conjunctive.
 
 Unknown semantic protocol revisions/kinds, malformed required fields, stale sender incarnation,
@@ -523,14 +523,14 @@ A COLLAB helper may:
 - validate exact physical refs/digests and deduplicate logical semantic delivery;
 - persist first-seen canonical hashes needed to detect later edit/conflict where observed;
 - project current obligations/mailbox state through one semantic reducer;
-- compute \`READY\`, \`WAITING\` or canonical \`CONFLICT\` with exact reason IDs/refs;
+- compute `READY`, `WAITING` or canonical `CONFLICT` with exact reason IDs/refs;
 - project PING/PONG health relations separately from ordinary semantic readiness;
 - validate current SIGNALs as noncanonical delivery hints;
 - expose signal diagnostics and exact GC-candidate evidence;
 - expose compact status suitable for manual or future activation adapters.
 
 It must not:
-- output or imply \`ELIGIBLE_TO_ACTIVATE\`;
+- output or imply `ELIGIBLE_TO_ACTIVATE`;
 - use an LLM to determine authority;
 - invent product/review dispositions;
 - treat role claims as authenticated identities;
@@ -565,18 +565,18 @@ them through; it does not infer authority or execute artifact contents.
 
 ### 9.2. Outgoing preflight
 
-Journal publication uses deterministic \`preflight_journal_fact\` against exact candidate bytes,
+Journal publication uses deterministic `preflight_journal_fact` against exact candidate bytes,
 current config and a stable complete observation. It prospectively runs the canonical reducer before
 the external write.
 
-SIGNAL publication uses \`preflight_signal\` against an **already physically admitted** journal fact.
+SIGNAL publication uses `preflight_signal` against an **already physically admitted** journal fact.
 It validates exact candidate bytes/target/current config but creates no prospective semantic state.
 
 Publication order is:
 
-\`\`\`text
+```text
 journal fact -> remote verify/admit -> optional SIGNAL -> remote verify
-\`\`\`
+```
 
 An ambiguous send is reconciled before any retry. A SIGNAL loss cannot lose semantic work because
 the journal fact already exists.
@@ -591,7 +591,7 @@ and, when a separately registered current capability authorizes deletion:
 
 1. re-read the exact current signal comment;
 2. compare room/comment/actor/raw-body digest with the candidate;
-3. pass a fresh \`AGENTS.md PRE_MUTATION_GATE\`;
+3. pass a fresh `AGENTS.md PRE_MUTATION_GATE`;
 4. DELETE that exact signal comment;
 5. reconcile the result before any retry.
 
@@ -608,7 +608,7 @@ deletion requires separate explicit projectholder authority/configuration.
 Distinguish at least:
 - duplicate identical logical journal event -> one semantic effect, while physical occurrence
   identity remains available for receipts/integrity;
-- conflicting reuse of journal logical identity/body -> canonical \`CONFLICT\`;
+- conflicting reuse of journal logical identity/body -> canonical `CONFLICT`;
 - overlapping pagination returning the same physical row identically -> one physical observation;
 - stale revision/result -> durable evidence, no mutation of current revision;
 - missing/unknown dependency -> unresolved, not silently satisfied;
@@ -648,7 +648,7 @@ Cutover from a legacy event-room replay epoch to M requires:
    - signal room;
    - durable task/journal room(s);
    - projectholder room/routing;
-   - exact persistent \`journal_epoch\`;
+   - exact persistent `journal_epoch`;
    - roles/incarnations;
    - current command registry/cycle key;
 6. fresh v1 derivative local state rather than migration of a v0 local ledger;
@@ -659,7 +659,7 @@ Cutover from a legacy event-room replay epoch to M requires:
 
 The command-registry cycle key may change between execution windows without rolling the journal
 epoch. Old command-like holder comments never gain current authority merely because they replay;
-actual authority still requires the exact current registry and \`AGENTS.md\` gate.
+actual authority still requires the exact current registry and `AGENTS.md` gate.
 
 Old event-room comments are not deleted by cutover.
 
@@ -687,7 +687,7 @@ A collaborative handoff adds to the generic/work-mode handoff:
 - current signal diagnostics and unresolved ambiguous delivery/GC operations, when any;
 - exact GC candidates only when they matter to continuation, clearly marked as non-authority;
 - holder decisions or authority gates genuinely required; product/project decisions use
-  \`EXECUTION-LOOP.md\` §8.1;
+  `EXECUTION-LOOP.md` §8.1;
 - current command-registry cycle key when projectholder commands matter.
 
 Do not duplicate large payloads in the handoff when exact durable refs suffice. Do not treat SIGNAL
