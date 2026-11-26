@@ -1,0 +1,27 @@
+name: COLLAB Watch
+
+on:
+  push:
+    paths:
+      - "tools/collab-watch/**"
+      - ".github/workflows/collab-watch.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: tools/collab-watch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Unit tests
+        run: python -m unittest discover -q
