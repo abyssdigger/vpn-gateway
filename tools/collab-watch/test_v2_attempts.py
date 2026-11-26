@@ -163,6 +163,51 @@ class AttemptTests(unittest.TestCase):
         with self.assertRaises(Conflict):
             self.store.claimed(EFFECT)
 
+    def test_durable_write_once_response_hint(self):
+        key = self.prepared()
+        hint = {"room": 34, "comment_id": 123}
+        with self.assertRaises(Conflict):
+            self.store.record_response_hint(key, hint)
+        self.store.start(key)
+        for bad in (None, {}, {"token": "test"}, {"id": ["x"*500]*5}):
+            with self.assertRaises(Conflict):
+                self.reopen().record_response_hint(key, bad)
+        started = self.reopen().record_response_hint(key, hint)
+        self.assertEqual(started["state"], "STARTED")
+        self.assertIsNone(started["locator"])
+        self.assertEqual(started["response_hint"], hint)
+        self.assertEqual(self.reopen().claimed(EFFECT), started)
+        self.assertEqual(self.reopen().record_response_hint(key, dict(reversed(list(hint.items())))), started)
+        with self.assertRaises(Conflict):
+            self.reopen().record_response_hint(key, dict(hint, comment_id=999))
+        unresolved = self.reopen().mark_unresolved(key, "unknown")
+        self.assertEqual(unresolved["response_hint"], hint)
+        self.assertEqual(self.reopen().record_response_hint(key, hint), unresolved)
+        with self.assertRaises(Conflict):
+            self.reopen().record_response_hint(key, dict(hint, room=35))
+        verified = self.reopen().mark_verified(key, RECEIPT, {"comment_id": 123})
+        self.assertEqual(verified["response_hint"], hint)
+        self.assertEqual(verified["locator"], {"comment_id": 123})
+        self.assertEqual(self.reopen().claimed(EFFECT), verified)
+        with self.assertRaises(Conflict):
+            self.reopen().record_response_hint(key, hint)
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("UPDATE attempts SET response_hint='{\"token\":\"test\"}' WHERE action_key=?", (key,))
+        with self.assertRaises(Conflict):
+            self.store.claimed(EFFECT)
+
+    def test_hint_after_unresolved_and_prepared_tamper(self):
+        key = self.prepared()
+        self.store.start(key)
+        self.store.mark_unresolved(key, "unknown")
+        hint = {"comment_id": 42}
+        self.assertEqual(self.reopen().record_response_hint(key, hint)["response_hint"], hint)
+        another = self.prepared(dict(ACTION, target={"id": 43}), dict(EFFECT, id=43))
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("UPDATE attempts SET response_hint=? WHERE action_key=?", (canonical(hint), another))
+        with self.assertRaises(Conflict):
+            self.store.claimed(EFFECT)
+
     def test_invalid_metadata_and_bounds(self):
         for bad in (None, {}, ["a"], {"id": 1.2}, {"id": (1,)}, {"id": 2**64},
                     {"token": "test"}, {"nested": {"password": "test"}},

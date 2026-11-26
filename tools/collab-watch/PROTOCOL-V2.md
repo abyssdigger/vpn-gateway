@@ -381,3 +381,11 @@ returns the exact non-PREPARED winner (or None when no attempt has crossed
 STARTED). Recovery can find the original action by stable effect even if a
 refreshed PREPARED attempt has a different action key. Lookup never grants
 permission to retry or changes state.
+
+A separate write-once response_hint is bounded transport identity metadata,
+not a verified locator or receipt. record_response_hint is permitted only in
+STARTED or UNRESOLVED; identical repeat is idempotent, different hint conflicts.
+It survives all later states and claimed-effect lookup. After VERIFIED it
+cannot be written. If a crash occurs before durable hint recording, recovery
+remains genuinely ambiguous; no retry is permitted. The staged schema is
+version 2; no migration of the earlier unaccepted staging schema is provided.

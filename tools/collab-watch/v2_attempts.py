@@ -10,7 +10,7 @@ import sqlite3
 from core import Conflict, canonical, digest, ident, require, strict_json
 from project_tasks import body_hash
 
-VERSION = 1
+VERSION = 2
 MAX_DESCRIPTOR_BYTES = 4096
 MAX_LOCATOR_BYTES = 1024
 MAX_ROWS = 10000
@@ -25,13 +25,13 @@ META_SQL = ("CREATE TABLE store_meta (singleton INTEGER PRIMARY KEY CHECK(single
 ATTEMPTS_SQL = ("CREATE TABLE attempts (action_key TEXT PRIMARY KEY NOT NULL, "
                 "action_descriptor TEXT NOT NULL, effect_key TEXT NOT NULL, "
                 "effect_descriptor TEXT NOT NULL, state TEXT NOT NULL, "
-                "diagnostic_code TEXT, receipt_sha256 TEXT, locator TEXT)")
+                "diagnostic_code TEXT, receipt_sha256 TEXT, locator TEXT, response_hint TEXT)")
 INDEX_SQL = ("CREATE UNIQUE INDEX effect_started_once ON attempts(effect_key) "
              "WHERE state != 'PREPARED'")
 SCHEMA = {("table", "store_meta", META_SQL), ("table", "attempts", ATTEMPTS_SQL),
           ("index", "effect_started_once", INDEX_SQL)}
 COLUMNS = ("action_key", "action_descriptor", "effect_key", "effect_descriptor",
-           "state", "diagnostic_code", "receipt_sha256", "locator")
+           "state", "diagnostic_code", "receipt_sha256", "locator", "response_hint")
 
 
 def _identity_data(value, max_bytes):
@@ -114,12 +114,14 @@ def _validated(conn, store_id):
     require(conn.execute("SELECT singleton,version,store_id FROM store_meta").fetchall()
             == [(1, VERSION, store_id)], "attempt store identity/version mismatch")
     require(conn.execute("PRAGMA quick_check(1)").fetchall() == [("ok",)], "attempt store integrity failure")
-    count, largest_action, largest_effect, largest_locator = conn.execute(
+    count, largest_action, largest_effect, largest_locator, largest_hint = conn.execute(
         "SELECT count(*),coalesce(max(length(action_descriptor)),0),"
-        "coalesce(max(length(effect_descriptor)),0),coalesce(max(length(locator)),0) FROM attempts"
+        "coalesce(max(length(effect_descriptor)),0),coalesce(max(length(locator)),0),"
+        "coalesce(max(length(response_hint)),0) FROM attempts"
     ).fetchone()
     require(count <= MAX_ROWS and largest_action <= MAX_DESCRIPTOR_BYTES
-            and largest_effect <= MAX_DESCRIPTOR_BYTES and largest_locator <= MAX_LOCATOR_BYTES,
+            and largest_effect <= MAX_DESCRIPTOR_BYTES and largest_locator <= MAX_LOCATOR_BYTES
+            and largest_hint <= MAX_LOCATOR_BYTES,
             "stored attempt bound")
     rows, effects, claimed = {}, {}, set()
     for values in conn.execute("SELECT "+",".join(COLUMNS)+" FROM attempts"):
@@ -148,8 +150,13 @@ def _validated(conn, store_id):
             require(body_hash(receipt), "invalid verified receipt digest")
         if locator is not None:
             locator = _decode(locator, MAX_LOCATOR_BYTES)
+        hint = row["response_hint"]
+        require(state != "PREPARED" or hint is None, "prepared attempt cannot have response hint")
+        if hint is not None:
+            hint = _decode(hint, MAX_LOCATOR_BYTES)
         require(ak not in rows, "duplicate stored action identity")
-        rows[ak] = dict(row, action_descriptor=action, effect_descriptor=effect, locator=locator)
+        rows[ak] = dict(row, action_descriptor=action, effect_descriptor=effect, locator=locator,
+                        response_hint=hint)
     return rows
 
 
@@ -214,8 +221,8 @@ class AttemptStore:
             require(len(rows) < MAX_ROWS, "attempt store row bound")
             require(all(r["effect_key"] != ek or canonical(r["effect_descriptor"]) == effect
                         for r in rows.values()), "effect descriptor binding mismatch")
-            conn.execute("INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?)",
-                         (ak, action, ek, effect, "PREPARED", None, None, None))
+            conn.execute("INSERT INTO attempts VALUES(?,?,?,?,?,?,?,?,?)",
+                         (ak, action, ek, effect, "PREPARED", None, None, None, None))
             return _validated(conn, self.store_id)[ak]
 
     def start(self, action_key):
@@ -228,6 +235,21 @@ class AttemptStore:
             changed = conn.execute("UPDATE attempts SET state='STARTED' WHERE action_key=? AND state='PREPARED'",
                                    (action_key,)).rowcount
             require(changed == 1, "atomic START transition failed")
+            return _validated(conn, self.store_id)[action_key]
+
+    def record_response_hint(self, action_key, hint):
+        """Write-once physical transport hint; never a verification receipt."""
+        require(body_hash(action_key), "invalid action key")
+        hint_text = _identity_data(hint, MAX_LOCATOR_BYTES)
+        with self._transaction() as (conn, rows):
+            old = rows.get(action_key)
+            require(old is not None and old["state"] in ("STARTED", "UNRESOLVED"),
+                    "invalid response hint state")
+            if old["response_hint"] is not None:
+                require(canonical(old["response_hint"]) == hint_text, "response hint cannot change")
+                return old
+            conn.execute("UPDATE attempts SET response_hint=? WHERE action_key=?",
+                         (hint_text, action_key))
             return _validated(conn, self.store_id)[action_key]
 
     def mark_unresolved(self, action_key, diagnostic_code):
