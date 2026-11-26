@@ -27,6 +27,12 @@ Before any other CD preparation:
 
 If fresh real UTC time cannot be obtained, do not begin autonomous CD mutation.
 
+While a time-boxed CD/CDC cycle is active, returning a terminal/final assistant response is itself
+an **execution-ending lifecycle action**. It is not a status operation and is permitted only after
+the cycle's pre-final stop gate passes. Completing a review unit, publishing an intermediate
+result, reaching a known frontier, or waiting for peer/external input does not by itself permit a
+terminal response.
+
 The clock starts before mandatory reading or preparation. Commit timestamps are not a
 substitute for `CYCLE_START_TIME`. Local timezone, inferred location and changes of either
 during the session do not participate in the CD clock.
@@ -215,6 +221,31 @@ block from the current project frontier, preferring logically adjacent work when
 otherwise equal.
 
 A CD does not end merely because the originally mentioned subsystem finished.
+
+When progress temporarily depends on an admitted peer/external event, waiting remains part of the
+same active turn:
+
+```text
+WAIT != return-to-user
+WAIT != turn completion
+WAIT != STOP
+
+WAIT = bounded in-turn suspension followed by continuation/stop re-evaluation
+```
+
+A progress/status update is permitted only when the execution surface can emit it without ending
+the active turn. If an ordinary user-visible response is terminal on the current execution surface,
+do not send it while the cycle remains active.
+
+Before any terminal/final response, perform `PRE_FINAL_GATE`:
+
+1. name the exact currently true early-stop/session-safety basis;
+2. verify it against current observable facts rather than the completion of the last local unit;
+3. verify that no safer permitted development step remains and no applicable bounded `WAIT` path
+   remains;
+4. ask: **if no final response were emitted now, could useful permitted work or bounded waiting
+   still continue inside the current cycle and safety margin?** If yes, the gate fails and the
+   cycle continues.
 
 Early stop before the session boundary is appropriate only when:
 
