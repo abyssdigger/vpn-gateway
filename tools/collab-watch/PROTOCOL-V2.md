@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Units 1–2
+# COLLAB v2 — project Issue work plane, Units 1–3a
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -6,7 +6,7 @@ The v0/v1 modules, protocol, configurations and current journal are unchanged.
 ## Boundary
 
 This unit implements a pure task registry, material admission and relation reducer.
-Unit 2 adds standalone acquisition. Neither implements compact transport, preflight, publishing, Issue
+Unit 2 adds standalone acquisition. Unit 3a adds compact transport. None implements preflight, publishing, Issue
 closure, holder-command execution, health/receipt handling or epoch cutover.
 Non-task control kinds are rejected by this unit, not silently ignored. Later
 units must compose the holder/health/receipt/signal projections without creating
@@ -176,3 +176,30 @@ assignments and one explicit CURRENT_ROLE for each bounded action/unit. A switch
 is explicit between units and rechecks the new role/incarnation before its first
 action. Evidence from one role is not authority for another. This is a future
 operational contract, not a change to current v1 bindings.
+
+## Unit 3a — compact observation transport
+
+`v2_compact.compact_v2(cfg, control, tasks, previous=None)` accepts only trusted,
+complete, stable normalized Unit-2 observations. It first projects the full raw
+observation, then emits versioned canonical JSON plus exact transfer SHA-256 and
+full inventory SHA-256. It must prove exact projection **and retained state**
+equivalence against the original reducer before returning. Decoder verifies
+canonical bytes, transfer digest, exact full config and dynamic partition identity,
+then uses the same reducer. No second lifecycle parser is introduced.
+
+The task envelope (r1 Issue body, identity, lifecycle metadata/events) remains
+raw. Control rows from known worker actors beginning the reserved journal family
+prefix, and all task comments beginning the task-material family prefix, remain
+raw even when not yet referenced or malformed. Ordinary prose becomes opaque:
+partition + physical ID + actor + created/updated timestamps + exact body digest.
+Validate physical duplicates before omission; identical duplicates deduplicate,
+conflicts fail. Opaque rows remain inventory only and are never reconstructed or
+promoted into semantic material. The full inventory digest binds the entire
+partitioned observation, including opaque additions/removals/changes. Whole-wire
+hash additionally binds the exact config; signal-room rotation requires a new
+transport encoding even when semantic config is unchanged.
+
+A trusted expected digest binds exact bytes, not acquisition completeness, honest
+classification, GitHub provenance or unseen history. The producer is responsible
+for the Unit-2 acquisition boundary. No prospective OPEN extension, preflight,
+CLI dispatch, publisher, close actuator, live pilot or epoch migration here.
