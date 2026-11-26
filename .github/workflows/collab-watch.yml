@@ -50,11 +50,18 @@ jobs:
           if ! git cat-file -e '5ea03ac9e0a2114f224ee810a743373ae2669534^{commit}' 2>/dev/null ||
              ! git diff --quiet 5ea03ac9e0a2114f224ee810a743373ae2669534 -- \
                collab_watch.py core.py journal.py preflight_m.py \
-               compact_observation.py pilot-config-m1.json 2>/dev/null; then
+               compact_observation.py pilot-config-m1.json preflight_cli.py 2>/dev/null; then
             echo "FAIL stage: historical baseline"
             exit 1
           fi
-      - name: Compare frozen raw and compact observations
+      - name: Verify exact terminal candidate
+        shell: bash
+        run: |
+          if ! python -c 'from pathlib import Path; import hashlib; b=Path("a013-disposition-candidate.txt").read_bytes(); raise SystemExit(0 if len(b)==415 and hashlib.sha256(b).hexdigest()=="2439f12370c5a2174527460cf6041dba70177c591848927b80472c2d0d64b151" else 1)' 2>/dev/null; then
+            echo "FAIL stage: candidate identity"
+            exit 1
+          fi
+      - name: Fresh terminal disposition preflight
         env:
           COLLAB_GITHUB_TOKEN: ${{ github.token }}
-        run: python live_compact_evidence.py
+        run: python preflight_cli.py --config pilot-config-m1.json --actor 340153730 --kind journal --candidate a013-disposition-candidate.txt --fresh 2>/dev/null
