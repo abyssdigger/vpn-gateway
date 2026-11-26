@@ -95,8 +95,43 @@ class RuntimeStatusTests(unittest.TestCase):
         self.assertEqual(demand["regular_present"], 1)
         self.assertEqual(demand["regular_deficit"], 1)
         self.assertEqual(demand["ordinary_device_ids"], [])
+        self.assertEqual(demand["external_ordinary_present"], 1)
+        self.assertEqual(demand["managed_ordinary_contributions"], [])
         agent.confirm_managed_demand(None)
         self.assertIsNone(agent.snapshot().managed_profile_demands)
+
+    def test_status_carries_ordered_observed_managed_contributions(self):
+        devices = "".join(f"""
+[device.{name}]
+enabled = true
+use_outbound_nat = true
+[device.{name}.managed_vpn]
+kind = "wireguard"
+interface = "wg{index}"
+address = "10.200.0.{index}/32"
+private_key_file = "/secret/{name}.key"
+[[device.{name}.managed_vpn.peers]]
+id = "peer"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.{index}:51820"
+probe_target = "10.201.0.{index}"
+""" for name, index in (("a", 1), ("b", 2)))
+        config = parse_current_config(devices + CONFIG.replace(
+            'device_order = ["ovpn"]', 'device_order = ["b", "ovpn", "a"]'
+        ) + "warm_paths = 2\n")
+        agent = RuntimeStatusAgent(build_configured_intent_status(config))
+        agent.confirm_managed_demand(project_final(config, (
+            PathBinding(LogicalPathId("a", 0, 0), InterfaceIdentity("wg1", 12)),
+            PathBinding(LogicalPathId("ovpn", 0, 0), InterfaceIdentity("vpn0", 11)),
+        )))
+        demand = json.loads(json.dumps(agent.snapshot().to_dict()))["managed_profile_demands"][0]
+        self.assertEqual(demand["regular_present"], 2)
+        self.assertEqual(demand["external_ordinary_present"], 1)
+        self.assertEqual(demand["managed_ordinary_contributions"], [
+            {"device_id": "b", "fresh_path_count": 0},
+            {"device_id": "a", "fresh_path_count": 1},
+        ])
+        self.assertEqual(demand["ordinary_device_ids"], ["a"])
 
     def test_status_exposes_scoped_helper_routing_intent(self):
         configured = build_configured_intent_status(

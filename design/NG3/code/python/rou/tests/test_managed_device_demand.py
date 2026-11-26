@@ -163,6 +163,52 @@ class ManagedDeviceDemandTests(unittest.TestCase):
         self.assertEqual(result.profiles[0].reserve_device_ids, ())
         self.assertEqual(result.profiles[1].ordinary_device_ids, ("r",))
 
+    def test_observed_contributions_preserve_order_zero_and_deduplication(self):
+        observed = (
+            presence("a"), presence("a"), presence("ext", 0),
+            presence("ext", 1), presence("r"), presence("disabled"),
+            presence("foreign"),
+        )
+        for target in ('"all"', "0", "1", "4"):
+            for project in (project_regular, project_final):
+                with self.subTest(target=target, project=project.__name__):
+                    cfg = config(("b", "ext", "a", "disabled", "r:reserve"), target)
+                    item = project(cfg, iter(observed)).profiles[0]
+                    self.assertEqual(item.external_ordinary_present, 2)
+                    self.assertEqual(
+                        tuple((c.device_id, c.fresh_path_count)
+                              for c in item.managed_ordinary_contributions),
+                        (("b", 0), ("a", 1)),
+                    )
+                    self.assertEqual(item.regular_present, 3)
+                    self.assertEqual(item.external_ordinary_present + sum(
+                        c.fresh_path_count for c in item.managed_ordinary_contributions
+                    ), item.regular_present)
+
+    def test_observed_contributions_are_profile_local(self):
+        cfg = parse_current_config(
+            DEVICES + profile("corp", ("r:reserve", "a", "ext:reserve"), "1")
+            + profile("other", ("r", "a", "ext"), "1", "10.78.0.0/24")
+            + '[profile.off]\nenabled = false\n'
+        )
+        for project in (project_regular, project_final):
+            with self.subTest(project=project.__name__):
+                result = project(cfg, (presence("a"), presence("r"), presence("ext")))
+                corp, other = result.profiles
+                self.assertEqual((corp.profile_id, other.profile_id), ("corp", "other"))
+                self.assertEqual(corp.external_ordinary_present, 0)
+                self.assertEqual(other.external_ordinary_present, 1)
+                self.assertEqual(
+                    tuple((c.device_id, c.fresh_path_count)
+                          for c in corp.managed_ordinary_contributions),
+                    (("a", 1),),
+                )
+                self.assertEqual(
+                    tuple((c.device_id, c.fresh_path_count)
+                          for c in other.managed_ordinary_contributions),
+                    (("r", 1), ("a", 1)),
+                )
+
     def test_reserve_external_support_is_not_actuated(self):
         cfg = config(("a", "ext:reserve", "r:reserve"), "1")
         result = project_final(cfg, (presence("ext"),))

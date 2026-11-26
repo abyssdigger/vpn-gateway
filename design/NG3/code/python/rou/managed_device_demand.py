@@ -14,6 +14,12 @@ from .release1_config import CurrentConfig
 
 
 @dataclass(frozen=True, slots=True)
+class ManagedOrdinaryContribution:
+    device_id: str
+    fresh_path_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ProfileManagedDeviceDemand:
     profile_id: str
     regular_target: int
@@ -26,6 +32,9 @@ class ProfileManagedDeviceDemand:
     # attempt to consider alternatives after a failed actuation.
     ordinary_candidates: tuple[str, ...]
     reserve_candidates: tuple[str, ...]
+    # Fresh structural observation only; not survivor selection or retirement.
+    external_ordinary_present: int
+    managed_ordinary_contributions: tuple[ManagedOrdinaryContribution, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +115,13 @@ def _project(
             ProfileManagedDeviceDemand(
                 profile_id, target, present, deficit, reserve_present,
                 selected, selected_reserve, candidates, reserve_candidates,
+                external_ordinary_present=sum(
+                    counts[d] for d in ordinary if d not in config.managed_vpns
+                ),
+                managed_ordinary_contributions=tuple(
+                    ManagedOrdinaryContribution(d, counts[d])
+                    for d in ordinary if d in config.managed_vpns
+                ),
             )
         )
         ordinary_demand.update(selected)
