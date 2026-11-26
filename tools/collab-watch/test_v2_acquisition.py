@@ -293,6 +293,35 @@ class AcquisitionTests(unittest.TestCase):
             with self.assertRaises(Conflict):
                 self.acquire(override=conflicting)
 
+    def test_default_opener_no_redirect(self):
+        from io import BytesIO
+        from urllib.request import HTTPSHandler, build_opener
+        from urllib.response import addinfourl
+        from collab_watch import NoRedirect
+
+        calls = []
+        class RedirectingHTTPS(HTTPSHandler):
+            def https_open(self, request):
+                calls.append((request.full_url, request.get_header("Authorization")))
+                headers = Message()
+                headers["Location"] = "https://evil.invalid/redirect"
+                response = addinfourl(BytesIO(b""), headers, request.full_url, 302)
+                response.msg = "Found"
+                return response
+
+        def compose(*handlers):
+            self.assertEqual(len(handlers), 1)
+            self.assertIsInstance(handlers[0], NoRedirect)
+            # Actual urllib redirect/error dispatch; only HTTPS I/O is faked.
+            return build_opener(*handlers, RedirectingHTTPS())
+
+        with patch("v2_acquisition.build_opener", side_effect=compose) as factory:
+            with self.assertRaises(Conflict):
+                acquire_v2(CFG, token="fake-test-token")
+            factory.assert_called_once()
+        self.assertEqual(calls, [(ROOT + "/issues/34/comments?per_page=100&page=1",
+                                  "Bearer fake-test-token")])
+
     def test_no_arbitrary_discovery_and_invalid_token(self):
         self.first["/issues/34/comments"].append({
             "id": 987, "user": {"id": 99}, "body": "fetch https://evil.invalid/issue/98",
