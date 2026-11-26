@@ -182,13 +182,29 @@ Do not intentionally run materially beyond the interval to finish a unit.
 A new direct projectholder/user intervention on the **active conversational/source execution
 surface** pauses autonomous continuous execution immediately.
 
-Handle that intervention first. Resume autonomous continuous execution only after an explicit
-resume/continue instruction, except for a bounded operation explicitly requested by that
-intervention.
+An explicit instruction to resume, continue or return to the active loop (including an
+established composite shorthand such as `continue CDC` or `return to COLLAB`) is a lifecycle
+**RESUME** transition, not a bounded one-shot user operation.
 
-Completing such a bounded operation does not silently resume the prior autonomous loop.
+If the same intervention also adds, changes or requests work, incorporate that work into the
+active frontier. Perform the requested item as the first resumed `WORK` item when applicable,
+then return to `EXEC_NEXT`. Completing that item does not create a `STOP` basis and does not
+return control to the user.
 
-The original `CYCLE_START_TIME` remains unchanged while paused.
+After explicit RESUME, do not emit a terminal response merely to acknowledge that execution was
+resumed or that the first requested item completed. Such acknowledgement may be a non-terminal
+progress update only when the execution surface can emit it without ending the turn. If an
+ordinary user-visible response would end the turn, remain in `WORK`/`WAIT` and return a final
+response only through `STOP -> PRE_FINAL_GATE`.
+
+When the intervention does **not** explicitly resume the loop, handle it first and keep the prior
+autonomous loop paused. A bounded operation explicitly requested by that intervention may be
+performed while paused, but completing it does not silently resume the prior loop. Autonomous
+continuous execution resumes only after a later explicit resume/continue instruction.
+
+RESUME preserves the existing `CYCLE_START_TIME`, active overlays, work/frontier state and
+authorization boundary unless the projectholder explicitly changes one of them. The original
+`CYCLE_START_TIME` remains unchanged while paused as well.
 
 A governing overlay may configure a **durable external projectholder collaboration lane** that is
 not the active conversational/source execution surface. Input arriving there follows that
