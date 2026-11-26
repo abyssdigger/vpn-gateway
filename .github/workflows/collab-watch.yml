@@ -25,3 +25,25 @@ jobs:
           python-version: "3.13"
       - name: Unit tests
         run: python -m unittest discover -q
+
+  live-evidence:
+    if: github.ref == 'refs/heads/collab-live-evidence-20261126'
+    permissions:
+      contents: read
+      issues: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: tools/collab-watch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compare frozen raw and compact observations
+        env:
+          COLLAB_GITHUB_TOKEN: ${{ github.token }}
+        run: python live_compact_evidence.py
