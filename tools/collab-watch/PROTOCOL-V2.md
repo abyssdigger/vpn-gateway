@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Units 1–3b-2
+# COLLAB v2 — project Issue work plane, Units 1–3c
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -6,8 +6,9 @@ The v0/v1 modules, protocol, configurations and current journal are unchanged.
 ## Boundary
 
 This unit implements a pure task registry, material admission and relation reducer.
-Unit 2 adds standalone acquisition. Unit 3a adds compact transport. None implements preflight, publishing, Issue
-closure, holder-command execution, health/receipt handling or epoch cutover.
+Unit 2 adds standalone acquisition. Unit 3a adds compact transport. Unit 3b adds conditional preflight; Unit 3c verifies actual post-action
+observations. None implements publishing, Issue-close mutation, holder-command
+execution, health/receipt handling or epoch cutover.
 Non-task control kinds are rejected by this unit, not silently ignored. Later
 units must compose the holder/health/receipt/signal projections without creating
 a second task lifecycle. The v1 signal wire may be reused through the physical
@@ -260,3 +261,44 @@ strict eventual real immutable control creation after Issue creation. No
 registration/readiness/state advancement before canonical physical admission.
 No Issue creation/comment send, post-send actuator, CLI, holder/signal, live
 workflow or epoch migration here.
+
+
+## Unit 3c — actual post-action readback
+
+Pure verify_control, verify_initial_open and verify_close recompute the accepted
+conditional preflight from the exact original compact baseline, prior retained
+state, selected role/incarnation/actor and exact body/request. Initial OPEN
+also requires the separately acquired original extra Issue. Each verifier
+requires the independently retained original preflight SHA-256 (canonical
+proof). This digest binds the inputs, not authority or external provenance;
+no caller-supplied proof fields relax validation.
+
+Fresh complete stable Unit-2 observations must replay canonically with the
+full state derived from the original baseline. Existing and initial-OPEN
+control verification finds the exact admitted immutable event, actor, room,
+body digest and physical occurrence, strictly after its preflight lower bound.
+A successful POST response can supply an expected {room,comment_id}; it must
+match that exact occurrence even if another matches. Without an expected ref,
+exactly one admitted occurrence may reconcile an ambiguous send. Zero or
+multiple occurrences remain unresolved; neither permits retry. An exact
+expected occurrence may resolve amid identical duplicates; the receipt reports
+their count. Later legitimate relations need not leave the verified event at
+the current head. Initial OPEN additionally requires the preflight Issue
+identity to match the now canonically discovered Issue; ordinary post-preflight
+comments may change without changing that identity.
+
+Close verification requires the same task, Issue, revision, attempt, accepted
+SHA, original Issue identity, and actual normalized GUARD close event strictly
+after the exact nominated physical ACCEPT. Canonical CLOSE_OBSERVED or a later
+valid CLOSED disposition may satisfy it. PATCH has no ACCEPT-ref field, so
+the later disposition may nominate a different eligible physical duplicate;
+the nominated preflight occurrence must still be present and independently
+precede the actual close.
+
+Receipts bind the original proof, baseline and post-state digests, explicit
+selected role/incarnation and actual physical occurrence or close identity.
+They create no ledger, state, synthetic event, retry or mutation authority.
+The caller supplies fresh trusted observations; the verifier cannot prove
+GitHub provenance or attribute identical actions to a particular HTTP call.
+Fresh pre-mutation inventory comparison, HTTP send/PATCH, retry policy, CLI,
+live evidence, holder/signal composition and epoch cutover remain outside 3c.
