@@ -1,0 +1,4 @@
+<!-- vpng-collab-journal/1 -->
+```json
+{"event_id":"m-f1-a004-open-r1","from":"GUARD","incarnation":"guard-gpt56-sol-current","journal_epoch":"collab-m1-20261126","kind":"OPEN","obligation":{"assignee":"BUILDER","disposition_by":"GUARD","id":"M-F1-A004","kind":"implementation","revision":1},"payload_ref":"issue:34#issuecomment-7201620585","protocol":"vpng-collab/1","room":34,"to":["BUILDER"]}
+```
