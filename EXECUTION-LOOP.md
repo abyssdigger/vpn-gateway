@@ -117,6 +117,11 @@ subsystem or a bounded wait timeout is not by itself a `STOP` basis.
 A refused unauthorized mutation is likewise not a `STOP` basis. Return to `EXEC_NEXT` and
 continue authorized/read-only work or `WAIT` when appropriate.
 
+While the loop is active, returning a terminal/final assistant response is itself an
+**execution-ending lifecycle action**. It is permitted only through the `STOP -> PRE_FINAL_GATE`
+path. A completed local unit, a clear frontier, an intermediate result, or the fact that the next
+step is `WAIT` never makes a terminal response safe by itself.
+
 ## 5. WAIT semantics
 
 `WAIT` is valid only when progress actually depends on external input/event and an active
@@ -131,6 +136,20 @@ The interaction overlay may define watcher/frontier mechanics. At the generic le
   a `STOP` basis; when the loop is still active and an applicable bounded wait exists, return to
   `WAIT` and then `EXEC_NEXT` rather than ending the turn;
 - do not use an unbounded wait that can bypass the session-safety boundary.
+
+`WAIT` does not return control to the user and does not complete the active turn:
+
+```text
+WAIT != return-to-user
+WAIT != turn completion
+WAIT != STOP
+
+WAIT = bounded in-turn suspension followed by EXEC_NEXT
+```
+
+A progress/status update is permitted only when the execution surface can emit it without ending
+the active turn. If an ordinary user-visible response is terminal on the current execution surface,
+do not send it while the loop remains active; remain in `WORK`/`WAIT` instead.
 
 ## 6. Clock and session-safety boundary
 
@@ -208,6 +227,10 @@ The gate must:
    applicable bounded waiting mechanism exists, no required `WAIT` transition;
 4. perform any active-overlay final checks, including an external-lane final read when required;
 5. prepare the truthful handoff/conclusion required for the actual stop basis.
+6. perform the terminal-response liveness check: **if no final response were emitted now, does any
+   permitted `WORK` or applicable bounded `WAIT` path still exist inside the current execution
+   window and safety boundary?** If yes, `PRE_FINAL_GATE` fails and the agent must return to
+   `EXEC_NEXT`.
 
 If no permitted stop basis is true, `STOP` is invalid: return to `EXEC_NEXT` and choose
 `WORK` or `WAIT`.

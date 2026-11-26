@@ -26,6 +26,11 @@ Before development work:
 
 All repository/GitHub mutations still pass `PRE_MUTATION_GATE` from `AGENTS.md`.
 
+For an active time-boxed CD/CDC window, development execution has a presumption of **continued
+turn liveness** until the generic `PRE_FINAL_GATE` passes. Completing a review unit, publishing an
+intermediate result, reaching a known frontier, or entering `WAIT` must not be followed by a
+terminal/final response merely because that local boundary is convenient.
+
 ## 2. Review units and development blocks
 
 Work proceeds in coherent **review units**.
@@ -223,6 +228,10 @@ equal. The loop may also enter another applicable work-mode overlay, such as res
 starting a new cycle.
 
 A development cycle does not end merely because the originally mentioned subsystem finished.
+
+A development-boundary status is not a handoff and does not authorize turn completion. If useful
+authorized work remains, continue `WORK`; if progress genuinely depends on an admitted external
+event, use bounded `WAIT`; only the generic `PRE_FINAL_GATE` may lead to a terminal response.
 
 Do not manufacture work merely to fill the clock.
 
