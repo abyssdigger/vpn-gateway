@@ -1,0 +1,7 @@
+# COLLAB event GC rehearsal
+
+Offline one-attempt janitor mechanism only. `core.attempt(scope, candidate, permit, transport)` takes an explicit repository/signal-room scope, the **unmodified** M projector candidate, and an external permit assertion binding that scope and the canonical SHA-256 of the entire candidate. The assertion is checked for equality, not minted or interpreted as projectholder authority. A future separately reviewed launcher must enforce the real capability, current epoch/room, and fresh mutation gate. This package ships no production transport, credentials, CLI, network, or GitHub deletion endpoint.
+
+The injected test transport provides `read_exact(repository, room, comment_id)` and `delete_exact(repository, room, comment_id)`. `read_exact` returns `Observation` with exact repository/room/comment/actor/body, or `None` only for confirmed absence; uncertain reads raise. Scope/candidate/permit rejection raises `Rejected` before any transport access. Exact read permits at most one fake delete attempt, then one reconciliation read even if the attempt raised. `ALREADY_ABSENT` is pre-attempt absence, `STALE` is mismatched pre-read, `CONFIRMED_ABSENT_AFTER_ATTEMPT` means only the observed postcondition (not causation), `UNCERTAIN` means the state cannot be established. The compare and mutation are not atomic; no blind retries or arbitrary URL execution. Real destructive capability is not part of this unit.
+
+Run from this directory: `python3 -m unittest -v test_core`.
