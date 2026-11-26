@@ -24,3 +24,5 @@ ADD_TAG	ng3-ref-hygiene-reconcile-20261126-source	origin/ref-hygiene-reconcile-2
 DEL_BRANCH	ref-hygiene-reconcile-20261126
 ADD_TAG	ng3-ref-hygiene-batch-tags-20261126-source	origin/ref-hygiene-batch-tags-20261126	ref-hygiene batch-tag helper source tip
 DEL_BRANCH	ref-hygiene-batch-tags-20261126
+ADD_TAG	ng3-review-followup-hardening-20261126-source	2c2590dff3f8d84571658b5b2400e854e73ab053	review-followup governance hardening source represented by main snapshot 179af5f8cfc887427c5aeebf223460958789fed3
+DEL_BRANCH	review-followup-hardening-20261126
