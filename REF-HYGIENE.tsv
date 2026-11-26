@@ -1,3 +1,24 @@
 # scripts: ./ref-hygiene-add-tags.sh ./ref-hygiene-delete-branches.sh
 # format: ADD_TAG<TAB>tag<TAB>target<TAB>annotation
 # format: DEL_BRANCH<TAB>branch
+
+ADD_TAG	ng3-collab-v0-hardening-source	02d96b3f642c7744bda64e707e84ab33c5c9c803	completed COLLAB hardening source preserved before branch retirement
+DEL_BRANCH	collab-v0-hardening-20261126
+ADD_TAG	ng3-collab-pilot-f2-probe-detached-source	d954157aff41924c5a4ce0ac0ef19aafba253c8a	F2 detached-probe source; exact ancestor of active F1 lineage
+DEL_BRANCH	collab-pilot-f2-probe-detached-20261126
+ADD_TAG	ng3-collab-pilot-f2-warm-release-source	71cffe94c65f27e59ed4641b0fdbc9790f7bfb78	F2 warm-release source; exact ancestor of active F1 lineage
+DEL_BRANCH	collab-pilot-f2-warm-release-20261126
+ADD_TAG	ng3-gpt6-eval-warm-paths-reserve-source	e252e29a91b83f3a858b5c46be22568619d6e16f	accepted warm-paths evaluation source; exact ancestor of active F1 lineage
+DEL_BRANCH	gpt6-eval-warm-paths-reserve-cdc-20261125
+ADD_TAG	ng3-config-driven-device-demand-source	78a97023f9b137e188744a43bdce5777d6ae1be8	config-driven Device-demand source; exact ancestor of active F1 lineage
+DEL_BRANCH	ng3-config-driven-device-demand-cdc-20261125
+ADD_TAG	ng3-warm-paths-reserve-source	8021fc07f32d3f9e4945c1c1a1ce3408baeb2d70	warm-paths/reserve source; exact ancestor of active F1 lineage
+DEL_BRANCH	ng3-warm-paths-reserve-cdc-20261125
+ADD_TAG	ng3-id-trial-canary-source	3d49e5662dc8e7151333a98bd1795f890d395e85	completed PASS ID execution-gates canary source
+DEL_BRANCH	id-trial-canary-20261125
+ADD_TAG	ng3-id-trial-execution-gates-source	3f70041755a6b8fcde69eb8b0c139fca00826b5a	completed PASS ID execution-gates normative source
+DEL_BRANCH	id-trial-execution-gates-20261125
+ADD_TAG	ng3-publication-validation-semantics-source	ab3fb2d3874f270e1219a57a2339e9c9764e2503	publication-validation process source already represented in main
+DEL_BRANCH	process-publication-validation-semantics-20261125
+ADD_TAG	ng3-ref-hygiene-reconcile-20261126-source	origin/ref-hygiene-reconcile-20261126	ref-hygiene reconciliation source tip
+DEL_BRANCH	ref-hygiene-reconcile-20261126
