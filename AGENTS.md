@@ -352,10 +352,10 @@ The top-level operating documents have deliberately non-overlapping responsibili
    research frontier, evidence classification, cheapest-sufficient-evidence discipline,
    hypothesis boundaries and research-specific continuation/escalation semantics. It grants no
    repository/GitHub authority.
-6. `PROJECT-CONVENTIONS.md` contains **project-artifact maintenance conventions**:
+6. `PROJECT-CONVENTIONS.md` contains **project-artifact and release-governance conventions**:
    language, formatting, review/experiment artifact handling, repository layout/lineage facts,
-   naming and CHANGELOG conventions. It must not define agent authorization or execution-loop
-   timing.
+   naming, CHANGELOG, deferral-record lifecycle and release-development methodology. It must not
+   define agent authorization or execution-loop timing.
 
 When a rule appears to belong to more than one document, keep the normative rule only in the
 owner above and use a short reference from the other document if needed.

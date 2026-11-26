@@ -14,6 +14,10 @@ semantics, component semantics or artifact conventions.
 Explicit projectholder `CD` / `CDC` start/resume/continue wording activates the generic loop
 and this development overlay under `AGENTS.md`.
 
+`CD` and `CDC` are accepted activation aliases with **identical process semantics**. The
+project does not assign a separate mode, lifecycle or authority meaning to the extra letter in
+`CDC`, and agents must not infer one from historical wording.
+
 A generic loop, ID/IDC or research-loop instruction does not activate development.
 
 Before development work:

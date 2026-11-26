@@ -2,7 +2,7 @@
 
 **Статус:** нормативный документ проекта  
 **Область:** архитектура, проектная документация, ревью, экспериментальные записи,
-структура репозитория и подготовка изменений
+структура репозитория, deferral records, релизная методика и подготовка изменений
 
 Этот документ фиксирует правила, которые должны сохраняться между обсуждениями и не
 зависеть от контекста конкретного чата.
@@ -395,13 +395,19 @@ Regression baseline предыдущей стадии/поколения сох�
 legacy-ветках; их большие журналы не переносятся обратно в актуальный `main`.
 CHANGELOG служит хронологией, а не нормативным источником продуктовой семантики.
 
+Корневой `REF-HYGIENE.tsv` является каноническим repository-layout местом для
+**deferred ref-hygiene ledger**. Этот документ определяет только его положение и назначение
+как артефакта. Формат исполняемых операций, authorization, publication/delete semantics и
+правила helper-скриптов принадлежат исключительно `AGENTS.md`.
+
 ## 9. Полномочия нормативных источников
 
 Приоритет определяется предметом правила, а не общей линейной иерархией:
 
 - `AGENTS.md`: entry point, порядок чтения, repository write authorization, публикация commits, `main` protection, snapshots и Git-history operations;
 - `CONTINUOUS-DEVELOPMENT.md`: только CD execution model, review/development-block cadence, session clock и handoff;
-- этот документ: язык артефактов, review records, структура репозитория, lineage и CHANGELOG;
+- этот документ: язык артефактов, review records, структура репозитория, lineage, CHANGELOG,
+  lifecycle deferral records и релизная методика разработки;
 - `design/requirements-model.md`: общая модель Requirements/Constraints и closure;
 - `design/component-model.md`: общая модель компонентов и взаимодействий;
 - требования нормативной стадии: продуктовая семантика, scope и ограничения;
@@ -416,6 +422,29 @@ CHANGELOG служит хронологией, а не нормативным и
 явно определить предметный нормативный источник и требуемое human decision,
 а затем исправить источник без молчаливого выбора удобной формулировки.
 
+### 9.1. Lifecycle deferral records
+
+Статус Requirement/Constraint `postponed` не должен существовать только как слово в дереве.
+Для каждого текущего postponement должен существовать явно связанный current deferral record
+под `design/deferrals/`, на который ссылается status/decision basis проекта.
+
+Current deferral record должен как минимум фиксировать:
+
+- затронутые Requirement/Constraint ID;
+- принятое основание postponement и источник решения;
+- границу исключенного scope и то, что postponement **не** исключает;
+- условия/события re-entry, после которых postponement обязан быть пересмотрен;
+- дату/контекст решения и, если применимо, предыдущий record, который он supersede.
+
+Обычная задержка реализации, нехватка времени или удобство текущего development block сами по
+себе не создают deferral. Postponement появляется только через принятый нормативный status
+transition по `design/requirements-model.md` и связанный record.
+
+При re-entry исторический deferral record не переписывается так, будто postponement не было.
+Текущий status/decision basis переводится на новое принятое состояние/решение, а прежний record
+остается historical evidence. Если postponement изменяет границу или условия, создается новый
+record или явный superseding update с сохранением ссылки на предыдущую историю.
+
 ## 10. Релизная модель разработки
 
 Релизная модель применяется к фактическим выпускам продукта и не превращает каждый
@@ -428,6 +457,15 @@ CHANGELOG служит хронологией, а не нормативным и
 
 Release cycle начинается с release-specific product decision, а не со сборки bundle или
 создания `release/<version>`.
+
+Базовый release frontier включает все применимые нормативные обязательства. В частности,
+`permanent` Requirement остается conformance obligation, **кроме** случая, когда одновременно:
+
+1. применимый нормативный Constraint явно допускает omission этого обязательства для выпуска; и
+2. approved `RELEASE-SCOPE.md` явно фиксирует, что для данного выпуска этим разрешением
+   воспользовались.
+
+Сам release scope не может исключить permanent Requirement без такой нормативной omission basis.
 
 До **любого** перехода к подготовке публикации конкретного выпуска должен существовать
 `release/<version>/RELEASE-SCOPE.md` со статусом `approved`, явно принятый projectholder.
@@ -450,6 +488,9 @@ Release cycle начинается с release-specific product decision, а не
 - версия и scope label;
 - состояние `proposed` или `approved`;
 - явно включенные capabilities/feature families;
+- явный перечень release-supported integration families / operational integration paths,
+  обязательных для этого выпуска; такой набор не должен определяться постфактум только
+  содержимым `DEPLOYMENT.md`, QA или test harness;
 - разрешенные требованиями omissions, которыми для этого выпуска решено воспользоваться;
 - разрешенные omissions, которыми решено **не** пользоваться;
 - release-specific commitments projectholder, не противоречащие нормативным требованиям;
@@ -595,8 +636,13 @@ Coverage обязан перечислить **каждый** нормативн
   применим к кандидату;
 - `excluded-postponed` — `postponed` узел нормативно существует, но исключен из текущего
   development/release frontier согласно своему postponement record;
-- `conformance-applicable` — `permanent` узел не имеет конечного closure и для выпуска
-  проверяется на отсутствие известного нарушения применимых решений;
+- `conformance-applicable` — `permanent` узел не имеет конечного closure, остается внутри
+  approved release frontier и для выпуска проверяется на отсутствие известного нарушения
+  применимых решений;
+- `excluded-by-approved-scope` — применимый нормативный Constraint явно допускает omission,
+  а approved `RELEASE-SCOPE.md` явно воспользовался этим разрешением; coverage обязан назвать
+  и Constraint basis, и exact scope decision. Само наличие `permanent` status такого
+  disposition не запрещает, но без обоих оснований он недопустим;
 - для `open`, `pending_closure` и `rejected_closure`, если такие состояния присутствуют,
   coverage обязан сохранить фактический status и явно зафиксировать release disposition и
   его влияние на решение о выпуске, а не скрывать узел под общим итогом.
@@ -651,6 +697,13 @@ release gate именно через release-specific scope.
 QA report обязан перечислить проверенные документы и их identity/digest, результаты
 documentation-driven walkthrough по разделам/шагам и отдельно результаты дополнительного
 negative/fault-injection QA.
+
+Финальный candidate-bound `QA-REPORT.md`, используемый как release evidence, обязан сам
+идентифицировать exact release-candidate commit SHA, exact product-bundle identity и exact
+workflow run/job, результаты которых он утверждает. Если существенный QA выполнялся на
+predecessor candidate, финальный record должен либо повторно зафиксировать проверку exact
+candidate, либо явно назвать predecessor relation и доказанный non-affecting delta. Нельзя
+оставлять эту identity chain только на последующий fulfillment review.
 
 До отдельного решения о выпуске должны существовать два различных evidence artifacts:
 
