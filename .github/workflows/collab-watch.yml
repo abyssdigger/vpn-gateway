@@ -40,9 +40,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Verify historical semantic baseline
+        shell: bash
+        run: |
+          if ! git cat-file -e '5ea03ac9e0a2114f224ee810a743373ae2669534^{commit}' 2>/dev/null ||
+             ! git diff --quiet 5ea03ac9e0a2114f224ee810a743373ae2669534 -- \
+               collab_watch.py core.py journal.py preflight_m.py \
+               compact_observation.py pilot-config-m1.json 2>/dev/null; then
+            echo "FAIL stage: historical baseline"
+            exit 1
+          fi
       - name: Compare frozen raw and compact observations
         env:
           COLLAB_GITHUB_TOKEN: ${{ github.token }}
