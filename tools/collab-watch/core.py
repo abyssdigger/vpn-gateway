@@ -18,6 +18,8 @@ SCHEMAS = {
     'BLOCK': ({'obligation', 'wait_for_event_id'}, set()),
     'DISPOSITION': ({'obligation', 'disposition', 'closure_ref'}, {'artifact_ref'}),
     'DORMANT': (set(), {'wait_for_event_id'}),
+    'PING': ({'ping_id'}, set()),
+    'PONG': ({'ping_id'}, set()),
 }
 
 
@@ -161,6 +163,10 @@ def validate_event(e, actor, cfg, payloads):
     require(isinstance(recipients, list) and recipients and all(isinstance(x, str) and x in roles for x in recipients) and len(set(recipients)) == len(recipients), 'invalid recipients')
     if kind != 'INPUT':
         require(len(recipients) == 1, 'expected a single recipient')
+    if kind in {'PING', 'PONG'}:
+        require(recipients != [role], 'health event must address one other worker')
+        require(ident(e['ping_id']), 'invalid ping_id')
+        require((e['ping_id'] == e['event_id']) == (kind == 'PING'), 'health event identity mismatch')
     if kind in {'HANDLED', 'BLOCK', 'DORMANT'}:
         require(recipients == [role], 'self control claim must address self')
     if 'obligation' in e:
@@ -188,6 +194,23 @@ def validate_event(e, actor, cfg, payloads):
         require(match is not None and int(match[1]) == e['room'] and ref in payloads, 'missing or wrong-room payload')
         require(payloads[ref][0] == actor, 'payload actor mismatch')
     return e
+
+
+def project_health(events):
+    """Replay the complete event set, independently of physical order."""
+    pings = {mid: {'ping_id': mid, 'room': e['room'], 'from': e['from'],
+                   'to': e['to'][0], 'payload_ref': e['payload_ref'], 'pongs': []}
+             for mid, e in sorted(events.items()) if e['kind'] == 'PING'}
+    for mid, e in sorted(events.items()):
+        if e['kind'] != 'PONG':
+            continue
+        ping = pings.get(e['ping_id'])
+        require(ping is not None, f'PONG references missing admitted PING: {mid}')
+        require(e['room'] == ping['room'] and e['from'] == ping['to']
+                and e['to'] == [ping['from']], f'PONG room/role mismatch: {mid}')
+        ping['pongs'].append({'event_id': mid, 'payload_ref': e['payload_ref']})
+    return {'pending': [p for p in pings.values() if not p['pongs']],
+            'matched': [p for p in pings.values() if p['pongs']]}
 
 
 def project(cfg, snapshots, previous=None):
@@ -260,6 +283,7 @@ def project(cfg, snapshots, previous=None):
     # order in which pages were fetched constitute a semantic causal clock.
     current, revisions, inputs, handled, dormant, stale = {}, {}, dict(holder_inputs), set(), {}, set()
     events = dict(sorted(events.items()))
+    health = project_health(events)
 
     # Pass 1: collect unique OPEN declarations keyed by explicit revision.
     for mid, e in events.items():
@@ -369,5 +393,5 @@ def project(cfg, snapshots, previous=None):
     for item in roles.values():
         if item['reasons']:
             item['state'] = 'READY'
-    projection = {'protocol': PROTOCOL, 'roles': roles, 'obligations': list(revisions.values()), 'stale_events': sorted(stale), 'ignored_external': sorted(ignored), 'integrity': 'fresh observation' if previous is None else 'prior observed comments matched', 'authority': 'not evaluated; coordination claims only'}
+    projection = {'protocol': PROTOCOL, 'roles': roles, 'health': health, 'obligations': list(revisions.values()), 'stale_events': sorted(stale), 'ignored_external': sorted(ignored), 'integrity': 'fresh observation' if previous is None else 'prior observed comments matched', 'authority': 'not evaluated; coordination claims only'}
     return projection, {'config_hash': config_hash, 'ledger': ledger}

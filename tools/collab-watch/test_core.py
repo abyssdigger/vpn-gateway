@@ -347,5 +347,93 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual({r['input'] for r in p['roles']['BUILDER']['reasons']}, {'higher', 'lower'})
 
 
+class HealthReplayTests(unittest.TestCase):
+    def ping(self, cid=300, mid='ping', **kw):
+        fields = {'ping_id': mid, **kw}
+        return ev(cid, 'PING', mid, **fields)
+
+    def pong(self, cid=200, mid='pong', **kw):
+        fields = {'sender': 'BUILDER', 'to': ['GUARD'], 'ping_id': 'ping', **kw}
+        return ev(cid, 'PONG', mid, **fields)
+
+    def test_pending_matched_reverse_delivery(self):
+        ping, pong = self.ping(), self.pong()
+        p, _ = run([ping])
+        self.assertEqual(p['health']['pending'][0]['ping_id'], 'ping')
+        a, state = run([pong, ping])
+        b, state2 = run([ping, pong, {**pong, 'id': 201}])
+        self.assertEqual(a['health'], b['health'])
+        self.assertEqual(a['health']['pending'], [])
+        self.assertEqual(a['health']['matched'][0]['pongs'], [{'event_id': 'pong', 'payload_ref': REF}])
+        self.assertEqual(a['roles'], run([])[0]['roles'])
+        self.assertEqual(run([ping, pong], state)[1], state)
+
+    def test_health_keeps_semantic_projection_unchanged(self):
+        opening = op(wait_for_event_id='result')
+        before, _ = run([opening])
+        after, _ = run([opening, self.ping(), self.pong()])
+        self.assertEqual(before['roles'], after['roles'])
+        self.assertEqual(before['obligations'], after['obligations'])
+        self.assertEqual(after['roles']['BUILDER']['state'], 'WAITING')
+
+    def test_health_never_satisfies_block_or_handled(self):
+        for events in ([op(wait_for_event_id='ping'), self.ping()],
+                       [op(wait_for_event_id='pong'), self.ping(), self.pong()],
+                       [self.ping(), handled(101, ids=['ping'], sender='BUILDER')],
+                       [self.ping(), self.pong(), handled(101, ids=['pong'])]):
+            with self.subTest(events=events), self.assertRaises(Conflict):
+                run(events)
+
+    def test_missing_or_wrong_roles(self):
+        for events in ([self.pong()], [self.ping(), self.pong(ping_id='missing')],
+                       [self.ping(), self.pong(sender='GUARD', to=['BUILDER'])],
+                       [self.ping(), self.pong(to=['BUILDER'])],
+                       [self.ping(), self.pong(ping_id='pong')]):
+            with self.subTest(events=events), self.assertRaises(Conflict):
+                run(events)
+
+    def test_strict_health_envelopes(self):
+        for event in (self.ping(ping_id='not-ping'), self.ping(ping_id=None),
+                      self.ping(to=['GUARD']), self.ping(to=['GUARD','BUILDER']),
+                      self.ping(incarnation='g-old'), self.ping(outcome='ANSWER'),
+                      self.ping(obligation={'id':'O','revision':1})):
+            with self.subTest(event=event), self.assertRaises(Conflict):
+                run([event])
+        for event in (self.pong(disposition='CLOSED'), self.pong(incarnation='b-old'),
+                      self.pong(outcome='ANSWER'), self.pong(ping_id=None)):
+            with self.subTest(event=event), self.assertRaises(Conflict):
+                run([self.ping(), event])
+
+    def test_wrong_room_even_with_valid_payload(self):
+        cfg = copy.deepcopy(CFG)
+        cfg['task_rooms'].append(36)
+        snapshots = snap([self.ping(), self.pong(room=36, payload_ref='issue:36#issuecomment-902')])
+        snapshots['36'] = [row(902, 'valid other-room payload')]
+        with self.assertRaises(Conflict):
+            project(cfg, snapshots)
+
+    def test_health_identity_conflict(self):
+        for events in ([self.ping(), self.ping(301, payload_ref='issue:34#issuecomment-902')],
+                       [self.ping(), ev(301, 'INPUT', 'ping', outcome='ANSWER')]):
+            with self.subTest(events=events), self.assertRaises(Conflict):
+                run(events, payloads=[row(900, 'payload'), row(902, 'other payload')])
+
+    def test_foreign_actor_never_confirms_health(self):
+        a, _ = run([self.ping(), self.pong(actor=999)])
+        self.assertEqual(len(a['health']['pending']), 1)
+        self.assertEqual(a['health']['matched'], [])
+
+    def test_multiple_replies_sorted_and_repeat_idempotent(self):
+        a, _ = run([self.ping(), self.pong(mid='z'), self.pong(201, mid='a')])
+        self.assertEqual([p['event_id'] for p in a['health']['matched'][0]['pongs']], ['a','z'])
+
+    def test_health_payload_integrity(self):
+        _, state = run([self.ping(), self.pong()])
+        with self.assertRaises(Conflict):
+            run([self.ping()], state)
+        with self.assertRaises(Conflict):
+            run([self.ping(), self.pong()], state, payloads=[row(900, 'edited')])
+
+
 if __name__ == '__main__':
     unittest.main()
