@@ -6,8 +6,31 @@ from split_journal import project_v2
 from test_split_journal import (CFG, SHA, OTHER, candidate, close, control, disposition,
                                 fixture, issue, material, opening, ref, row, ts)
 from v2_compact import compact_v2
-from v2_preflight import (preflight_close, preflight_close_compact, preflight_control,
-                          preflight_control_compact)
+from v2_preflight import (preflight_close as close_raw, preflight_close_compact as close_compact,
+                          preflight_control as control_raw, preflight_control_compact as control_compact)
+
+
+# Existing distinct-actor fixtures use a fixed explicit test role assignment.
+# Shared-actor tests below call the production APIs with independently chosen roles.
+def selection(actor):
+    role, inc = {10: ('GUARD', 'g'), 11: ('BUILDER', 'b'), 13: ('SPEC', 's')}[actor]
+    return dict(selected_role=role, selected_incarnation=inc)
+
+
+def preflight_control(cfg, c, t, actor, body, previous=None):
+    return control_raw(cfg, c, t, actor, body, previous, **selection(actor))
+
+
+def preflight_control_compact(cfg, obs, actor, body, previous=None):
+    return control_compact(cfg, obs, actor, body, previous, **selection(actor))
+
+
+def preflight_close(cfg, c, t, actor, request, previous=None):
+    return close_raw(cfg, c, t, actor, request, previous, **selection(actor))
+
+
+def preflight_close_compact(cfg, obs, actor, request, previous=None):
+    return close_compact(cfg, obs, actor, request, previous, **selection(actor))
 
 
 class PreflightV2Tests(unittest.TestCase):
@@ -196,6 +219,57 @@ class PreflightV2Tests(unittest.TestCase):
         _, retained = project_v2(CFG, {"34": rows[:2]}, {"42": task})
         with self.assertRaises(Conflict):
             self.control(rows[:1], task, rows[1], retained)
+
+
+    def test_explicit_role_shared_actor(self):
+        cfg = copy.deepcopy(CFG)
+        cfg["roles"]["SPEC"]["actor_id"] = 10
+        rows, task = fixture()
+        task["author_id"] = 10
+        rows[0]["user"]["id"] = 10
+        guard = dict(selected_role="GUARD", selected_incarnation="g")
+        spec_role = dict(selected_role="SPEC", selected_incarnation="s")
+        wrong_guard = dict(selected_role="GUARD", selected_incarnation="wrong")
+        t = {"42": task}
+
+        def check(prior, candidate, correct, wrong):
+            c = {"34": prior}
+            packed = compact_v2(cfg, c, t)
+            proof = control_raw(cfg, c, t, 10, candidate["body"], **correct)
+            self.assertEqual(proof, control_compact(cfg, packed, 10, candidate["body"], **correct))
+            self.assertEqual(proof["selected_role"], correct["selected_role"])
+            self.assertEqual(proof["selected_incarnation"], correct["selected_incarnation"])
+            for selected in wrong:
+                with self.assertRaises(Conflict):
+                    control_raw(cfg, c, t, 10, candidate["body"], **selected)
+                with self.assertRaises(Conflict):
+                    control_compact(cfg, packed, 10, candidate["body"], **selected)
+
+        check(rows[:2], rows[2], guard, [spec_role, wrong_guard])
+        supersede = control("s", "DISPOSITION", 105, 12, open_id="o", previous="v1",
+                            disposition="SUPERSEDED")
+        supersede["user"]["id"] = 10
+        check(rows, supersede, spec_role, [guard])
+        m = material(1200, "SPEC", 13, revision=2)
+        m["user"]["id"] = 10
+        task["comments"].append(m)
+        o2 = control("o2", "OPEN", 106, 15, revision=2, task_ref={"issue_number": 42, "issue_id": 4002},
+                     spec_ref={"kind": "issue_comment", **ref(m)}, previous="s")
+        o2["user"]["id"] = 10
+        check(rows+[supersede], o2, spec_role, [guard])
+
+        request = self.close_request(rows[-1])
+        packed = compact_v2(cfg, {"34": rows}, t)
+        proof = close_raw(cfg, {"34": rows}, t, 10, request, **guard)
+        self.assertEqual(proof, close_compact(cfg, packed, 10, request, **guard))
+        self.assertEqual(proof["selected_role"], "GUARD")
+        for selected in (spec_role, wrong_guard):
+            with self.assertRaises(Conflict):
+                close_raw(cfg, {"34": rows}, t, 10, request, **selected)
+            with self.assertRaises(Conflict):
+                close_compact(cfg, packed, 10, request, **selected)
+        close(task)
+        check(rows, disposition(rows[-1]), guard, [spec_role, wrong_guard])
 
 
 if __name__ == "__main__":

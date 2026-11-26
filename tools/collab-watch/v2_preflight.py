@@ -77,17 +77,30 @@ def _inspect(cfg, task, normalized, event, reference):
             "created_at": row["created_at"], "updated_at": row["updated_at"]}
 
 
-def preflight_control(cfg, control, tasks, actor, body, previous=None):
-    return preflight_control_compact(cfg, compact_v2(cfg, control, tasks, previous), actor, body, previous)
+def _selected(cfg, actor, selected_role, selected_incarnation):
+    require(isinstance(selected_role, str) and selected_role in cfg["roles"],
+            "explicit selected role required")
+    role = cfg["roles"][selected_role]
+    require(positive(actor) and role["actor_id"] == actor and
+            role["incarnation"] == selected_incarnation, "selected actor/role/incarnation mismatch")
+    return {"selected_role": selected_role, "selected_incarnation": selected_incarnation}
 
 
-def preflight_control_compact(cfg, observation, actor, body, previous=None):
+def preflight_control(cfg, control, tasks, actor, body, previous=None, *, selected_role, selected_incarnation):
+    return preflight_control_compact(cfg, compact_v2(cfg, control, tasks, previous), actor, body, previous,
+                                     selected_role=selected_role, selected_incarnation=selected_incarnation)
+
+
+def preflight_control_compact(cfg, observation, actor, body, previous=None, *, selected_role, selected_incarnation):
     projection, tasks, proof = _baseline(cfg, observation, previous)
+    proof.update(_selected(cfg, actor, selected_role, selected_incarnation))
     require(isinstance(body, str) and 0 < len(body.encode("utf-8")) <= MAX_CANDIDATE_BYTES,
             "invalid outgoing candidate size")
     event = framed(body, MARKER)
     require(isinstance(event, dict), "invalid outgoing control candidate")
     validate_event(cfg, event, event.get("room"), actor)
+    require(event["from"] == selected_role and event["incarnation"] == selected_incarnation,
+            "candidate does not match explicit selected role/incarnation")
     existing = {f["event"]["event_id"]: f["event"] for f in projection["facts"].values()}
     require(event["event_id"] not in existing, "outgoing event already observed; reconcile delivery")
     task, raw = _task(projection, tasks, event["task"])
@@ -137,15 +150,17 @@ def preflight_control_compact(cfg, observation, actor, body, previous=None):
     return proof
 
 
-def preflight_close(cfg, control, tasks, actor, request, previous=None):
-    return preflight_close_compact(cfg, compact_v2(cfg, control, tasks, previous), actor, request, previous)
+def preflight_close(cfg, control, tasks, actor, request, previous=None, *, selected_role, selected_incarnation):
+    return preflight_close_compact(cfg, compact_v2(cfg, control, tasks, previous), actor, request, previous,
+                                   selected_role=selected_role, selected_incarnation=selected_incarnation)
 
 
-def preflight_close_compact(cfg, observation, actor, request, previous=None):
+def preflight_close_compact(cfg, observation, actor, request, previous=None, *, selected_role, selected_incarnation):
     projection, tasks, proof = _baseline(cfg, observation, previous)
+    proof.update(_selected(cfg, actor, selected_role, selected_incarnation))
     shape(request, {"task", "issue_number", "issue_id", "revision", "attempt", "commit_sha", "accept_ref"},
           "close request")
-    require(positive(actor) and actor == cfg["roles"]["GUARD"]["actor_id"], "close actor must be GUARD")
+    require(selected_role == "GUARD", "close selected role must be GUARD")
     require(all(positive(request[k]) for k in ("issue_number", "issue_id", "revision", "attempt"))
             and sha(request["commit_sha"]), "invalid close request identity")
     task, raw = _task(projection, tasks, request["task"])

@@ -231,3 +231,11 @@ event. CLOSED control proof is possible only after canonical CLOSE_OBSERVED and
 must bind exact observed close + eligible physical ACCEPT. Initial new-task OPEN,
 prospective acquisition, post-send actuator/retry, CLI, writes and epoch migration
 remain out of scope.
+
+Every raw/compact control and close preflight API requires explicit keyword
+arguments selected_role and selected_incarnation in addition to physical actor.
+They must match the configured role/actor/incarnation, and control candidate
+from/incarnation must exactly match the selected binding. Issue close requires
+selected GUARD, not merely its possibly shared GitHub actor ID. Proofs retain
+this independent CURRENT_ROLE selection. This is cooperative structural checking,
+not authentication; runtime model-to-role authorization remains external.
