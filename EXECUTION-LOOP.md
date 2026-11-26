@@ -56,25 +56,42 @@ loop modes use the ordinary authorization rules.
 
 ## 3. Entering a loop
 
-Before continuous execution begins:
+A **loop entry** is either:
+- the initial start of a continuous execution cycle; or
+- an explicit RESUME/recovery re-entry into an already active cycle after user intervention,
+  context loss or another pause that requires reconstruction.
 
-1. choose `CYCLE_INTERVAL`: the user-specified interval, otherwise **30 minutes**;
-2. obtain fresh real current time in UTC and record it as `CYCLE_START_TIME` with an explicit
+At **every** loop entry, before autonomous work resumes:
+
+1. obtain fresh real current time in UTC and record it as `LOOP_ENTRY_TIME` with an explicit
    UTC offset (`Z` or `+00:00`);
-3. read this document if it has not already been read unchanged in the active context;
-4. apply the `AGENTS.md` reading gate and read the active overlay documents;
-5. establish the current work frontier and any external-input processed frontier;
-6. preserve the current authorization boundary exactly as established by `AGENTS.md`.
+2. emit one concise **non-terminal** progress notice to the projectholder stating that loop entry
+   time;
+3. on an initial start, choose `CYCLE_INTERVAL`: the user-specified interval, otherwise
+   **30 minutes**, and set `CYCLE_START_TIME = LOOP_ENTRY_TIME`;
+4. on RESUME/recovery re-entry, preserve the existing `CYCLE_START_TIME`,
+   `CYCLE_INTERVAL`, safety boundary, active overlays and authority boundary unless the
+   projectholder explicitly changed them;
+5. read this document if it has not already been read unchanged in the active context;
+6. apply the `AGENTS.md` reading gate and read the active overlay documents;
+7. establish or reconstruct the current work frontier and any external-input processed frontier;
+8. preserve the current authorization boundary exactly as established by `AGENTS.md`.
 
-If fresh real UTC time cannot be obtained, do not begin autonomous continuous execution.
+The entry notice is observational only. It is not a STOP/final response and does not return
+control to the projectholder. After the notice, continue through the normal work/frontier
+reconstruction and `EXEC_NEXT` path.
 
-The clock starts before mandatory reading or preparation. Commit timestamps, local timezone and
-inferred location are not substitutes for `CYCLE_START_TIME`.
+If fresh real UTC time cannot be obtained, do not begin or resume autonomous continuous execution.
+
+The cycle clock starts before mandatory reading or preparation on the initial entry. Commit
+timestamps, local timezone and inferred location are not substitutes for `CYCLE_START_TIME` or
+`LOOP_ENTRY_TIME`.
 
 Maintain a compact control marker in active execution context:
 
 ```text
 LOOP_STATE: WORK | WAIT | STOPPING
+LOOP_ENTRY_TIME: <latest initial/resume entry UTC time>
 ACTIVE_OVERLAYS: <development/research/ID/...>
 ACTIVE_UNIT: <current work frontier>
 NEXT: <concrete next operation or awaited event>
