@@ -1,2 +1,3 @@
 live compact evidence trigger
 baseline-shared-head=aed5df908c9eb3ddc16e77757708f4f0faed7ad1
+publication-preflight-after-compact-acceptance=1
