@@ -156,6 +156,10 @@ def project_m(cfg, snapshots, previous=None):
     """Replay a complete stable v1 observation. Local state is derivative only."""
     validate_m_config(cfg)
     semantic_cfg = semantic_config(cfg)
+    if previous is not None:
+        require(isinstance(previous, dict) and set(previous) == {'protocol', 'semantic_config_hash', 'ledger'}
+                and previous['protocol'] == PROTOCOL, 'invalid v1 retained state')
+        previous = {'config_hash': previous['semantic_config_hash'], 'ledger': previous['ledger']}
     checked_config_hash(semantic_cfg, previous)
     rooms = [*cfg['task_rooms'], cfg['projectholder']['room'], cfg['signal_room']]
     require(isinstance(snapshots, dict) and set(snapshots) == {str(room) for room in rooms},
@@ -232,4 +236,4 @@ def project_m(cfg, snapshots, previous=None):
                                'fresh observation' if previous is None else 'prior observed comments matched', PROTOCOL)
     signal_status, gc = project_signals(cfg, snapshots[str(cfg['signal_room'])], facts, receipts)
     projection.update(journal_epoch=cfg['journal_epoch'], signal_status=signal_status, gc_candidates=gc)
-    return projection, state
+    return projection, {'protocol': PROTOCOL, 'semantic_config_hash': state['config_hash'], 'ledger': state['ledger']}

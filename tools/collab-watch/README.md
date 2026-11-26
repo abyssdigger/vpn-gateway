@@ -1,11 +1,11 @@
-# collab-watch v0
+# collab-watch: legacy v0 and M v1
 
 A read-only, one-shot collaboration projection. Python 3 (stdlib; Linux local
 `flock`). No wake actuator, daemon, GitHub mutation, shell execution, model
 selection or authority evaluation. The process and acceptance rules are in
 `COLLABORATIVE-EXECUTION.md` and `AGENTS.md`.
 
-## Run the offline fixture
+## Run the legacy v0 offline fixture
 
 ```sh
 cd tools/collab-watch
@@ -21,7 +21,7 @@ is READY for the two holder inputs; BUILDER is READY for the open obligation
 and the STOP command. STOP is reported, not executed. Never reuse fixture state
 for a live room or production state for a fixture.
 
-## Read live rooms once
+## Read legacy v0 live rooms once
 
 ```sh
 cd tools/collab-watch
@@ -65,12 +65,12 @@ historical integrity claims. A failure during state persistence may have occurre
 after atomic replacement; re-observe before acting on the result.
 
 Exit 0 means the observation was projected; READY/WAITING is derived work state,
-not process liveness, activation eligibility, or permission. A CONFLICT is global:
-no role recommendation is emitted. Physical actor admission does not authenticate
+not process liveness, activation eligibility, or permission. For canonical CONFLICT no role recommendation is emitted. In M v1, a
+signal-only conflict is diagnostic, not canonical CONFLICT. Physical actor admission does not authenticate
 the cooperative roles when they share the same GitHub account. Review and mutation
 gates remain independent of all helper output.
 
-## Preview an outgoing event (E2 preflight)
+## Preview a legacy v0 outgoing event (E2 preflight)
 
 From this directory, call the pure API `preflight.preflight(cfg, snapshots,
 actor, body, previous=None)` with the exact outgoing UTF-8 comment text,
@@ -96,3 +96,61 @@ ambiguous delivery; never blindly retry. A missing ledger still permits only
 fresh-current reconstruction, not a historical integrity assertion.
 
 Run `python3 -m unittest -v test_preflight` for the offline acceptance tests.
+
+## M v1: journal and signals (offline acceptance; cutover pending)
+
+The M path is selected only by the explicit configuration field
+`"protocol": "vpng-collab/1"`. The v0 format has no protocol field and is
+not reinterpreted. Unknown or mixed formats fail closed. M uses a durable
+journal in the configured task rooms, exact holder inputs, and a separate
+ephemeral signal room. Missing, duplicated or quarantined signals do not
+change the canonical projection. The helper never sends or deletes comments.
+
+Run the separate synthetic offline fixture, not a live pilot:
+
+```sh
+state_dir=$(mktemp -d)
+python3 collab_watch.py --once --config fixtures/m1-config.json \
+  --fixture fixtures/m1-snapshot.json --state "$state_dir/state.json"
+```
+
+The fixture has an OPEN, an INPUT, its exact HANDLED receipt, a consumed
+signal and ordinary holder prose. The open obligation remains READY despite
+receipt/GC eligibility. Removing the signal from the fixture and replaying
+with the same state leaves the semantic projection unchanged.
+
+V1 retained state has exactly `protocol`, `semantic_config_hash` and
+`ledger`. The hash covers all semantic configuration including journal epoch,
+roles/incarnations, holder routing, task rooms, repository and command registry.
+Only the transport signal room is excluded; rotating it preserves this state.
+Changes to semantic configuration require a new, explicitly reconciled journal
+epoch. The ledger binds canonical physical comments only, never signals.
+Legacy and M state files are not interchangeable. A lost ledger cannot prove
+historical integrity. The complete double-scan acquisition still includes every
+configured room and current signal observation; direct live HTTP was not
+available in the builder test environment.
+
+### M outgoing preflight
+
+Pure APIs in `preflight_m.py`:
+
+- `preflight_journal_fact(cfg, snapshots, actor, body, previous=None)`
+  validates the exact reserved journal frame against prospective semantic replay.
+  It returns exact candidate body, journal epoch, task room, semantic config,
+  baseline-state and prospective-state hashes. It excludes only the synthetic
+  fact's physical ref from the prospective hash.
+- `preflight_signal(cfg, snapshots, actor, body, previous=None)` validates a
+  signal referencing an already physically admitted journal fact. It binds
+  the target ref/digest, recipient, body, canonical state, full transport config
+  and normalized current signal observations (including quarantined rows).
+  It must not change semantic projection or retained state.
+
+Both reject already observed outgoing logical IDs; reconcile ambiguous sends
+instead of replaying them. Publication order: journal preflight, actual journal
+publication under the mutation gate, remote verification and admission, then
+optional signal preflight, publication under the gate and remote verification.
+Do not preview a signal against a synthetic not-yet-published journal fact.
+Repeat preflight if relevant bindings change. This is not atomic remote
+publication or authorization. No API acquires, persists, sends, wakes, or
+deletes anything. GC candidates are evidence only; actual GitHub deletion is
+not authorized by the M process decision. No live M cutover is claimed here.

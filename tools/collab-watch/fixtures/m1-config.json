@@ -1,0 +1,33 @@
+{
+  "command_registry": {
+    "capability_scopes": {},
+    "condition_keys": [],
+    "cycle": "new-cdc",
+    "model_scopes": {},
+    "utc_keys": []
+  },
+  "journal_epoch": "m1",
+  "projectholder": {
+    "actor_id": 3,
+    "room": 35,
+    "route_to": [
+      "GUARD"
+    ]
+  },
+  "protocol": "vpng-collab/1",
+  "repository": "owner/repo",
+  "roles": {
+    "BUILDER": {
+      "actor_id": 2,
+      "incarnation": "b1"
+    },
+    "GUARD": {
+      "actor_id": 1,
+      "incarnation": "g1"
+    }
+  },
+  "signal_room": 37,
+  "task_rooms": [
+    34
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "34": [
+    {
+      "body": "task prose",
+      "id": 900,
+      "user": {
+        "id": 1
+      }
+    },
+    {
+      "body": "peer prose",
+      "id": 901,
+      "user": {
+        "id": 2
+      }
+    },
+    {
+      "body": "<!-- vpng-collab-journal/1 -->\n```json\n{\"event_id\":\"open\",\"from\":\"GUARD\",\"incarnation\":\"g1\",\"journal_epoch\":\"m1\",\"kind\":\"OPEN\",\"obligation\":{\"assignee\":\"BUILDER\",\"disposition_by\":\"GUARD\",\"id\":\"O\",\"kind\":\"work\",\"revision\":1},\"payload_ref\":\"issue:34#issuecomment-900\",\"protocol\":\"vpng-collab/1\",\"room\":34,\"to\":[\"BUILDER\"]}\n```",
+      "id": 100,
+      "user": {
+        "id": 1
+      }
+    },
+    {
+      "body": "<!-- vpng-collab-journal/1 -->\n```json\n{\"event_id\":\"input\",\"from\":\"GUARD\",\"incarnation\":\"g1\",\"journal_epoch\":\"m1\",\"kind\":\"INPUT\",\"outcome\":\"ANSWER\",\"payload_ref\":\"issue:34#issuecomment-900\",\"protocol\":\"vpng-collab/1\",\"room\":34,\"to\":[\"BUILDER\"]}\n```",
+      "id": 101,
+      "user": {
+        "id": 1
+      }
+    },
+    {
+      "body": "<!-- vpng-collab-journal/1 -->\n```json\n{\"event_id\":\"ack\",\"from\":\"BUILDER\",\"handled\":[{\"body_sha256\":\"7ff7906668a4e0bc3d1e2e1b003dd4a9a4f19ab7075d3f566ce3f0d89a8e474a\",\"event_id\":\"input\",\"ref\":\"issue:34#issuecomment-101\"}],\"incarnation\":\"b1\",\"journal_epoch\":\"m1\",\"kind\":\"HANDLED\",\"payload_ref\":\"issue:34#issuecomment-900\",\"protocol\":\"vpng-collab/1\",\"room\":34,\"to\":[\"BUILDER\"]}\n```",
+      "id": 102,
+      "user": {
+        "id": 2
+      }
+    }
+  ],
+  "35": [
+    {
+      "body": "offline holder input",
+      "id": 300,
+      "user": {
+        "id": 3
+      }
+    }
+  ],
+  "37": [
+    {
+      "body": "<!-- vpng-collab-signal/1 -->\n```json\n{\"event_id\":\"input\",\"from\":\"GUARD\",\"incarnation\":\"g1\",\"journal_epoch\":\"m1\",\"journal_ref\":\"issue:34#issuecomment-101\",\"journal_sha256\":\"7ff7906668a4e0bc3d1e2e1b003dd4a9a4f19ab7075d3f566ce3f0d89a8e474a\",\"protocol\":\"vpng-collab-signal/1\",\"signal_id\":\"s200\",\"to\":\"BUILDER\"}\n```",
+      "id": 200,
+      "user": {
+        "id": 1
+      }
+    }
+  ]
+}

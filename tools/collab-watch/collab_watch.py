@@ -17,6 +17,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from core import Conflict, canonical, project, read_comment, require, strict_json, validate_config
 
+from journal import PROTOCOL as M_PROTOCOL, project_m, validate_m_config
+
 API = 'https://api.github.com'
 PAGE_SIZE = 100
 MAX_PAGES = 50
@@ -32,8 +34,19 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+def validate_selected_config(cfg):
+    require(isinstance(cfg, dict), 'configuration must be an object')
+    if 'protocol' in cfg:
+        require(cfg['protocol'] == M_PROTOCOL, 'unknown configuration protocol')
+        validate_m_config(cfg)
+        return True
+    validate_config(cfg)
+    return False
+
+
 def configured_rooms(cfg):
-    return [cfg['event_room'], *cfg['task_rooms'], cfg['projectholder']['room']]
+    is_m = validate_selected_config(cfg)
+    return [cfg['signal_room' if is_m else 'event_room'], *cfg['task_rooms'], cfg['projectholder']['room']]
 
 
 def read_json_file(path, limit=MAX_LOCAL_BYTES):
@@ -133,7 +146,7 @@ def observation_key(snapshots):
 
 def acquire(cfg, token=None, opener=None):
     """Two bounded complete reads; matching observations, not atomic snapshot proof."""
-    validate_config(cfg)
+    validate_selected_config(cfg)
     if opener is None:
         opener = build_opener(NoRedirect())
     def scan():
@@ -186,12 +199,12 @@ def persist(path, value):
 
 
 def observe_once(cfg, state_path, *, fixture=None, token=None, opener=None):
-    validate_config(cfg)
+    is_m = validate_selected_config(cfg)
     state_path = Path(state_path)
     with state_lock(state_path):
         previous = read_json_file(state_path) if state_path.exists() else None
         snapshots = read_json_file(fixture) if fixture is not None else acquire(cfg, token, opener)
-        projection, new_state = project(cfg, snapshots, previous)
+        projection, new_state = (project_m if is_m else project)(cfg, snapshots, previous)
         # No state advancement until acquisition and replay both succeed.
         persist(state_path, new_state)
         return projection
