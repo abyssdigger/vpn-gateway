@@ -482,6 +482,41 @@ from durable comment timestamps.
 `COMMUNICATION_UNCONFIRMED` never declares a session ended, creates DORMANT, reassigns work,
 changes incarnation/model or widens/revokes authority.
 
+### 7.6.1. Non-blocking peer wait budget
+
+Peer-response waiting and communication-health diagnosis are separate mechanisms.
+
+When one role has issued a request whose completion depends on another role, the default
+`PEER_WAIT_BUDGET` is **2 minutes** of live-session time. Expiry of this budget means only that
+the current bounded peer wait has returned control to the waiting role. It does **not** mean the
+peer is dead, DORMANT, STOPPED or replaced, and it does not satisfy, cancel or close the awaited
+journal relation.
+
+On peer-wait expiry the waiting role must immediately return to `EXEC_NEXT`:
+
+1. if any independent authorized `WORK` exists, continue it;
+2. if the current unit alone depends on the peer, keep that unit explicitly
+   `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit;
+3. if no independent work exists, another bounded peer wait may be entered, subject to the same
+   session-safety boundary and without converting repeated timeout into semantic closure.
+
+A peer-wait timeout never:
+- reassigns the peer's obligation or role;
+- changes role/incarnation/model;
+- permits the surviving role to emit the peer's journal fact, result, review or disposition;
+- widens repository/GitHub authority;
+- permits bypassing required independent review or preflight;
+- advances canonical processed/handled state;
+- creates a STOP basis by itself.
+
+The 10/5-minute communication-health policy above remains diagnostic and may run independently.
+Its PING/PONG state must not block the work scheduler. Conversely, continued independent work after
+2 minutes is not evidence that communication is healthy.
+
+A newly observed valid peer journal fact restores the ordinary work relation naturally. The role
+then re-enters the previously waiting unit according to normal READY/frontier semantics; no special
+"resume from timeout" semantic event is required.
+
 ### 7.7. Relation semantics
 
 For OPEN, the obligation object contains at least:
