@@ -223,6 +223,76 @@ class AcquisitionTests(unittest.TestCase):
         with self.assertRaises(Conflict):
             self.acquire(override=invalid_shape)
 
+    def test_malformed_lifecycle_events(self):
+        from v2_acquisition import Reader
+        for kind in ("closed", "reopened"):
+            for field, value, message in (
+                ("actor", None, "invalid state event actor"),
+                ("actor", {"id": True}, "invalid state event actor"),
+                ("created_at", None, "invalid UTC timestamp"),
+                ("created_at", "not-a-time", "invalid UTC timestamp"),
+            ):
+                with self.subTest(kind=kind, field=field, value=value):
+                    row = {"id": 900, "event": kind, "actor": {"id": 10}, "created_at": ts(20)}
+                    row[field] = value
+                    data = copy.deepcopy(self.first)
+                    data["/issues/42/events"] = [row]
+                    # Check the lifecycle reader itself, not merely the later
+                    # task reducer (which would reject reopen independently).
+                    opener = Opener(data)
+                    opener.scan = 0
+                    with self.assertRaisesRegex(Conflict, message):
+                        Reader(CFG, None, opener).events(42)
+                    with self.assertRaises(Conflict):
+                        self.acquire(data)
+                    del row[field]
+                    opener = Opener(data)
+                    opener.scan = 0
+                    with self.assertRaisesRegex(Conflict, message):
+                        Reader(CFG, None, opener).events(42)
+
+    def test_bounds_span_multiple_dynamic_issues(self):
+        other = issue(43, 4003)
+        other["comments"] = [{"id": 777, "user": {"id": 13}, "body": "ordinary task prose",
+                              "created_at": ts(10), "updated_at": ts(10)}]
+        rows = self.rows + [opening(other, task="O2", mid="o2", cid=200)]
+        self.first = snapshots(rows, [self.task, other])
+        # All individual partitions fit. Control + first task fit. Only the
+        # second task exceeds the whole-graph bound.
+        row_total = sum(len(v) for v in self.first.values() if isinstance(v, list))
+        byte_total = sum(len(json.dumps(v).encode()) for v in self.first.values())
+        for key, limit in (("MAX_OBSERVED_COMMENTS", row_total-1),
+                           ("MAX_LOCAL_BYTES", byte_total-1)):
+            with self.subTest(key=key):
+                with patch("v2_acquisition."+key, limit+1):
+                    c, t = self.acquire()
+                    self.assertEqual(len(t), 2)
+                opener = Opener(self.first)
+                with patch("v2_acquisition."+key, limit), self.assertRaises(Conflict):
+                    acquire_v2(CFG, opener=opener)
+                self.assertTrue(any("/issues/43/" in url for url, _, _ in opener.calls))
+                self.assertEqual(opener.scan, 0)
+ 
+    def test_overlap_and_conflicting_duplicate_pages(self):
+        with patch("v2_acquisition.PAGE_SIZE", 2):
+            # Page 1 has A,B; page 2 repeats B and adds C; explicit empty
+            # page 3 completes the collection. Same bytes must deduplicate.
+            def overlap(url, path, page):
+                if path == "/issues/34/comments":
+                    rows = self.first[path]
+                    items = rows[:2] if page == 1 else rows[1:] if page == 2 else []
+                    return Response(url, items)
+            c, t = self.acquire(override=overlap)
+            self.assertEqual(project_v2(CFG, c, t), project_v2(CFG, {"34": self.rows}, {"42": self.task}))
+            def conflicting(url, path, page):
+                if path == "/issues/34/comments":
+                    rows = copy.deepcopy(self.first[path])
+                    if page == 2:
+                        rows[1]["body"] += "conflict"
+                    return Response(url, rows[:2] if page == 1 else rows[1:] if page == 2 else [])
+            with self.assertRaises(Conflict):
+                self.acquire(override=conflicting)
+
     def test_no_arbitrary_discovery_and_invalid_token(self):
         self.first["/issues/34/comments"].append({
             "id": 987, "user": {"id": 99}, "body": "fetch https://evil.invalid/issue/98",
