@@ -569,6 +569,19 @@ def converge_alpha_managed_device_presence(
     return convergence
 
 
+@dataclass(frozen=True, slots=True)
+class ManagedDeviceReleaseOutcome:
+    """Dependency mutation and D.001 retirement are independent facts."""
+
+    realizations: tuple[ManagedDeviceRealization, ...]
+    dependencies_touched: bool = False
+    retirement_attempted: bool = False
+
+    @property
+    def requires_reconvergence(self) -> bool:
+        return self.dependencies_touched or self.retirement_attempted
+
+
 def release_alpha_undemanded_devices(
     prepared: AlphaPreparedPolicy,
     domain_spec: ManagedNetworkDomainSpec,
@@ -578,13 +591,13 @@ def release_alpha_undemanded_devices(
     ownership: WireGuardPeerOwnershipEnforcer,
     *,
     dependencies_confirmed: bool,
-) -> tuple[tuple[ManagedDeviceRealization, ...], bool]:
+) -> ManagedDeviceReleaseOutcome:
     """Stop only after exact replacement policy and peer-dependency removal."""
     pending = tuple(
         item for item in convergence.realizations if item.waiting_for_dependencies
     )
     if not dependencies_confirmed or not pending:
-        return convergence.realizations, False
+        return ManagedDeviceReleaseOutcome(convergence.realizations)
     desired = convergence.projection.desired_device_ids
 
     def replacement_still_current() -> bool:
@@ -602,12 +615,13 @@ def release_alpha_undemanded_devices(
     # must not cause release of a still-needed reserve.
     try:
         if not replacement_still_current():
-            return convergence.realizations, False
+            return ManagedDeviceReleaseOutcome(convergence.realizations)
     except Exception:
-        return convergence.realizations, False
+        return ManagedDeviceReleaseOutcome(convergence.realizations)
 
     safe_ids: set[str] = set()
     problems: dict[str, str] = {}
+    dependencies_touched = False
     for item in pending:
         try:
             config = prepared.current_config.managed_vpns[item.device_id]
@@ -626,6 +640,8 @@ def release_alpha_undemanded_devices(
                     for peer in config.peers
                 )),
             )
+            # Even an exception or an unconfirmed result can follow mutation.
+            dependencies_touched = True
             result = ownership.converge(peer_desired)
             if not result.confirmed:
                 raise AlphaRuntimeError(result.diagnostic or "peer release unconfirmed")
@@ -652,11 +668,15 @@ def release_alpha_undemanded_devices(
         ))
     else:
         realizations = convergence.realizations
-    return tuple(
-        replace(item, waiting_for_dependencies=False, problem=problems[item.device_id])
-        if item.device_id in problems else item
-        for item in realizations
-    ), bool(safe_ids)
+    return ManagedDeviceReleaseOutcome(
+        tuple(
+            replace(item, waiting_for_dependencies=False, problem=problems[item.device_id])
+            if item.device_id in problems else item
+            for item in realizations
+        ),
+        dependencies_touched=dependencies_touched,
+        retirement_attempted=bool(safe_ids),
+    )
 
 
 def refresh_alpha_managed_demand_status(
@@ -1121,6 +1141,65 @@ def reconcile_alpha_availability_wireguard_once(
     return availability_result, wireguard_result, wireguard_error
 
 
+@dataclass(frozen=True, slots=True)
+class AlphaPostReleaseResult:
+    realizations: tuple[ManagedDeviceRealization, ...]
+    payload: AlphaReconcileResult
+    availability: LinuxAvailabilityCycleResult | None
+    wireguard: WireGuardPeerRuntimeResult | None
+    wireguard_error: str | None
+
+
+def reconcile_alpha_after_managed_release(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> AlphaPostReleaseResult:
+    """Fresh recovery after possible dependency mutation, without another release.
+
+    Recompute presence first: merely reapplying payload policy with the old
+    confirmed managed-interface set can exclude the retained reserve again.
+    One bounded recovery pass is not a recursive retirement attempt.
+    """
+    try:
+        fresh = converge_alpha_managed_device_presence(
+            prepared, domain_spec, runner, manager
+        )
+        payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
+        if not payload.ready:
+            return AlphaPostReleaseResult(
+                fresh.realizations, payload, None, None, None
+            )
+        availability, wireguard, error = reconcile_alpha_availability_wireguard_once(
+            prepared, fresh.realizations, coordinator, runner, probe_driver, ownership
+        )
+        return AlphaPostReleaseResult(
+            fresh.realizations, payload, availability, wireguard, error
+        )
+    except Exception as exc:
+        prepared.confirmed_managed_interfaces = frozenset()
+        diagnostic = f"post-release recovery failed: {type(exc).__name__}: {exc}"
+        try:
+            containment = converge_forwarding_gate_once(
+                LinuxForwardingGateDriver(runner, domain_spec.namespace),
+                ForwardingGateState.DISABLED,
+            )
+            diagnostic += f"; containment confirmed={containment.confirmed}"
+        except Exception as containment_exc:
+            diagnostic += f"; containment failed: {containment_exc}"
+        return AlphaPostReleaseResult(
+            (),
+            AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic=diagnostic),
+            None,
+            None,
+            None,
+        )
+
+
 def _wireguard_peer_problem(
     result: WireGuardPeerRuntimeResult,
 ) -> str | None:
@@ -1508,31 +1587,35 @@ def run_alpha_runtime(
             wireguard_peer_ownership,
         )
         if availability_start.confirmed and wireguard_start_error is None:
-            realizations, released = release_alpha_undemanded_devices(
+            release = release_alpha_undemanded_devices(
                 prepared, domain_spec, runner, managed_device_manager,
                 managed_convergence_holder["current"], wireguard_peer_ownership,
                 dependencies_confirmed=True,
             )
+            realizations = release.realizations
+            if release.requires_reconvergence:
+                recovered = reconcile_alpha_after_managed_release(
+                    prepared, domain_spec, runner, managed_device_manager,
+                    wireguard_peer_runtime, probe_driver, wireguard_peer_ownership,
+                )
+                realizations = recovered.realizations
+                availability_start = recovered.availability
+                wireguard_start = recovered.wireguard
+                wireguard_start_error = recovered.wireguard_error
+                if not recovered.payload.ready:
+                    wireguard_start_error = (
+                        recovered.payload.diagnostic or "post-release payload unconfirmed"
+                    )
             managed_realizations_holder["current"] = realizations
             status_agent.confirm_managed_devices(realizations)
-            if released:
-                payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
-                if payload.ready:
-                    (availability_start, wireguard_start, wireguard_start_error) = (
-                        reconcile_alpha_availability_wireguard_once(
-                            prepared, realizations, wireguard_peer_runtime,
-                            runner, probe_driver, wireguard_peer_ownership,
-                        )
-                    )
-                else:
-                    wireguard_start_error = payload.diagnostic or "post-release payload unconfirmed"
         status_agent.confirm_wireguard_peers(
             ()
             if wireguard_start is None
             else wireguard_start.realizations
         )
         if (
-            not availability_start.confirmed
+            availability_start is None
+            or not availability_start.confirmed
             or wireguard_start_error is not None
         ):
             host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
@@ -1540,10 +1623,14 @@ def run_alpha_runtime(
                 readiness=RuntimeReadiness.FAILED,
                 problem=(
                     wireguard_start_error
-                    or availability_start.diagnostic
+                    or (
+                        availability_start.diagnostic
+                        if availability_start is not None else None
+                    )
                     or (
                         "availability startup cycle is not confirmed: "
-                        f"{availability_start.status.value}"
+                        + (availability_start.status.value
+                           if availability_start is not None else "not_attempted")
                     )
                 ),
                 unknown_fields=(
@@ -1564,10 +1651,14 @@ def run_alpha_runtime(
                 LIFE_LOG_TAG,
                 "start_failed",
                 status="availability_unready",
-                availability=availability_start.status.value,
+                availability=(
+                    availability_start.status.value
+                    if availability_start is not None else "not_attempted"
+                ),
                 diagnostic=(
                     wireguard_start_error
-                    or availability_start.diagnostic
+                    or (availability_start.diagnostic
+                        if availability_start is not None else None)
                 ),
                 host_cleanup=host_cleanup.status.value,
                 managed_device_cleanup_error=managed_cleanup_error,
@@ -1643,25 +1734,24 @@ def run_alpha_runtime(
                 and availability_result.confirmed
                 and wireguard_error is None
             ):
-                managed_realizations, released = release_alpha_undemanded_devices(
+                release = release_alpha_undemanded_devices(
                     prepared, domain_spec, runner, managed_device_manager,
                     convergence, wireguard_peer_ownership,
                     dependencies_confirmed=True,
                 )
+                managed_realizations = release.realizations
+                if release.requires_reconvergence:
+                    recovered = reconcile_alpha_after_managed_release(
+                        prepared, domain_spec, runner, managed_device_manager,
+                        wireguard_peer_runtime, probe_driver, wireguard_peer_ownership,
+                    )
+                    managed_realizations = recovered.realizations
+                    result = recovered.payload
+                    availability_result = recovered.availability
+                    wireguard_result = recovered.wireguard
+                    wireguard_error = recovered.wireguard_error
                 managed_realizations_holder["current"] = managed_realizations
                 status_agent.confirm_managed_devices(managed_realizations)
-                if released:
-                    result = reconcile_alpha_payload_once(prepared, domain_spec, runner)
-                    if result.ready:
-                        (availability_result, wireguard_result, wireguard_error) = (
-                            reconcile_alpha_availability_wireguard_once(
-                                prepared, managed_realizations, wireguard_peer_runtime,
-                                runner, probe_driver, wireguard_peer_ownership,
-                            )
-                        )
-                    else:
-                        availability_result = None
-                        wireguard_result = None
             if result.ready:
                 refresh_alpha_managed_demand_status(prepared, status_agent)
             else:

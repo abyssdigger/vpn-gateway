@@ -16,6 +16,7 @@ from rou.alpha_runtime import (
     _release_alpha_managed_device_dependencies,
     converge_alpha_managed_device_presence,
     reconcile_alpha_payload_once,
+    reconcile_alpha_after_managed_release,
     reconcile_alpha_availability_wireguard_once,
     refresh_alpha_managed_demand_status,
     release_alpha_undemanded_devices,
@@ -259,11 +260,11 @@ warm_paths = 1
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
             assert any(item.device_id == "wg-reserve" and item.waiting_for_dependencies
                        for item in recovery.realizations)
-            _, released = release_alpha_undemanded_devices(
+            release = release_alpha_undemanded_devices(
                 prepared, domain, runner, manager, recovery, ownership,
                 dependencies_confirmed=False,
             )
-            assert not released
+            assert not release.retirement_attempted
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
 
             # Reconcile all path-dependent objects before releasing the old device.
@@ -280,25 +281,79 @@ warm_paths = 1
                 ),
             )
             with patch("rou.alpha_runtime._observe_presence_bindings", return_value=(changed,)):
-                _, released = release_alpha_undemanded_devices(
+                release = release_alpha_undemanded_devices(
                     prepared, domain, runner, manager, recovery, ownership,
                     dependencies_confirmed=True,
                 )
-            assert not released
+            assert not release.retirement_attempted
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
             print("A012_RUNTIME_STALE_REPLACEMENT_BLOCKS_RELEASE=PASS")
             with patch.object(
                 WireGuardPeerOwnershipEnforcer, "converge",
                 return_value=WireGuardPeerOwnershipResult(False, False, None, "test failure"),
             ):
-                failed_realizations, released = release_alpha_undemanded_devices(
+                release = release_alpha_undemanded_devices(
                     prepared, domain, runner, manager, recovery, ownership,
                     dependencies_confirmed=True,
                 )
-            assert not released
-            assert _managed_device_problem(failed_realizations) is not None
+            assert not release.retirement_attempted
+            assert release.dependencies_touched
+            assert _managed_device_problem(release.realizations) is not None
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
             print("A012_RUNTIME_PEER_RELEASE_FAILURE_BLOCKS_STOP=PASS")
+
+            # Real D.003 mutation followed by replacement disappearance.
+            # Repeat with an unconfirmed result AFTER mutation, not merely
+            # a fake failure that leaves kernel state untouched.
+            original_converge = WireGuardPeerOwnershipEnforcer.converge
+            for confirmed_cleanup in (True, False):
+                assert ownership.converge(old_owner).confirmed
+                cleanup_calls = []
+
+                def lose_replacement(instance, desired):
+                    result = original_converge(instance, desired)
+                    assert result.confirmed, result.diagnostic
+                    cleanup_calls.append(desired)
+                    run("ip", "-n", NS, "link", "del", "wg0")
+                    key_path.chmod(0o644)
+                    if confirmed_cleanup:
+                        return result
+                    return WireGuardPeerOwnershipResult(
+                        False, False, None, "test failure after real mutation"
+                    )
+
+                with patch.object(WireGuardPeerOwnershipEnforcer, "converge", lose_replacement):
+                    release = release_alpha_undemanded_devices(
+                        prepared, domain, runner, manager, recovery, ownership,
+                        dependencies_confirmed=True,
+                    )
+                assert len(cleanup_calls) == 1
+                assert release.dependencies_touched
+                assert not release.retirement_attempted
+                assert release.requires_reconvergence
+                assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
+                assert "10.77.0.0/24" not in run(
+                    "ip", "netns", "exec", NS, "wg", "show", "wg1", "allowed-ips"
+                )
+                with patch("rou.alpha_runtime.ALPHA_NAMESPACE", NS):
+                    recovered = reconcile_alpha_after_managed_release(
+                        prepared, domain, runner, manager, coordinator, probe, ownership,
+                    )
+                assert recovered.payload.ready, recovered.payload.diagnostic
+                assert recovered.availability is not None
+                assert recovered.availability.confirmed, recovered.availability.diagnostic
+                assert recovered.wireguard_error is None, recovered.wireguard_error
+                assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-reserve"}
+                assert any(item.device_id == "wg-reserve" and
+                           item.confirmed_state is ManagedWireGuardState.PRESENT
+                           for item in recovered.realizations)
+                assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
+                # Return to the normal recovery setup for the next scenario.
+                key_path.chmod(0o600)
+                recovery = converge_alpha_managed_device_presence(prepared, domain, runner, manager)
+                reconcile_dependencies(recovery)
+                assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-main"}
+            print("A012_RUNTIME_POST_CLEANUP_ABORT_RECONVERGES=PASS")
 
             # Observe exact kernel AllowedIPs immediately before the real D.001
             # delete. Do not substitute an assertion on the desired projection.
@@ -312,11 +367,12 @@ warm_paths = 1
                 return original_stop(instance, device_id)
 
             with patch.object(LinuxManagedWireGuardAdapter, "converge_absent", checked_stop):
-                released_realizations, released = release_alpha_undemanded_devices(
+                release = release_alpha_undemanded_devices(
                     prepared, domain, runner, manager, recovery, ownership,
                     dependencies_confirmed=True,
                 )
-            assert released
+            assert release.retirement_attempted and release.dependencies_touched
+            released_realizations = release.realizations
             print("A012_RUNTIME_DYNAMIC_PEER_DEPENDENCY_REMOVED_BEFORE_STOP=PASS")
             assert _managed_device_problem(released_realizations) is None
             assert adapter.observe("wg-reserve").state is ManagedWireGuardState.ABSENT
