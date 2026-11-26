@@ -9,9 +9,10 @@
 # not fetch or refresh refs itself.
 #
 # The script deliberately performs no tag-existence preflight and does not
-# interpret command failures. For every ADD_TAG row it runs git tag and git
-# push in sequence, leaving Git's stdout/stderr unchanged. A failure does not
-# stop later rows from being attempted.
+# interpret command failures. It attempts every local git tag operation in file
+# order, collects the corresponding refs, then publishes all listed tag refs in
+# one git push invocation. A local tag failure does not stop later rows from
+# being attempted; Git's stdout/stderr and final push result remain unchanged.
 #
 # The ledger is input only and is never modified by this script.
 
@@ -19,11 +20,16 @@ set -u
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ledger="${1:-$script_dir/REF-HYGIENE.tsv}"
+tag_refs=()
 
-while IFS=$'\t' read -r command tag target annotation; do
+while IFS=\t' read -r command tag target annotation; do
     [[ -z "${command:-}" || "$command" == \#* ]] && continue
     [[ "$command" == "ADD_TAG" ]] || continue
 
     git tag -a "$tag" "$target" -m "$annotation"
-    git push origin "refs/tags/$tag"
+    tag_refs+=("refs/tags/$tag")
 done < "$ledger"
+
+if (("${#tag_refs[@]}")); then
+    git push origin "${tag_refs[@]}"
+fi

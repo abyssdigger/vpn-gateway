@@ -22,3 +22,5 @@ ADD_TAG	ng3-publication-validation-semantics-source	ab3fb2d3874f270e1219a57a2339
 DEL_BRANCH	process-publication-validation-semantics-20261125
 ADD_TAG	ng3-ref-hygiene-reconcile-20261126-source	origin/ref-hygiene-reconcile-20261126	ref-hygiene reconciliation source tip
 DEL_BRANCH	ref-hygiene-reconcile-20261126
+ADD_TAG	ng3-ref-hygiene-batch-tags-20261126-source	origin/ref-hygiene-batch-tags-20261126	ref-hygiene batch-tag helper source tip
+DEL_BRANCH	ref-hygiene-batch-tags-20261126
