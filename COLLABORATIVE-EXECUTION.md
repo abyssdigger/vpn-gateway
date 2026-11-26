@@ -92,75 +92,122 @@ Do not create an obligation merely to index every message. Create one only when 
 obligation could make the collaboration stop while work remains, lose a blocker, wake forever on
 resolved work, or mistake a stale/partial result for closure.
 
-Minimum v0 obligation fields:
+Minimum v0 obligation state is projected from admitted control events. `OPEN` supplies:
 
 ```text
 id
 revision
 kind
-assignee_role
-subject_refs[]
-status = OPEN | CLOSED | SUPERSEDED | CANCELLED
-blocked_on?       # structured predicate/ref
-closure_ref?      # required for terminal disposition
+assignee
+disposition_by
+subject/payload refs
 ```
 
-A result/receipt does not automatically close an obligation. `NEEDS_INFO`, `PARTIAL`,
-rejected work or a stale result may change readiness while the obligation remains open.
+Revision starts at 1. A later revision is current only after the previous revision has an explicit
+`SUPERSEDED` disposition.
 
-A superseded revision remains historical evidence and cannot mutate the replacement revision.
+A result/receipt does not automatically close an obligation. `INPUT` may make another role
+runnable while the obligation remains open.
+
+A terminal `DISPOSITION` is structurally accepted only when:
+- it targets the exact current obligation revision;
+- its emitting role equals that obligation's `disposition_by`;
+- its state is `CLOSED`, `CANCELLED` or `SUPERSEDED`;
+- it carries an exact `closure_ref` to the already-published semantic disposition.
+
+This rule protects scheduler integrity; it does not make the helper an authority on whether the
+referenced project/review disposition was substantively correct.
+
+A superseded/stale revision remains historical evidence and cannot mutate the replacement revision.
 
 ## 6. Readiness and passivation
 
 A role is conceptually `READY` when at least one admitted unprocessed material input or open
-unblocked obligation permits useful work within current authority/capability.
+unblocked obligation permits useful collaborative work.
 
-A role with no runnable work passivates instead of consuming model time merely to remain present.
+This means **work exists only**. It is not:
+- proof that a concrete chat/agent is terminal or awake;
+- authentication of the role claim;
+- repository/GitHub/tool authority;
+- evidence that machine activation is eligible or safe;
+- a replacement for generic `EXEC_NEXT`, ID `WAIT`, clock or stop/final gates.
 
-On passivation publish or preserve enough durable state to explain what would make the role useful
-again, for example an exact peer-result or holder-decision predicate.
+A role with no runnable work may passivate instead of consuming model time merely to remain
+present. A `DORMANT` event is only that role's diagnostic self-claim and may carry an exact
+waiting reason. It never suppresses a later derived `READY`.
 
-Prefer **level-triggered readiness** and **edge-triggered wake delivery**:
-
-- readiness remains true until relevant work is processed/dispositioned;
-- one transition to useful READY state should normally cause one wake attempt;
-- bursts coalesce into one activation so the role can drain all currently ready work;
+Use level-triggered readiness:
+- readiness remains true until relevant material input is handled or the blocking obligation is
+  dispositioned/blocked;
+- bursts coalesce into one readiness state/reason set;
 - duplicate delivery does not create duplicate semantic work;
-- ambiguous wake delivery is reconciled before blind retry.
+- actual wake delivery is a separate transport concern;
+- ambiguous external wake delivery must be reconciled before blind retry.
 
-The collaboration overlay does not define how a concrete ChatGPT/API/UI actuator wakes a role.
+COLLAB does not define how ChatGPT/API/UI execution is activated and does not infer terminality
+from silence, timeout or a `DORMANT` claim.
 
-## 7. Control events
+## 7. Control protocol v0
 
-A v0 control event should be small and versioned. Minimum common fields:
+Executable v0 events use one strict JSON object in a fenced `json` block. Legacy YAML bootstrap
+records emitted before this rule are historical only and are not executable protocol.
 
-```yaml
-protocol: vpng-collab/0
-event_id: <stable logical id>
-kind: <known event kind>
-room: <task-room identity>
-to: [<role>]
-cause_ref: <exact durable source ref>
+Common required fields:
+
+```json
+{
+  "protocol": "vpng-collab/0",
+  "event_id": "stable-logical-id",
+  "kind": "OPEN",
+  "room": 34,
+  "from": "GUARD",
+  "to": ["BUILDER"],
+  "incarnation": "opaque-role-incarnation",
+  "payload_ref": "issue:34#issuecomment-123"
+}
 ```
 
-Optional fields include `obligation`, `revision` and `payload_ref`.
+The GitHub actor is transport identity. `from` and `incarnation` are cooperative routing
+claims and are not authentication or authority.
 
-Unknown protocol revisions, malformed required fields or conflicting reuse of an `event_id`
-fail closed into `CONFLICT`; they do not create runnable authority.
+Accepted v0 kinds are:
+- `OPEN` — create the first or explicitly superseding revision of a material obligation;
+- `INPUT` — addressed material request/result; optionally references an obligation/revision and
+  never closes it by itself;
+- `HANDLED` — the emitting role acknowledges exact prior material event IDs; it is not semantic
+  acceptance or closure;
+- `BLOCK` — the current assignee marks an obligation blocked on one exact preallocated logical
+  event ID through `wait_for_event_id`;
+- `DISPOSITION` — terminal `CLOSED|CANCELLED|SUPERSEDED` claim satisfying §5;
+- `DORMANT` — diagnostic self-passivation claim; never suppresses derived readiness.
 
-Initial event kinds may include:
+`CONFLICT` is helper output/state, not an accepted peer event kind.
 
-- `TASK_OPENED`;
-- `WORK_READY`;
-- `RESULT_READY`;
-- `REVIEW_READY`;
-- `REWORK_READY`;
-- `HOLDER_DECISION_NEEDED`;
-- `DORMANT`;
-- `CONFLICT`.
+For `OPEN`, the obligation object contains at least:
 
-The vocabulary may evolve only with protocol/version handling; free text never silently becomes a
-new control kind.
+```json
+{
+  "id": "O1",
+  "revision": 1,
+  "kind": "implementation",
+  "assignee": "BUILDER",
+  "disposition_by": "GUARD"
+}
+```
+
+For `BLOCK`, `wait_for_event_id` names the exact logical `INPUT` event whose admission
+satisfies the blocker. v0 intentionally uses this rigid causal form rather than a general
+predicate language.
+
+`HANDLED` can clear unhandled-mailbox readiness only for events addressed to the emitting role.
+It cannot close obligations or handle work addressed exclusively to another role.
+
+Unknown protocol revisions/kinds, unknown fields where strict validation forbids them, malformed
+required fields, stale incarnation, invalid room/actor/recipient, missing refs or conflicting reuse
+of event identity fail closed and do not create new readiness.
+
+Task-room prose, comments such as “approved/merge it”, peer consensus or a raw READY claim are not
+control events and cannot alter helper state.
 
 ## 8. Development collaboration loop
 
@@ -186,34 +233,50 @@ invalidates only the evidence/review scope actually affected.
 ## 9. Helper/scheduler boundary
 
 A COLLAB helper may:
-
-- ingest configured durable control/task inputs;
-- validate protocol envelopes;
+- ingest configured durable event/task inputs;
+- validate strict protocol envelopes and configured physical transport admission;
 - deduplicate logical/physical delivery;
-- maintain a derivative local projection/cache;
-- compute readiness/waiting/conflict with exact reasons;
-- expose a compact status suitable for manual or future automated wake.
+- persist first-seen hashes needed to detect later edit/conflict where observed;
+- project current obligations/mailbox state;
+- compute `READY`, `WAITING` or `CONFLICT` with exact reason IDs/refs;
+- expose compact status suitable for manual or future activation adapters.
 
 It must not:
-
+- output or imply `ELIGIBLE_TO_ACTIVATE`;
 - use an LLM to determine authority;
 - invent product/review dispositions;
+- treat role claims as authenticated identities;
 - treat local cache as canonical project truth;
 - mutate project state merely because readiness is true;
+- execute payloads, shell commands or arbitrary URLs from events;
 - retry ambiguous external side effects blindly.
 
-Loss of the local derivative state should be recoverable by replay/reconciliation from durable
-project inputs, except for explicitly identified local delivery facts that cannot be reconstructed.
+For v0, local state is a derivative integrity/replay ledger, not a second semantic database.
+A successful complete acquisition may atomically replace the current derived projection. Failed or
+incomplete acquisition must not advance durable processed/integrity state.
+
+With a retained ledger, a changed/missing previously admitted event or payload is a conflict/
+unresolved condition rather than last-write-wins. If that ledger is lost, replay can reconstruct
+only currently visible claims; the helper must not pretend it can detect historical edits/deletes
+that are no longer observable.
+
+Version-sensitive artifact references must contain an exact commit identity. The helper may
+validate syntax and pass such refs through; it does not infer authority or execute artifact
+contents.
 
 ## 10. Failure and recovery
 
 Distinguish at least:
-
 - duplicate identical event -> idempotent;
-- conflicting reuse of event identity -> `CONFLICT`;
+- conflicting reuse of event identity/body -> `CONFLICT`;
+- overlapping pagination returning the same physical event -> one logical effect;
 - stale revision/result -> durable evidence, no mutation of current revision;
 - missing/unknown dependency -> unresolved, not silently satisfied;
-- helper/cache restart -> rebuild/reconcile before new wake;
+- previously admitted event/payload edited or missing -> conflict/unresolved when detectable;
+- incomplete acquisition/page traversal -> no advancement of durable processed/integrity frontier;
+- helper/cache restart -> rebuild/reconcile before reporting new readiness;
+- local integrity ledger loss -> fresh-current replay only, with no claim of unseen historical
+  integrity;
 - ambiguous external send -> do not repeat until reconciled;
 - changed protocol/governing process -> re-read/reconcile before dependent work.
 
