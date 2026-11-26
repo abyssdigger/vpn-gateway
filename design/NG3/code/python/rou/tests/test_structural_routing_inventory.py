@@ -85,6 +85,32 @@ def parse(routes=EXP029_ROUTES, rules=CURRENT_RULES, interfaces=(HOST, PATH0, PA
 
 
 class StructuralRoutingInventoryTests(unittest.TestCase):
+    def test_detached_probe_rule_preserves_only_physical_name(self):
+        row = dict(EXP065_PROBE_RULE, oif_detached=None)
+        value = parse([], [row], (HOST, PATH0))
+        self.assertEqual(value.conflicts, ())
+        self.assertEqual(len(value.rules), 1)
+        self.assertIsNone(value.rules[0].egress)
+        self.assertEqual(value.rules[0].detached_egress_name, "path1")
+
+    def test_detached_probe_rule_rejects_unrepresentable_shapes(self):
+        bad = [
+            (dict(EXP065_PROBE_RULE, oif_detached=True), (HOST, PATH0)),
+            (dict(EXP065_PROBE_RULE, oif_detached=False), (HOST, PATH0)),
+            (dict(EXP065_PROBE_RULE, oif_detached=None), (HOST, PATH0, PATH1)),
+            (dict(EXP065_PROBE_RULE), (HOST, PATH0)),
+            (dict(EXP065_PROBE_RULE, oif_detached=None, oif="bad/name"), (HOST, PATH0)),
+            (dict(EXP065_PROBE_RULE, oif_detached=None, oif="a" * 16), (HOST, PATH0)),
+            (dict(EXP065_PROBE_RULE, oif_detached=None, fwmark="0x1"), (HOST, PATH0)),
+            (dict(EXP065_PROBE_RULE, oif_detached=None, table="2147483648"), (HOST, PATH0)),
+            (dict(PAYLOAD_RULE, oif_detached=None), (HOST, PATH0)),
+        ]
+        for row, interfaces in bad:
+            with self.subTest(row=row):
+                value = parse([], [row], interfaces)
+                self.assertEqual(value.rules, ())
+                self.assertEqual(len(value.conflicts), 1)
+
     def test_exp029_routes_and_exp065_probe_rule_normalize_to_typed_inventory(self):
         value = parse()
         self.assertEqual(value.conflicts, ())

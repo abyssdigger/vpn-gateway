@@ -229,7 +229,7 @@ def _observed_rule_key(rule: ObservedManagedRule) -> tuple[object, ...]:
         rule.uid_start,
         rule.uid_end,
         rule.ipproto,
-        rule.egress.ifname if rule.egress else "",
+        rule.egress.ifname if rule.egress else (rule.detached_egress_name or ""),
         rule.egress.ifindex if rule.egress else -1,
         rule.fwmark,
         rule.fwmask,

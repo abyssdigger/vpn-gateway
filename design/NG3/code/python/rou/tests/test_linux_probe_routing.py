@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address, IPv4Network
+from dataclasses import replace
 import unittest
 
 from rou.binding import LogicalPathId
@@ -45,6 +46,31 @@ def backend():
 
 
 class LinuxProbeRoutingBackendTests(unittest.TestCase):
+    def test_detached_rule_exact_delete_and_invalid_shape_refusal(self):
+        runner, value = backend()
+        detached = ObservedManagedRule(
+            priority=PRIORITY, table=TABLE, ingress=None,
+            destination=IPv4Network(f"{TARGET}/32"),
+            uid_start=4242, uid_end=4242, ipproto=1,
+            detached_egress_name="vpn0",
+        )
+        value.delete_rule(detached)
+        self.assertEqual(runner.commands[-1], (
+            "ip", "-n", "managed", "-4", "rule", "del",
+            "priority", str(PRIORITY), "uidrange", "4242-4242",
+            "ipproto", "1", "oif", "vpn0", "to", f"{TARGET}/32",
+            "lookup", str(TABLE),
+        ))
+        for bad in (
+            replace(detached, detached_egress_name=None),
+            replace(detached, detached_egress_name="bad/name"),
+            replace(detached, egress=VPN),
+            replace(detached, uid_start=0, uid_end=0),
+        ):
+            with self.subTest(bad=bad), self.assertRaises(LinuxProbeRoutingError):
+                value.delete_rule(bad)
+        self.assertEqual(len(runner.commands), 1)
+
     def test_add_probe_route_reuses_shared_route_shape(self):
         runner, value = backend()
         value.add_route(

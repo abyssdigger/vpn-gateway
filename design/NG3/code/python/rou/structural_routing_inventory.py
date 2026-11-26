@@ -60,6 +60,8 @@ class ObservedManagedRule:
     uid_end: int | None = None
     ipproto: int | None = None
     egress: InterfaceIdentity | None = None
+    # Stored physical name, not a live link identity.
+    detached_egress_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,6 +379,7 @@ def _parse_reserved_rule(
         "uid_end",
         "ipproto",
         "oif",
+        "oif_detached",
     }
     extras = sorted(set(row) - allowed)
     if extras:
@@ -413,7 +416,18 @@ def _parse_reserved_rule(
             "probe rule has no valid oif"
         )
     egress = interfaces.get(oif)
-    if egress is None:
+    detached_name = None
+    if "oif_detached" in row:
+        # iproute2 emits the presence-sensitive JSON null marker (print_null).
+        # A contradictory or malformed observation cannot authorize deletion.
+        if row["oif_detached"] is not None or egress is not None:
+            raise StructuralRoutingInventoryError(
+                "probe rule has malformed or contradictory oif_detached marker"
+            )
+        if not valid_detached_egress_name(oif):
+            raise StructuralRoutingInventoryError("probe rule has invalid detached oif name")
+        detached_name = oif
+    elif egress is None:
         raise StructuralRoutingInventoryError(
             f"probe rule oif {oif!r} is absent from current interface inventory"
         )
@@ -426,7 +440,20 @@ def _parse_reserved_rule(
         uid_end=uid_end,
         ipproto=ipproto,
         egress=egress,
+        detached_egress_name=detached_name,
     )
+
+
+def valid_detached_egress_name(name: object) -> bool:
+    # Linux IFNAMSIZ includes the terminating NUL; reject ambiguous names.
+    if not isinstance(name, str) or not name or name in (".", ".."):
+        return False
+    try:
+        return len(name.encode("utf-8")) < 16 and not any(
+            c.isspace() or c in "/:\x00" for c in name
+        )
+    except UnicodeError:
+        return False
 
 
 def _table_owner(

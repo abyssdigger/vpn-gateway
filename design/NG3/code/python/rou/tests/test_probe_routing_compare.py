@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address, IPv4Network
+from dataclasses import replace
 import unittest
 
 from rou.binding import LogicalPathId
@@ -87,6 +88,19 @@ def exact_observation(desired):
 
 
 class ProbeRoutingComparisonTests(unittest.TestCase):
+    def test_detached_name_never_confirms_live_desired_identity(self):
+        desired = desired_state()
+        actual = exact_observation(desired)
+        rule = actual.rules[0]
+        detached = replace(rule, egress=None, detached_egress_name=rule.egress.ifname)
+        result = compare_probe_routing(
+            desired, replace(actual, rules=(detached,)), NG3_LINUX_POLICY_PLATFORM,
+        )
+        self.assertFalse(result.confirmed)
+        self.assertEqual(result.confirmed_rules, ())
+        self.assertEqual(result.stale_rules, (detached,))
+        self.assertEqual(result.missing_rules, desired.rules)
+
     def test_exact_actual_probe_routing_is_confirmed(self):
         desired = desired_state()
         result = compare_probe_routing(
