@@ -192,9 +192,27 @@ This means **work exists only**. It is not:
 - evidence that machine activation is eligible or safe;
 - a replacement for generic `EXEC_NEXT`, ID `WAIT`, clock or stop/final gates.
 
-A role with no runnable work may passivate instead of consuming model time merely to remain
-present. A `DORMANT` event is only that role's diagnostic self-claim and may carry an exact
-waiting reason. It never suppresses a later derived `READY`.
+A role with no runnable work may enter collaboration passivation state. A `DORMANT` event is
+only that role's durable diagnostic self-claim and may carry an exact waiting reason. It never
+suppresses a later derived `READY`.
+
+`DORMANT` is **not** a generic `STOP` basis and does not by itself permit the live execution
+turn to end.
+
+While the continuous loop remains active:
+
+- if no verified post-turn wake/activation path exists and an applicable bounded wait mechanism is
+  available, a DORMANT/blocked role must enter bounded `WAIT`, then return to `EXEC_NEXT`;
+- a bounded WAIT timeout is not successful passivation and is not semantic completion;
+- ending the turn still requires `PRE_FINAL_GATE` and a real generic/overlay stop basis;
+- if no bounded wait exists, or the session-safety boundary is reached, surface that operational
+  blocker explicitly in the collaboration handoff/projectholder lane rather than treating
+  `DORMANT` itself as the stop reason;
+- only after a concrete post-turn wake mechanism has been separately demonstrated may an overlay
+  define true terminal passivation semantics for that mechanism.
+
+Therefore a durable `DORMANT` record can be correct while a terminal exit immediately after it is
+still a process failure.
 
 Use level-triggered readiness:
 - readiness remains true until relevant material input is handled or the blocking obligation is
@@ -273,7 +291,7 @@ During an active collaboration cycle, the active observer may run the following 
 policy**:
 
 1. any newly observed valid event from a peer confirms communication liveness for that peer;
-2. if no such new observation has occurred for 30 minutes, emit at most one outstanding `PING`;
+2. if no such new observation has occurred for 10 minutes, emit at most one outstanding `PING`;
 3. after emitting it, wait up to 5 minutes for the matching `PONG` or another newly observed valid
    peer event;
 4. if neither arrives, report `COMMUNICATION_UNCONFIRMED(role, ping_id)` once to the configured
@@ -281,7 +299,7 @@ policy**:
 5. suppress repeated PING/notification for that unresolved episode until liveness is restored or
    PROJECTHOLDER changes the situation.
 
-The 30/5-minute policy is based on **local observation time of new events**, not GitHub comment IDs,
+The 10/5-minute policy is based on **local observation time of new events**, not GitHub comment IDs,
 publication timestamps or replayed historical events. A helper restart/replay may reconstruct the
 PING/PONG relation but must not infer elapsed live-session time from old durable timestamps.
 

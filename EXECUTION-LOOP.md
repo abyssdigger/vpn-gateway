@@ -127,6 +127,9 @@ The interaction overlay may define watcher/frontier mechanics. At the generic le
 - ordinary timeout means the wait returned control; it is not semantic completion;
 - recoverable wait/tool failure returns to `EXEC_NEXT` after bounded recovery;
 - timeout or failure must not silently advance a processed semantic frontier;
+- an overlay-local blocked/passivated/dormant marker describes work state only and is not by itself
+  a `STOP` basis; when the loop is still active and an applicable bounded wait exists, return to
+  `WAIT` and then `EXEC_NEXT` rather than ending the turn;
 - do not use an unbounded wait that can bypass the session-safety boundary.
 
 ## 6. Clock and session-safety boundary
