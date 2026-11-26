@@ -1,5 +1,6 @@
 """Offline transport and durable local state evidence; no live GitHub writes."""
 import io
+from email.message import Message
 import json
 from pathlib import Path
 import tempfile
@@ -70,6 +71,45 @@ class AcquisitionTests(unittest.TestCase):
         opener.open.side_effect = lambda req, timeout: Response('https://untrusted.example', [])
         with self.assertRaises(Conflict):
             fetch_page('owner/repo', 33, 1, opener, None)
+
+    def test_malformed_link_cannot_look_complete(self):
+        opener = Mock()
+        bad = ['<https://example/last>; rel="last", malformed rel="next"',
+               '<https://example/1>; rel="next", <https://example/2>; rel="next"',
+               '<https://example/last>; rel="last",',
+               '<https://example/unknown>; rel="unknown"', '',
+               '<https://example/last>; rel="last"\r\n',
+               '<https://example/last<bad>; rel="last"',
+               '<https://example/bad path>; rel="last"']
+        for link in bad:
+            with self.subTest(link=link), self.assertRaises(Conflict):
+                opener.open.side_effect = lambda req, timeout: Response(req.full_url, [], {'Link': link})
+                fetch_page('owner/repo', 33, 1, opener, None)
+        opener.open.side_effect = lambda req, timeout: Response(req.full_url, [], {
+            'Link': '<https://example/2>; rel="next", <https://example/3>; rel="last"'
+        })
+        self.assertEqual(fetch_page('owner/repo', 33, 1, opener, None), ([], True))
+        headers = Message()
+        headers['Link'] = '<https://example/3>; rel="last"'
+        headers['Link'] = 'malformed rel="next"'
+        opener.open.side_effect = lambda req, timeout: Response(req.full_url, [], headers)
+        with self.assertRaises(Conflict):
+            fetch_page('owner/repo', 33, 1, opener, None)
+
+    def test_credential_diagnostics_do_not_echo_value(self):
+        opener = Mock()
+        for token in ('secret\nvalue', 'secret\rvalue', 'secret value', 'x' * 4097):
+            with self.subTest(length=len(token)), self.assertRaisesRegex(Conflict, '^invalid bearer credential format$'):
+                fetch_page('owner/repo', 33, 1, opener, token)
+        opener.open.assert_not_called()
+        opener.open.side_effect = ValueError('secret-token')
+        with self.assertRaises(Conflict) as raised:
+            fetch_page('owner/repo', 33, 1, opener, 'secret-token')
+        self.assertNotIn('secret-token', str(raised.exception))
+        with patch('collab_watch.Request', side_effect=ValueError('secret-token')):
+            with self.assertRaises(Conflict) as raised:
+                fetch_page('owner/repo', 33, 1, opener, 'secret-token')
+        self.assertNotIn('secret-token', str(raised.exception))
 
     def test_full_page_without_link_reads_extra_page(self):
         full = [row(i+1, 'body') for i in range(PAGE_SIZE)]

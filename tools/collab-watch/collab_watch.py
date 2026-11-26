@@ -50,10 +50,13 @@ def fetch_page(repo, room, page, opener, token):
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'vpng-collab-watch/0',
     }
-    if token:
+    if token is not None:
+        require(isinstance(token, str) and 0 < len(token) <= 4096
+                and re.fullmatch(r'[A-Za-z0-9._~+/-]+=*', token),
+                'invalid bearer credential format')
         headers['Authorization'] = 'Bearer ' + token
-    request = Request(url, headers=headers, method='GET')
     try:
+        request = Request(url, headers=headers, method='GET')
         with opener.open(request, timeout=TIMEOUT) as response:
             require(response.status == 200 and response.geturl() == url,
                     'unexpected HTTP response or redirect')
@@ -67,19 +70,30 @@ def fetch_page(repo, room, page, opener, token):
             rows = strict_json(data.decode('utf-8'))
             require(isinstance(rows, list) and len(rows) <= PAGE_SIZE,
                     'GitHub response is not a bounded comment list')
-            link = response.headers.get('Link')
-            if link:
+            # HTTP permits multiple Link fields; consume all of them.
+            headers = response.headers
+            links = headers.get_all('Link', []) if hasattr(headers, 'get_all') else (
+                [headers['Link']] if 'Link' in headers else [])
+            if links:
+                link = ','.join(links)
                 # Link is a continuation hint only; never request its URL.
-                fields = re.findall(r'<[^>]+>\s*;\s*rel="([a-z ]+)"', link)
-                require(fields and sum('next' in x.split() for x in fields) <= 1,
-                        'invalid GitHub pagination link')
-                has_next = any('next' in x.split() for x in fields)
+                require(len(link) <= 16384, 'GitHub pagination link exceeds bound')
+                require(link.isascii() and not re.search(r'[\x00-\x08\x0a-\x1f\x7f]', link), 'invalid GitHub pagination link')
+                relations = []
+                for field in link.split(','):
+                    match = re.fullmatch(r'\s*<[^<>,\s\x00-\x1f\x7f]+>\s*;\s*rel="(next|last|prev|first)"\s*', field)
+                    require(match is not None, 'invalid GitHub pagination link')
+                    relations.append(match[1])
+                require(len(set(relations)) == len(relations), 'duplicate GitHub pagination relation')
+                has_next = 'next' in relations
             else:
                 has_next = False
             return rows, has_next
     except HTTPError as exc:
         raise Conflict(f'GitHub read failed: HTTP {exc.code} (room {room}, page {page})') from None
-    except (URLError, TimeoutError, OSError, UnicodeError, HTTPException) as exc:
+    except Conflict:
+        raise
+    except (URLError, TimeoutError, OSError, UnicodeError, HTTPException, ValueError) as exc:
         # Do not include arbitrary URL/header/body/token values in diagnostics.
         raise Conflict(f'GitHub acquisition failed: {type(exc).__name__} (room {room}, page {page})') from None
 
