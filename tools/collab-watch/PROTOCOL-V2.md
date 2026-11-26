@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Unit 1
+# COLLAB v2 — project Issue work plane, Units 1–2
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -6,7 +6,7 @@ The v0/v1 modules, protocol, configurations and current journal are unchanged.
 ## Boundary
 
 This unit implements a pure task registry, material admission and relation reducer.
-It does not implement acquisition, compact transport, preflight, publishing, Issue
+Unit 2 adds standalone acquisition. Neither implements compact transport, preflight, publishing, Issue
 closure, holder-command execution, health/receipt handling or epoch cutover.
 Non-task control kinds are rejected by this unit, not silently ignored. Later
 units must compose the holder/health/receipt/signal projections without creating
@@ -14,7 +14,7 @@ a second task lifecycle. The v1 signal wire may be reused through the physical
 fact index.
 
 The input is a trusted, complete normalized observation, not an arbitrary URL
-or authority. Acquisition must prove completeness/stability separately.
+or authority. Acquisition proves bounded completeness and observed stability separately.
 
 ## Configuration and discovery
 
@@ -152,3 +152,27 @@ digest/ref/chronology violations, not completely erased unobserved history.
 Signal and incidental UI state never affect task semantics. The returned facts
 index retains physical ref, exact raw digest and event for later delivery
 integration. Readiness is coordination information, never execution authority.
+
+## Unit 2 — standalone acquisition
+
+`v2_acquisition.acquire_v2(cfg, token=None, opener=None)` returns `(control, tasks)`
+for `project_v2`. It uses fixed GitHub GET endpoints derived from validated repo and
+numeric Issue identities. Each complete scan reads fixed control rooms, structurally
+discovers tasks, and reads each Issue resource, comments and Issue events. Task
+resource repository/number/immutable ID and comment parent URL are checked; PRs
+are rejected. Only closed/reopened events are semantic; other events still count
+against pagination and resource bounds. Two complete scans must agree, including
+task set, comment timestamps, body and closure metadata; incidental UI metadata
+and row order are ignored. No arbitrary response URL is followed. Full pages
+without Link require an explicit extra page; empty continuation, no progress,
+conflicting overlap and page/row/byte exhaustion fail closed. No redirects or
+credential forwarding. Public acquisition errors do not include remote strings.
+Stable observations do not prove transactional snapshot or unobserved history.
+No legacy dispatch, persistence, compact, preflight, holder/signal projection,
+write actuator or epoch migration in Unit 2.
+
+For a future multi-role model binding, distinguish runtime identity, allowed role
+assignments and one explicit CURRENT_ROLE for each bounded action/unit. A switch
+is explicit between units and rechecks the new role/incarnation before its first
+action. Evidence from one role is not authority for another. This is a future
+operational contract, not a change to current v1 bindings.
