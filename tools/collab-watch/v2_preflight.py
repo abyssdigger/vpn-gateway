@@ -4,7 +4,7 @@ from __future__ import annotations
 from core import canonical, digest, positive, require
 from journal import framed
 from project_tasks import body_hash, inspect_material, normalize_task, shape, sha
-from split_journal import MARKER, _registry, advance_relation, physical_ref, project_v2, validate_event
+from split_journal import MARKER, _registry, advance_relation, physical_ref, project_v2, validate_event, validate_v2_config
 from v2_compact import compact_v2, semantic_view
 
 PROTOCOL = "vpng-collab-preflight/2"
@@ -176,4 +176,75 @@ def preflight_close_compact(cfg, observation, actor, request, previous=None, *, 
     proof["postcondition"] = {"event_kind": "closed", "actor_id": actor,
                               "issue_number": task["issue_number"], "issue_id": task["issue_id"],
                               "created_at_strictly_after": fact["created_at"]}
+    return proof
+
+
+def initial_open_candidate(cfg, actor, body, *, selected_role, selected_incarnation):
+    """Structural candidate gate before any candidate-directed acquisition."""
+    validate_v2_config(cfg)
+    _selected(cfg, actor, selected_role, selected_incarnation)
+    require(selected_role == "SPEC", "initial OPEN requires selected SPEC")
+    require(isinstance(body, str) and 0 < len(body.encode("utf-8")) <= MAX_CANDIDATE_BYTES,
+            "invalid initial OPEN candidate size")
+    event = framed(body, MARKER)
+    require(isinstance(event, dict), "invalid initial OPEN candidate")
+    validate_event(cfg, event, event.get("room"), actor)
+    require(event["kind"] == "OPEN" and event["revision"] == 1 and event["previous"] is None
+            and event["from"] == selected_role and event["incarnation"] == selected_incarnation,
+            "initial OPEN candidate/selected role mismatch")
+    # Reject reserved rooms even before baseline acquisition.
+    _registry(cfg, {event["event_id"]: event})
+    return event
+
+
+def prospective_initial_registry(cfg, existing, event):
+    """Check one new candidate in logical registry only; no physical fact."""
+    require(event["event_id"] not in existing, "outgoing event already observed; reconcile delivery")
+    baseline, _ = _registry(cfg, existing)
+    ref = event["task_ref"]
+    require(event["task"] not in baseline and
+            all(ref["issue_number"] != binding[1] and ref["issue_id"] != binding[2]
+                for binding in baseline.values()), "initial OPEN task/Issue already registered")
+    prospective, _ = _registry(cfg, dict(existing, **{event["event_id"]: event}))
+    require(set(prospective) == set(baseline) | {event["task"]}
+            and prospective[event["task"]] == (event["room"], ref["issue_number"], ref["issue_id"]),
+            "prospective registry is not one exact extra task")
+    return ref
+
+
+def preflight_initial_open(cfg, control, tasks, extra_task, actor, body, previous=None, *,
+                           selected_role, selected_incarnation):
+    return preflight_initial_open_compact(
+        cfg, compact_v2(cfg, control, tasks, previous), extra_task, actor, body, previous,
+        selected_role=selected_role, selected_incarnation=selected_incarnation)
+
+
+def preflight_initial_open_compact(cfg, observation, extra_task, actor, body, previous=None, *,
+                                   selected_role, selected_incarnation):
+    event = initial_open_candidate(cfg, actor, body, selected_role=selected_role,
+                                   selected_incarnation=selected_incarnation)
+    projection, _, proof = _baseline(cfg, observation, previous)
+    existing = {f["event"]["event_id"]: f["event"] for f in projection["facts"].values()}
+    ref = prospective_initial_registry(cfg, existing, event)
+    normalized = normalize_task(cfg, ref, extra_task)
+    require(extra_task["state"] == "open" and normalized["close"] is None,
+            "initial OPEN requires physically open Issue")
+    require(normalized["identity"]["body_sha256"] == event["spec_ref"]["body_sha256"],
+            "initial OPEN Issue body digest mismatch")
+    # Digest the complete normalized extra partition, including ordinary prose.
+    # Duplicate identical rows and API order do not change observation identity.
+    extra = dict(extra_task, comments=[
+        {"id": row["id"], "user": {"id": row["actor_id"]}, "body": row["body"],
+         "created_at": row["created_at"], "updated_at": row["updated_at"]}
+        for _, row in sorted(normalized["comments"].items())], events=[])
+    proof.update(_selected(cfg, actor, selected_role, selected_incarnation))
+    proof.update(operation="initial_open", prospective_issue=normalized["identity"],
+                 extra_observation_sha256=digest(canonical(extra)),
+                 candidate={k: event[k] for k in ("event_id", "kind", "task", "revision", "room",
+                                                   "from", "incarnation", "previous", "task_ref", "spec_ref")})
+    proof["candidate"].update(actor_id=actor, body_sha256=digest(body))
+    proof["postcondition"] = {"actor_id": actor, "body_sha256": digest(body),
+                              "event_id": event["event_id"], "room": event["room"],
+                              "immutable": True,
+                              "created_at_strictly_after": normalized["identity"]["created_at"]}
     return proof

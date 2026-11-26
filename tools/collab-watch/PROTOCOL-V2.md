@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Units 1–3b-1
+# COLLAB v2 — project Issue work plane, Units 1–3b-2
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -239,3 +239,24 @@ from/incarnation must exactly match the selected binding. Issue close requires
 selected GUARD, not merely its possibly shared GitHub actor ID. Proofs retain
 this independent CURRENT_ROLE selection. This is cooperative structural checking,
 not authentication; runtime model-to-role authorization remains external.
+
+## Unit 3b-2 — prospective initial OPEN
+
+A separate read-only acquire_v2_for_initial_open path parses an exact r1 OPEN
+against configured actor and explicit selected SPEC/incarnation before any
+candidate-directed network. In each complete scan, validate the baseline control
+registry and one exact prospective new task/number/immutable ID before fetching
+that numeric Issue through Reader.task. Candidate and extra partition never
+enter the baseline task registry/state. Both scans cover the baseline plus
+one separate extra Issue under shared bounds; any drift or actual occurrence
+of the candidate event requires reconciliation, not a prospective success.
+
+The raw/compact initial-OPEN preflight consumes the baseline and exactly one
+already acquired extra task. The Issue must be physically open, same repository,
+number and immutable ID, non-PR, configured SPEC author and exact r1 body digest.
+The proof binds baseline state/inventory, separate complete normalized extra
+observation digest, explicit selected SPEC, candidate exact bytes/ref/spec and
+strict eventual real immutable control creation after Issue creation. No
+registration/readiness/state advancement before canonical physical admission.
+No Issue creation/comment send, post-send actuator, CLI, holder/signal, live
+workflow or epoch migration here.

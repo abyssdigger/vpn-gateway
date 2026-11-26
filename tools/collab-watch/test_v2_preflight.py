@@ -6,6 +6,7 @@ from split_journal import project_v2
 from test_split_journal import (CFG, SHA, OTHER, candidate, close, control, disposition,
                                 fixture, issue, material, opening, ref, row, ts)
 from v2_compact import compact_v2
+from v2_preflight import preflight_initial_open, preflight_initial_open_compact
 from v2_preflight import (preflight_close as close_raw, preflight_close_compact as close_compact,
                           preflight_control as control_raw, preflight_control_compact as control_compact)
 
@@ -270,6 +271,100 @@ class PreflightV2Tests(unittest.TestCase):
                 close_compact(cfg, packed, 10, request, **selected)
         close(task)
         check(rows, disposition(rows[-1]), guard, [spec_role, wrong_guard])
+
+
+    def test_initial_open_proof_separate_baseline_shared_actor(self):
+        cfg = copy.deepcopy(CFG)
+        cfg["roles"]["SPEC"]["actor_id"] = 10
+        rows, task = fixture()
+        task["author_id"] = 10
+        rows[0]["user"]["id"] = 10
+        extra = issue(43, 4003)
+        extra["author_id"] = 10
+        out = opening(extra, task="O2", mid="o2", cid=200)
+        out["user"]["id"] = 10
+        c, t = {"34": rows}, {"42": task}
+        baseline = project_v2(cfg, c, t)
+        packed = compact_v2(cfg, c, t, baseline[1])
+        spec = dict(selected_role="SPEC", selected_incarnation="s")
+        proof = preflight_initial_open(cfg, c, t, extra, 10, out["body"], baseline[1], **spec)
+        self.assertEqual(proof, preflight_initial_open_compact(cfg, packed, extra, 10,
+                                                              out["body"], baseline[1], **spec))
+        self.assertEqual(proof["state"], "CONDITIONAL")
+        self.assertEqual(proof["postcondition"]["created_at_strictly_after"], extra["created_at"])
+        self.assertEqual(proof["inventory_sha256"], packed.inventory_sha256)
+        self.assertNotIn("ledger", proof)
+        self.assertNotIn("projection", proof)
+        self.assertNotIn("comment_id", proof["candidate"])
+        self.assertEqual(project_v2(cfg, c, t), baseline)
+        self.assertEqual(len(baseline[0]["tasks"]), 1)
+        self.assertNotIn("task:4003:identity", baseline[1]["ledger"])
+        for selected in (dict(selected_role="GUARD", selected_incarnation="g"),
+                         dict(selected_role="SPEC", selected_incarnation="wrong")):
+            with self.assertRaises(Conflict):
+                preflight_initial_open(cfg, c, t, extra, 10, out["body"], **selected)
+            with self.assertRaises(Conflict):
+                preflight_initial_open_compact(cfg, packed, extra, 10, out["body"], **selected)
+        actual = copy.deepcopy(out)
+        actual["created_at"] = actual["updated_at"] = extra["created_at"]
+        with self.assertRaises(Conflict):
+            project_v2(cfg, {"34": rows+[actual]}, {"42": task, "43": extra}, baseline[1])
+        self.assertEqual(len(project_v2(cfg, {"34": rows+[out]}, {"42": task, "43": extra},
+                                        baseline[1])[0]["tasks"]), 2)
+
+    def test_initial_open_wrong_identity_registry_and_history(self):
+        rows, task = fixture()
+        extra = issue(43, 4003)
+        out = opening(extra, task="O2", mid="o2", cid=200)
+        c, t = {"34": rows}, {"42": task}
+        spec = dict(selected_role="SPEC", selected_incarnation="s")
+        for key, value in (("repository", "foreign/repo"), ("number", 44), ("id", 999),
+                           ("is_pull_request", True), ("body", "changed"), ("author_id", 10)):
+            with self.subTest(key=key), self.assertRaises(Conflict):
+                preflight_initial_open(CFG, c, t, dict(extra, **{key: value}), 13, out["body"], **spec)
+        closed = copy.deepcopy(extra)
+        close(closed)
+        with self.assertRaises(Conflict):
+            preflight_initial_open(CFG, c, t, closed, 13, out["body"], **spec)
+        reopened = dict(extra, events=[{"id": 900, "kind": "reopened", "actor_id": 10, "created_at": ts(20)}])
+        with self.assertRaises(Conflict):
+            preflight_initial_open(CFG, c, t, reopened, 13, out["body"], **spec)
+        for candidate in (opening(extra, task="O1", mid="x", cid=200),
+                          opening(issue(42, 4003), task="O2", mid="x", cid=200),
+                          opening(issue(43, 4002), task="O2", mid="x", cid=200),
+                          opening(extra, task="O2", mid="o", cid=200)):
+            with self.assertRaises(Conflict):
+                preflight_initial_open(CFG, c, t, extra, 13, candidate["body"], **spec)
+        with self.assertRaises(Conflict):
+            preflight_initial_open(CFG, {"34": rows+[out]}, {"42": task, "43": extra},
+                                   extra, 13, out["body"], **spec)
+        _, retained = project_v2(CFG, c, t)
+        with self.assertRaises(Conflict):
+            preflight_initial_open(CFG, {"34": rows[:1]}, t, extra, 13, out["body"], retained, **spec)
+
+    def test_initial_open_extra_inventory_exact_and_order_independent(self):
+        rows, task = fixture()
+        extra = issue(43, 4003)
+        out = opening(extra, task="O2", mid="o2", cid=200)
+        c, t = {"34": rows}, {"42": task}
+        spec = dict(selected_role="SPEC", selected_incarnation="s")
+        def prove(x):
+            return preflight_initial_open(CFG, c, t, x, 13, out["body"], **spec)
+        before = prove(extra)
+        extra["comments"] = [row(777, 13, "ordinary discussion", 10),
+                             row(778, 99, "other prose", 11)]
+        after = prove(extra)
+        self.assertNotEqual(before["extra_observation_sha256"], after["extra_observation_sha256"])
+        self.assertEqual(before["inventory_sha256"], after["inventory_sha256"])
+        self.assertEqual(before["baseline_state_sha256"], after["baseline_state_sha256"])
+        reversed_rows = dict(extra, comments=list(reversed(extra["comments"])) + [extra["comments"][0]])
+        self.assertEqual(after, prove(reversed_rows))
+        for field, value in (("body", "edited"), ("updated_at", ts(12))):
+            drift = copy.deepcopy(extra)
+            drift["comments"][0][field] = value
+            proof = prove(drift)
+            self.assertNotEqual(after["extra_observation_sha256"], proof["extra_observation_sha256"])
+            self.assertEqual(after["baseline_state_sha256"], proof["baseline_state_sha256"])
 
 
 if __name__ == "__main__":

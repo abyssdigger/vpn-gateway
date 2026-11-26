@@ -9,7 +9,7 @@ from unittest.mock import patch
 from core import Conflict
 from split_journal import project_v2
 from test_split_journal import CFG, fixture, issue, opening, close, ts
-from v2_acquisition import acquire_v2
+from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
 
 ROOT = "https://api.github.com/repos/owner/repo"
 
@@ -332,6 +332,101 @@ class AcquisitionTests(unittest.TestCase):
         self.assertFalse(any("evil" in u or "/issues/98" in u for u, _, _ in opener.calls))
         with self.assertRaises(Conflict):
             acquire_v2(CFG, token="bad\ncredential", opener=opener)
+
+
+    def prospective_fixture(self):
+        extra = issue(43, 4003)
+        extra["comments"] = [{"id": 777, "user": {"id": 13}, "body": "extra discussion",
+                              "created_at": ts(10), "updated_at": ts(10)}]
+        out = opening(extra, task="O2", mid="o2", cid=200)
+        self.first = snapshots(self.rows, [self.task, extra])
+        return extra, out
+
+    def prospective(self, out, opener, actor=13, role="SPEC", inc="s"):
+        return acquire_v2_for_initial_open(CFG, actor, out["body"], selected_role=role,
+                                           selected_incarnation=inc, token="fake", opener=opener)
+
+    def test_initial_open_extra_separate_and_exact(self):
+        extra, out = self.prospective_fixture()
+        opener = Opener(self.first)
+        c, t, x = self.prospective(out, opener)
+        self.assertEqual((c, t, x), ({"34": self.rows}, {"42": self.task}, extra))
+        self.assertEqual(len(project_v2(CFG, c, t)[0]["tasks"]), 1)
+        self.assertEqual(sum("/issues/43?" in u or u.endswith("/issues/43") for u, _, _ in opener.calls), 2)
+        self.assertTrue(all(u.startswith(ROOT+"/issues/") and method == "GET" and auth == "Bearer fake"
+                            for u, method, auth in opener.calls))
+        admitted = snapshots(self.rows+[out], [self.task, extra])
+        opener = Opener(self.first, admitted)
+        with self.assertRaises(Conflict):
+            self.prospective(out, opener)
+        self.assertEqual(opener.scan, 1)
+        # No extra resource read in the second scan once the candidate is observed.
+        self.assertEqual(sum(u.endswith("/issues/43") for u, _, _ in opener.calls), 1)
+        with self.assertRaises(Conflict):
+            self.prospective(out, Opener(admitted))
+
+    def test_initial_open_extra_drift_and_missing(self):
+        extra, out = self.prospective_fixture()
+        for path, field, value in (
+            ("/issues/43", "body", "changed"),
+            ("/issues/43", "id", 999), ("/issues/43", "number", 44),
+            ("/issues/43", "pull_request", {}),
+            ("/issues/43/comments", "body", "changed"),
+            ("/issues/43/comments", "updated_at", ts(11)),
+        ):
+            data = copy.deepcopy(self.first)
+            target = data[path]
+            (target[0] if isinstance(target, list) else target)[field] = value
+            with self.subTest(path=path, field=field), self.assertRaises(Conflict):
+                self.prospective(out, Opener(self.first, data))
+        closed = copy.deepcopy(extra)
+        close(closed)
+        with self.assertRaises(Conflict):
+            self.prospective(out, Opener(self.first, snapshots(self.rows, [self.task, closed])))
+        data = copy.deepcopy(self.first)
+        del data["/issues/43"]
+        with self.assertRaises(Conflict):
+            self.prospective(out, Opener(data))
+        other = issue(44, 4004)
+        expanded = snapshots(self.rows+[opening(other, task="O3", mid="o3", cid=201)],
+                             [self.task, extra, other])
+        with self.assertRaises(Conflict):
+            self.prospective(out, Opener(self.first, expanded))
+
+    def test_initial_open_reject_before_extra_fetch(self):
+        extra, out = self.prospective_fixture()
+        for candidate in (opening(extra, task="O1", mid="rebind", cid=200),
+                          opening(issue(42, 4003), task="O2", mid="rebind", cid=200),
+                          opening(issue(43, 4002), task="O2", mid="rebind", cid=200),
+                          opening(extra, task="O2", mid="o", cid=200),
+                          opening(issue(35, 4003), task="O2", mid="reserved", cid=200)):
+            opener = Opener(self.first)
+            with self.assertRaises(Conflict):
+                self.prospective(candidate, opener)
+            self.assertFalse(any("/issues/43" in u or "/issues/35" in u for u, _, _ in opener.calls))
+        for actor, role, inc, body in (
+            (10, "GUARD", "g", out["body"]), (13, "SPEC", "wrong", out["body"]),
+            (13, "SPEC", "s", out["body"].replace('"revision":1', '"revision":2')),
+            (13, "SPEC", "s", self.rows[1]["body"]), (13, "SPEC", "s", "unframed"),
+            (13, "SPEC", "s", out["body"].replace('"room":34', '"room":99')),
+        ):
+            opener = Opener(self.first)
+            with self.assertRaises(Conflict):
+                self.prospective(dict(out, body=body), opener, actor, role, inc)
+            self.assertEqual(opener.calls, [])
+
+    def test_initial_open_extra_aggregate_bounds(self):
+        extra, out = self.prospective_fixture()
+        row_total = sum(len(v) for v in self.first.values() if isinstance(v, list))
+        byte_total = sum(len(json.dumps(v).encode()) for v in self.first.values())
+        for key, limit in (("MAX_OBSERVED_COMMENTS", row_total-1),
+                           ("MAX_LOCAL_BYTES", byte_total-1)):
+            with patch("v2_acquisition."+key, limit+1):
+                self.prospective(out, Opener(self.first))
+            opener = Opener(self.first)
+            with patch("v2_acquisition."+key, limit), self.assertRaises(Conflict):
+                self.prospective(out, opener)
+            self.assertTrue(any("/issues/43/" in u for u, _, _ in opener.calls))
 
 
 if __name__ == "__main__":

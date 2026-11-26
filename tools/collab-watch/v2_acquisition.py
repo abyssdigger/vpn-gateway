@@ -10,7 +10,8 @@ from collab_watch import (API, PAGE_SIZE, MAX_PAGES, MAX_PAGE_BYTES,
                           MAX_LOCAL_BYTES, MAX_OBSERVED_COMMENTS, TIMEOUT, NoRedirect)
 from core import Conflict, canonical, positive, require, strict_json
 from project_tasks import comment, normalize_task, stamp
-from split_journal import discover_tasks, validate_v2_config
+from split_journal import _control, discover_tasks, validate_v2_config
+from v2_preflight import initial_open_candidate, prospective_initial_registry
 
 
 def _next(headers):
@@ -149,6 +150,30 @@ class Reader:
         return task
 
 
+def _acquire(cfg, token, opener, candidate=None):
+    validate_v2_config(cfg)
+    if opener is None:
+        opener = build_opener(NoRedirect())
+    def scan():
+        reader = Reader(cfg, token, opener)
+        control = {str(room): reader.comments(room) for room in cfg["journal_rooms"]}
+        refs = discover_tasks(cfg, control)
+        extra_ref = None
+        if candidate is not None:
+            # The candidate never enters the physical baseline. If it appeared
+            # during either scan, stop for reconciliation before any extra GET.
+            existing, _, _, _ = _control(cfg, control)
+            extra_ref = prospective_initial_registry(cfg, existing, candidate)
+        tasks = {key: reader.task(cfg, ref) for key, ref in refs.items()}
+        if extra_ref is not None:
+            return control, tasks, reader.task(cfg, extra_ref)
+        return control, tasks
+    first = scan()
+    second = scan()
+    require(canonical(first) == canonical(second), "dynamic observation changed during acquisition")
+    return second
+
+
 def acquire_v2(cfg, token=None, opener=None):
     """Return (control, tasks) only after two equal complete dynamic scans.
 
@@ -156,20 +181,24 @@ def acquire_v2(cfg, token=None, opener=None):
     projection authority, CLI dispatch or write actuator in this unit.
     """
     try:
-        validate_v2_config(cfg)
-        if opener is None:
-            opener = build_opener(NoRedirect())
-        def scan():
-            reader = Reader(cfg, token, opener)
-            control = {str(room): reader.comments(room) for room in cfg["journal_rooms"]}
-            refs = discover_tasks(cfg, control)
-            tasks = {key: reader.task(cfg, ref) for key, ref in refs.items()}
-            return control, tasks
-        first = scan()
-        second = scan()
-        require(canonical(first) == canonical(second), "dynamic observation changed during acquisition")
-        return second
+        return _acquire(cfg, token, opener)
     except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
         # Some legacy validators include untrusted JSON keys in their messages.
         # Keep the public acquisition diagnostic independent of remote strings.
         raise Conflict("v2 acquisition failed: invalid, incomplete, unstable or inaccessible observation") from None
+
+
+def acquire_v2_for_initial_open(cfg, actor, body, *, selected_role, selected_incarnation,
+                                token=None, opener=None):
+    """Acquire baseline plus one separately held, structurally nominated Issue.
+
+    Both complete scans use the same aggregate bounds and prospective registry
+    checks. An actually admitted candidate requires reconciliation, not replay
+    as an outgoing candidate. The returned extra is not a canonical task.
+    """
+    try:
+        candidate = initial_open_candidate(cfg, actor, body, selected_role=selected_role,
+                                           selected_incarnation=selected_incarnation)
+        return _acquire(cfg, token, opener, candidate)
+    except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
+        raise Conflict("v2 initial OPEN acquisition failed: invalid, incomplete, unstable or already observed") from None
