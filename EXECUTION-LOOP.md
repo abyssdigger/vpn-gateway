@@ -194,6 +194,37 @@ The gate must:
 If no permitted stop basis is true, `STOP` is invalid: return to `EXEC_NEXT` and choose
 `WORK` or `WAIT`.
 
+### 8.1. Projectholder decision request contract
+
+When a genuine projectholder product/project decision is required, the request is a semantic
+decision payload, not a pointer to prior conversation. It must be self-contained for a
+projectholder who knows the project but has not read the current agent/peer/task-room transcript.
+
+The request must contain:
+
+1. **Essence** — the concrete residual question, why it matters now and which dependent scope
+   cannot proceed without the decision.
+2. **Normative basis** — the exact Requirements, Constraints, accepted decisions and material
+   facts from which the question arises, plus why the applicable real-ambiguity filtering still
+   leaves more than one permissible outcome.
+3. **Surviving options and consequences** — for every genuinely permissible option, the
+   observable/product effect, material advantages, disadvantages, risks/costs/constraints and
+   the accepted obligations it affects.
+4. **Exact decision requested** — the minimum additional product/project choice or external
+   basis needed to continue.
+
+References to Issues, task rooms, reviews, artifacts or prior messages may provide evidence and
+detail, but must not replace any required item above. A request such as "choose A/B; context is
+in room/thread X" is insufficient.
+
+Use the same self-contained payload whether the decision is delivered through the active
+conversation, a projectholder room, an Issue, a handoff or another admitted transport.
+
+If normative filtering leaves only one permissible outcome, do not manufacture a holder choice;
+continue at the owning design/implementation layer within existing authority. Setup/entitlement
+actions and execution-authority expansion are separate holder actions: request their exact
+minimal action and do not disguise them as product alternatives.
+
 ## 9. Recovery
 
 Do not infer a platform limitation from one recoverable wait/tool failure.
@@ -217,7 +248,7 @@ When the loop stops, provide only the state needed to resume cheaply and truthfu
 - completed units relevant to continuation;
 - exact unfinished work;
 - green/red/pending checks or evidence relevant to the current frontier;
-- decisions genuinely requiring projectholder action;
+- decisions genuinely requiring projectholder action, expressed under §8.1 when a product/project decision is required;
 - any overlay-specific state required by its owner document.
 
 Do not manufacture a repository artifact merely to store a handoff unless that artifact

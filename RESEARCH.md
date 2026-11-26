@@ -122,8 +122,12 @@ Keep these distinct:
 
 A decision or setup action does not automatically imply the others.
 
-When only one minimal holder action is required, request exactly that action and keep independent
-research in `WAIT`/continue other unblocked work as appropriate.
+When the remaining gate is a holder product/project decision, use the self-contained
+decision-request contract in `EXECUTION-LOOP.md` §8.1. For setup/entitlement or
+execution-authority expansion, request only the exact minimal action required; do not present it
+as a product choice.
+
+Keep independent research in `WAIT`/continue other unblocked work as appropriate.
 
 ## 7. Research transport and frontier
 
