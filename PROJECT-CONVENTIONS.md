@@ -2,7 +2,7 @@
 
 **Статус:** нормативный документ проекта  
 **Область:** архитектура, проектная документация, ревью, экспериментальные записи,
-структура репозитория и подготовка изменений
+структура репозитория, release methodology и подготовка изменений
 
 Этот документ фиксирует правила, которые должны сохраняться между обсуждениями и не
 зависеть от контекста конкретного чата.
@@ -349,6 +349,11 @@ legacy-main-rc:design/RC3/architecture.md
 должен отвергать физическое повторное появление legacy generation trees, legacy experiment/
 review payload и legacy CI workflows.
 
+Корневой `REF-HYGIENE.tsv` является каноническим deferred ref-hygiene ledger активной линии.
+Его расположение и роль root artifact определяются этим документом; правила записи операций,
+authorization, исполнения и reconciliation принадлежат только `AGENTS.md`. Параллельный live
+cleanup ledger в review/experiment artifacts не создается.
+
 ### 6.1. Git/publication policy
 
 Repository write authorization, working-branch publication, `main` protection, snapshot
@@ -401,7 +406,8 @@ CHANGELOG служит хронологией, а не нормативным и
 
 - `AGENTS.md`: entry point, порядок чтения, repository write authorization, публикация commits, `main` protection, snapshots и Git-history operations;
 - `CONTINUOUS-DEVELOPMENT.md`: только CD execution model, review/development-block cadence, session clock и handoff;
-- этот документ: язык артефактов, review records, структура репозитория, lineage и CHANGELOG;
+- этот документ: язык артефактов, review records, структура репозитория, lineage, CHANGELOG
+  и release methodology;
 - `design/requirements-model.md`: общая модель Requirements/Constraints и closure;
 - `design/component-model.md`: общая модель компонентов и взаимодействий;
 - требования нормативной стадии: продуктовая семантика, scope и ограничения;
@@ -445,11 +451,18 @@ Release cycle начинается с release-specific product decision, а не
 разрешает выпуск без некоторой функции, projectholder может явно **не воспользоваться**
 этим разрешением и сделать функцию обязательной для конкретного выпуска.
 
+Постоянный (`permanent`) R/C остается conformance obligation выпуска, **кроме** случая, когда
+применимый нормативный Constraint явно разрешает release omission и утвержденный
+`RELEASE-SCOPE.md` столь же явно этим разрешением пользуется. Такое release-specific исключение
+не меняет status самого R/C и не превращает omission в architecture closure.
+
 Минимальное содержание `RELEASE-SCOPE.md`:
 
 - версия и scope label;
 - состояние `proposed` или `approved`;
 - явно включенные capabilities/feature families;
+- если выпуск поддерживает конкретные integration families/operator paths — их явный
+  нормативный перечень; published documentation не может молча сузить этот перечень;
 - разрешенные требованиями omissions, которыми для этого выпуска решено воспользоваться;
 - разрешенные omissions, которыми решено **не** пользоваться;
 - release-specific commitments projectholder, не противоречащие нормативным требованиям;
@@ -595,8 +608,12 @@ Coverage обязан перечислить **каждый** нормативн
   применим к кандидату;
 - `excluded-postponed` — `postponed` узел нормативно существует, но исключен из текущего
   development/release frontier согласно своему postponement record;
-- `conformance-applicable` — `permanent` узел не имеет конечного closure и для выпуска
-  проверяется на отсутствие известного нарушения применимых решений;
+- `conformance-applicable` — `permanent` узел не имеет конечного closure, не исключен
+  утвержденным omission и для выпуска проверяется на отсутствие известного нарушения применимых
+  решений;
+- `excluded-by-approved-scope` — утвержденный release scope явно пользуется omission,
+  разрешенным конкретным применимым нормативным Constraint; coverage обязан назвать и scope
+  decision, и разрешающий Constraint, а status исключенного R/C при этом не изменяется;
 - для `open`, `pending_closure` и `rejected_closure`, если такие состояния присутствуют,
   coverage обязан сохранить фактический status и явно зафиксировать release disposition и
   его влияние на решение о выпуске, а не скрывать узел под общим итогом.
@@ -648,9 +665,21 @@ operator capability или иной документированный сцен�
 успешный walkthrough через опубликованный интерфейс и применимое штатное наблюдение становится
 release gate именно через release-specific scope.
 
+Утвержденный scope задает нижнюю границу обязательного walkthrough: omission integration path из
+published documentation не удаляет его из release gate. Если опубликованная документация сверх
+scope заявляет дополнительный path как поддерживаемый выпуском, этот заявленный path также
+требует применимого walkthrough либо явного согласования scope до freeze candidate.
+
 QA report обязан перечислить проверенные документы и их identity/digest, результаты
 documentation-driven walkthrough по разделам/шагам и отдельно результаты дополнительного
 negative/fault-injection QA.
+
+Если QA report заявляет candidate-bound PASS, сам `QA-REPORT.md` обязан назвать exact candidate
+SHA и exact workflow/run/job identity, к которым относится этот PASS. QA на predecessor commit
+допустим только по правилу ниже; в таком случае **сам QA report**, а не только позднейший
+fulfillment review, обязан назвать predecessor, review candidate и доказанный non-affecting
+между ними delta/basis. Fulfillment review не используется для молчаливого исправления
+неоднозначной QA identity chain.
 
 До отдельного решения о выпуске должны существовать два различных evidence artifacts:
 

@@ -18,7 +18,7 @@ instructions may have been lost:
 Normal subject owners:
 
 - `PROJECT-CONVENTIONS.md` — documentation/review conventions, repository layout, lineage,
-  CHANGELOG;
+  CHANGELOG and release methodology;
 - `design/requirements-model.md` — Requirement/Constraint model;
 - `design/component-model.md` — component/interaction model;
 - current-stage requirements — product semantics/scope/constraints;
@@ -352,10 +352,10 @@ The top-level operating documents have deliberately non-overlapping responsibili
    research frontier, evidence classification, cheapest-sufficient-evidence discipline,
    hypothesis boundaries and research-specific continuation/escalation semantics. It grants no
    repository/GitHub authority.
-6. `PROJECT-CONVENTIONS.md` contains **project-artifact maintenance conventions**:
+6. `PROJECT-CONVENTIONS.md` contains **project-artifact maintenance and release methodology**:
    language, formatting, review/experiment artifact handling, repository layout/lineage facts,
-   naming and CHANGELOG conventions. It must not define agent authorization or execution-loop
-   timing.
+   naming and CHANGELOG conventions, plus release-cycle/scope/candidate/QA/fulfillment/publication
+   methodology. It must not define agent authorization or execution-loop timing.
 
 When a rule appears to belong to more than one document, keep the normative rule only in the
 owner above and use a short reference from the other document if needed.
@@ -370,7 +370,8 @@ Do not restate detailed subject rules here.
 - development work follows `CONTINUOUS-DEVELOPMENT.md`;
 - interactive/in-dialog execution follows `INTERACTIVE-DEVELOPMENT.md`;
 - research work follows `RESEARCH.md`;
-- documentation/review/layout/lineage conventions follow `PROJECT-CONVENTIONS.md`.
+- documentation/review/layout/lineage conventions and release methodology follow
+  `PROJECT-CONVENTIONS.md`.
 
 Implementation must not invent missing product semantics or silently convert implementation
 limitations into product scope.

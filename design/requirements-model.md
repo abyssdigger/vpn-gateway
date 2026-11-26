@@ -1586,6 +1586,19 @@ Evidence доказывает требование.
 причину исключения узла из текущей области работ, границы этого исключения и условие либо
 способ возобновления работы, если они известны.
 
+Канонический current-state pointer для таких внешних оснований находится в stage-specific
+`requirement-status-basis.md`; устойчивые postponement/deferral records хранятся в
+`design/deferrals/`. Deferral record требуется, когда [`postponed`] опирается на принятое
+решение об исключении из frontier, которое должно пережить конкретный review/chat. Record как
+минимум фиксирует затронутые R/C, причину/основание, scope исключения и известный re-entry
+condition либо явно указывает, что условие еще не определено.
+
+Re-entry не переписывает исторический deferral как будто postponement не существовал. Новый
+re-entry/applicability review фиксирует актуальное решение, stage-specific status-basis pointer
+обновляется на текущее основание, а прежний deferral остается историческим evidence. Изменение
+или удаление одного лишь deferral-файла без соответствующего текущего status/basis update не
+меняет requirement frontier.
+
 ### Статус требования
 
 Каждый нормативный Requirement/Constraint обязан иметь ровно один статус требования
