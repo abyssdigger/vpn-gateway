@@ -239,9 +239,62 @@ Accepted v0 kinds are:
 - `BLOCK` — the current assignee marks an obligation blocked on one exact preallocated logical
   event ID through `wait_for_event_id`;
 - `DISPOSITION` — terminal `CLOSED|CANCELLED|SUPERSEDED` claim satisfying §5;
-- `DORMANT` — diagnostic self-passivation claim; never suppresses derived readiness.
+- `DORMANT` — diagnostic self-passivation claim; never suppresses derived readiness;
+- `PING` — diagnostic communication-liveness probe addressed to exactly one peer role;
+- `PONG` — diagnostic response to one exact admitted `PING`.
 
 `CONFLICT` is helper output/state, not an accepted peer event kind.
+
+### Communication health
+
+`PING/PONG` are diagnostic relations only. They:
+- do not create, block, satisfy or close obligations;
+- do not create semantic `READY`;
+- do not imply activation eligibility, terminality or authority;
+- are not a replacement for normal addressed work events.
+
+A valid `PING`:
+- is addressed to exactly one configured worker role other than the sender;
+- carries `ping_id` equal to its own `event_id`;
+- uses the current configured role/incarnation identities;
+- carries no obligation/disposition semantics.
+
+A valid `PONG`:
+- carries the exact `ping_id` of one admitted `PING`;
+- is in the same task room;
+- reverses the exact sender/recipient roles of that `PING`;
+- uses current configured incarnations.
+
+Replay/order remains relation-driven: physical comment ID or fetch order is not a health causal clock.
+A PONG that references no admitted PING, or mismatches room/roles/incarnation, is an invalid health
+relation and must not be treated as successful liveness.
+
+During an active collaboration cycle, the active observer may run the following **local diagnostic
+policy**:
+
+1. any newly observed valid event from a peer confirms communication liveness for that peer;
+2. if no such new observation has occurred for 30 minutes, emit at most one outstanding `PING`;
+3. after emitting it, wait up to 5 minutes for the matching `PONG` or another newly observed valid
+   peer event;
+4. if neither arrives, report `COMMUNICATION_UNCONFIRMED(role, ping_id)` once to the configured
+   projectholder lane;
+5. suppress repeated PING/notification for that unresolved episode until liveness is restored or
+   PROJECTHOLDER changes the situation.
+
+The 30/5-minute policy is based on **local observation time of new events**, not GitHub comment IDs,
+publication timestamps or replayed historical events. A helper restart/replay may reconstruct the
+PING/PONG relation but must not infer elapsed live-session time from old durable timestamps.
+
+`COMMUNICATION_UNCONFIRMED` means only that communication was not confirmed in the diagnostic
+window. It must not:
+- declare a chat/session ended;
+- convert the role to `DORMANT`;
+- reassign work automatically;
+- restart/change model or incarnation;
+- widen or revoke authority.
+
+A later newly observed valid peer event clears the diagnostic episode and may be reported as
+communication recovered.
 
 For `OPEN`, the obligation object contains at least:
 
@@ -299,6 +352,7 @@ A COLLAB helper may:
 - persist first-seen hashes needed to detect later edit/conflict where observed;
 - project current obligations/mailbox state;
 - compute `READY`, `WAITING` or `CONFLICT` with exact reason IDs/refs;
+- project PING/PONG health relations separately from semantic readiness;
 - expose compact status suitable for manual or future activation adapters.
 
 It must not:
