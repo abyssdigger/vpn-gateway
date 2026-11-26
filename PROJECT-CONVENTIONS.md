@@ -433,7 +433,9 @@ Current deferral record должен как минимум фиксироват�
 - затронутые Requirement/Constraint ID;
 - принятое основание postponement и источник решения;
 - границу исключенного scope и то, что postponement **не** исключает;
-- условия/события re-entry, после которых postponement обязан быть пересмотрен;
+- известное условие, событие или метод re-entry, после которого postponement обязан быть
+  пересмотрен; если конкретный trigger/method пока неизвестен, record явно фиксирует это и
+  необходимость отдельного осознанного re-entry decision, а не выдумывает условие;
 - дату/контекст решения и, если применимо, предыдущий record, который он supersede.
 
 Обычная задержка реализации, нехватка времени или удобство текущего development block сами по
@@ -690,20 +692,32 @@ Documentation-driven acceptance доказывает не только корр�
 совместно утвержденным `release/<version>/RELEASE-SCOPE.md` и публикуемой
 administrator/user documentation этого выпуска. Общая release methodology не перечисляет
 конкретные VPN technologies или release-specific features: если scope делает integration path,
-operator capability или иной документированный сценарий обязательным для данного выпуска, его
-успешный walkthrough через опубликованный интерфейс и применимое штатное наблюдение становится
-release gate именно через release-specific scope.
+operator capability или иной сценарий обязательным для данного выпуска, отсутствие для него
+достаточной опубликованной документации или успешного walkthrough является **release blocker**.
+Пересечение с фактически существующей документацией не может молча уменьшить обязательный
+integration set, уже принятый release scope.
 
 QA report обязан перечислить проверенные документы и их identity/digest, результаты
 documentation-driven walkthrough по разделам/шагам и отдельно результаты дополнительного
 negative/fault-injection QA.
 
-Финальный candidate-bound `QA-REPORT.md`, используемый как release evidence, обязан сам
-идентифицировать exact release-candidate commit SHA, exact product-bundle identity и exact
-workflow run/job, результаты которых он утверждает. Если существенный QA выполнялся на
-predecessor candidate, финальный record должен либо повторно зафиксировать проверку exact
-candidate, либо явно назвать predecessor relation и доказанный non-affecting delta. Нельзя
-оставлять эту identity chain только на последующий fulfillment review.
+Candidate-bound `QA-REPORT.md`, входящий в проверяемое дерево, обязан идентифицировать
+**exact tested source SHA**, exact product-bundle identity и exact workflow run/job либо другой
+воспроизводимо идентифицированный evidence, результаты которых он утверждает. Если существенный
+QA выполнялся на predecessor candidate, report явно называет tested predecessor и доступную на
+момент создания report границу допустимого non-affecting delta.
+
+`QA-REPORT.md` не обязан и не должен пытаться вписать SHA того финального frozen candidate,
+который содержит сам этот report: такое требование было бы самоссылочным и меняло бы identity
+кандидата при каждой попытке записать ее внутрь дерева.
+
+Exact final frozen-candidate SHA, связь с tested source/report/bundle и доказательство того, что
+delta после tested source не затронул QA-relevant product-bundle inputs, installer,
+опубликованную admin/user documentation, example configuration, deployment contract или runtime
+behavior, фиксирует immutable fulfillment review (либо отдельно идентифицированный post-freeze
+QA evidence, на который fulfillment review ссылается). Если delta затрагивает хотя бы одно из
+этих свойств, QA должен быть повторен на новом tested source и candidate refrozen; identity chain
+нельзя чинить только декларацией в fulfillment review.
 
 До отдельного решения о выпуске должны существовать два различных evidence artifacts:
 
