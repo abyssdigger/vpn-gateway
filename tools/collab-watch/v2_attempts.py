@@ -189,6 +189,18 @@ class AttemptStore:
         with self._transaction() as (_, rows):
             return rows.get(action_key)
 
+    def claimed(self, effect_descriptor):
+        """Locate the one attempt that crossed the external-effect boundary."""
+        effect = _identity_data(effect_descriptor, MAX_DESCRIPTOR_BYTES)
+        ek = digest(effect)
+        with self._transaction() as (_, rows):
+            matches = [r for r in rows.values() if r["effect_key"] == ek]
+            require(all(canonical(r["effect_descriptor"]) == effect for r in matches),
+                    "effect descriptor binding mismatch")
+            started = [r for r in matches if r["state"] != "PREPARED"]
+            require(len(started) <= 1, "multiple claimed attempts")
+            return started[0] if started else None
+
     def prepare(self, action_descriptor, effect_descriptor):
         action = _identity_data(action_descriptor, MAX_DESCRIPTOR_BYTES)
         effect = _identity_data(effect_descriptor, MAX_DESCRIPTOR_BYTES)

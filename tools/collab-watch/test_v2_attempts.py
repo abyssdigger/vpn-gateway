@@ -131,6 +131,38 @@ class AttemptTests(unittest.TestCase):
         with self.assertRaises(Conflict):
             self.reopen().start(fresh)
 
+    def test_claimed_effect_recovery_lookup(self):
+        first = self.prepared()
+        self.assertIsNone(self.reopen().claimed(EFFECT))
+        second = self.prepared(dict(ACTION, proof_sha256="c"*64))
+        self.assertIsNone(self.reopen().claimed(EFFECT))
+        self.assertIsNone(self.reopen().claimed(dict(EFFECT, id=43)))
+        winners = [k for k in self.race([first, second]) if k is not None]
+        self.assertEqual(len(winners), 1)
+        winner = winners[0]
+        loser = second if winner == first else first
+        for state in ("STARTED", "UNRESOLVED", "VERIFIED"):
+            reopened = self.reopen()
+            claimed = reopened.claimed(EFFECT)
+            self.assertEqual(claimed, reopened.status(winner))
+            self.assertEqual(claimed["state"], state)
+            self.assertEqual(reopened.status(loser)["state"], "PREPARED")
+            self.assertIsNone(reopened.claimed(dict(EFFECT, id=43)))
+            with self.assertRaises(Conflict):
+                reopened.start(loser)
+            if state == "STARTED":
+                reopened.mark_unresolved(winner, "unknown")
+            elif state == "UNRESOLVED":
+                reopened.mark_verified(winner, RECEIPT, {"comment_id": 42})
+        self.assertEqual(self.reopen().claimed(EFFECT)["locator"], {"comment_id": 42})
+        for invalid in (None, {"token": "test"}, {"id": "bad key"}):
+            with self.assertRaises(Conflict):
+                self.reopen().claimed(invalid)
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("UPDATE attempts SET action_descriptor='{}' WHERE action_key=?", (winner,))
+        with self.assertRaises(Conflict):
+            self.store.claimed(EFFECT)
+
     def test_invalid_metadata_and_bounds(self):
         for bad in (None, {}, ["a"], {"id": 1.2}, {"id": (1,)}, {"id": 2**64},
                     {"token": "test"}, {"nested": {"password": "test"}},
@@ -186,6 +218,8 @@ class AttemptTests(unittest.TestCase):
             self.reopen()
         with self.assertRaises(Conflict):
             self.store.start(key)
+        with self.assertRaises(Conflict):
+            self.store.claimed(EFFECT)
         self.path.unlink()
         with self.assertRaises(Conflict):
             self.store.prepare(ACTION, EFFECT)

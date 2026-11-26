@@ -375,3 +375,9 @@ explicit investigation. STARTED only means an external side effect is possible,
 not that it happened. Absence after a crash permits read-only reconciliation,
 never another send. No HTTP mutation or PRE_MUTATION authority evaluation in
 this unit; the next actuator unit owns semantic action/effect schemas.
+
+The read-only claimed(effect_descriptor) lookup revalidates the store and
+returns the exact non-PREPARED winner (or None when no attempt has crossed
+STARTED). Recovery can find the original action by stable effect even if a
+refreshed PREPARED attempt has a different action key. Lookup never grants
+permission to retry or changes state.
