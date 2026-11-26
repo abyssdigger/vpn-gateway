@@ -54,14 +54,14 @@ jobs:
             echo "FAIL stage: historical baseline"
             exit 1
           fi
-      - name: Verify exact OPEN candidate
+      - name: Verify exact result candidate
         shell: bash
         run: |
-          if ! python -c 'from pathlib import Path; import hashlib; b=Path("d001-open-candidate.txt").read_bytes(); raise SystemExit(0 if len(b)==399 and hashlib.sha256(b).hexdigest()=="96e6011d51ce60786c0020696f388f688f96feb42e5d81306b965f1757d1128f" else 1)' 2>/dev/null; then
+          if ! python -c 'from pathlib import Path; import hashlib; b=Path("d001-result-candidate.txt").read_bytes(); raise SystemExit(0 if len(b)==349 and hashlib.sha256(b).hexdigest()=="0977604bedfab4af139e734702926261b383ad26cda33df85ac67b335d07d75c" else 1)' 2>/dev/null; then
             echo "FAIL stage: candidate identity"
             exit 1
           fi
-      - name: Fresh D001 OPEN preflight
+      - name: Fresh D001 result preflight
         env:
           COLLAB_GITHUB_TOKEN: ${{ github.token }}
-        run: python preflight_cli.py --config pilot-config-m1.json --actor 340153730 --kind journal --candidate d001-open-candidate.txt --fresh 2>/dev/null
+        run: python preflight_cli.py --config pilot-config-m1.json --actor 340153730 --kind journal --candidate d001-result-candidate.txt --fresh 2>/dev/null

@@ -1,0 +1,4 @@
+<!-- vpng-collab-journal/1 -->
+```json
+{"event_id":"m-f1-d001-result-r1","from":"BUILDER","incarnation":"builder-gpt62-current","journal_epoch":"collab-m1-20261126","kind":"INPUT","obligation":{"id":"M-F1-D001","revision":1},"outcome":"ANSWER","payload_ref":"issue:34#issuecomment-7201328376","protocol":"vpng-collab/1","room":34,"to":["GUARD"]}
+```
