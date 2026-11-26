@@ -3030,8 +3030,8 @@ Direct Adapter от нормализованного намерения упра
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R4` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R1` — [`none`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
 
 API
 
@@ -3087,7 +3087,7 @@ Architectural decisions
 13. `Selective retire bound to expected generation`
    *Для A.012 selective reclaim D.001 принимает exact expected InterfaceIdentity и confirmed base generation. Непосредственно внутри D.001 ownership/delete guard повторно подтверждается именно эта реализация и действующее поколение; отсутствие или замена не позволяют удалить другой экземпляр, даже с тем же ownership marker. После actuation свежо подтверждается требуемый postcondition; replacement/drift не изображается как подтвержденное отсутствие. Не заявляется атомарная compare-delete вне принятой operating boundary. Broad owner-wide converge_absent остается отдельным explicit/global cleanup contract и не используется вместо exact selective retire.*
 
-**F1 materialization frontier:** existing ownership/generation checking and owner-wide absent operations дают partial contribution к parent R7.R4; отдельный read-only confirm_present и exact generation-bound selective retire отсутствуют, child R7.R4.R1/R2 contributions none. Existing evidence ниже не является F1 acceptance.
+**F1 materialization frontier:** D.001 реализует отдельный read-only `confirm_present` и exact generation/identity-bound `retire_exact`. Вклад в R7.R4/R1/R2 остается partial: это нижние механизмы подтверждения и selective retirement, не careful/strict survivor selection, A.004 current-use protection, A.012 reclaim authorization или runtime integration. Existing evidence ниже не является F1 acceptance.
 
 **Evidence:** `EV-00050`, `EV-00060`, `EV-00070`.
 
@@ -3099,6 +3099,19 @@ WireGuard-границу D.001: перед изменением проверяе
 подтвержденное отсутствие старого интерфейса. Порядок пиров не входит в D.001 base generation,
 поскольку является политикой D.002. Для daemon-based VPN нижняя service realization остается
 integration-specific; существующие внешние VPN-службы остаются во внешнем управлении.
+
+F1 exact confirmation/retirement: `confirm_present` однократно подготавливает desired base,
+дважды свежо проверяет точную принадлежащую реализацию (identity/ownership/kind и base-state)
+и возвращает confirmed generation + `InterfaceIdentity` без network mutation. `retire_exact`
+связывает expected generation и identity с той же prepared base, дважды проверяет реализацию,
+выполняет существующий guarded delete не более одного раза без retry и подтверждает отсутствие
+только по свежему валидированному inventory. Все exact inventory reads проверяют также unrelated
+rows, duplicate names/indices и aliases до выводов об отношении или отсутствии; mismatch,
+неоднозначность, malformed observation и replacement не превращаются в success. Broad cleanup
+остается отдельным контрактом; атомарный compare-delete против произвольной root mutation не
+заявляется. F1 evidence: implementation `846d8893a7191dfcc5e63388e070f6de94dbade8`,
+NG3 Python run `45880822577` (25/25 jobs, 971 unit tests, real WireGuard exact confirm/retire PASS).
+Исторические EV-00050/60/70 не заменяют это F1 evidence.
 
 ## [D.002] WireGuardPeerManager
 
