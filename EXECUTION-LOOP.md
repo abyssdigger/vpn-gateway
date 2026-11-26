@@ -14,7 +14,8 @@ Established overlays are:
 
 - `CONTINUOUS-DEVELOPMENT.md` — development work;
 - `INTERACTIVE-DEVELOPMENT.md` — interactive/live-dialog execution (ID);
-- `RESEARCH.md` — research work.
+- `RESEARCH.md` — research work;
+- `COLLABORATIVE-EXECUTION.md` — multi-expert collaboration and coordination.
 
 The loop is the lifecycle; overlays add semantics to the current work. Switching or adding an
 overlay does not start a second clock and does not create a second authorization model.
@@ -26,6 +27,8 @@ loop + development
 loop + development + ID
 loop + research
 loop + research + ID
+loop + development + collaboration
+loop + research + collaboration + ID
 ```
 
 A future experiment/emulation overlay may be added when a concrete use case requires semantics
@@ -43,7 +46,9 @@ Established shorthands:
 - `CD` / `CDC` -> loop + development overlay;
 - `ID` / `IDC` -> loop + interactive overlay, with the work-mode overlay determined by the
   assigned task; it does **not** imply development by itself;
-- an explicit `research loop` / continuous-research instruction -> loop + research overlay.
+- an explicit `research loop` / continuous-research instruction -> loop + research overlay;
+- explicit `COLLAB` / collaborative-cycle wording -> loop + collaboration overlay, with the
+  work-mode overlay determined by the task.
 
 The projectholder may explicitly compose overlays, for example an interactive research cycle.
 

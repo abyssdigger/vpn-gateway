@@ -45,6 +45,11 @@ explicitly starts/resumes a continuous research loop, when an active loop enters
 unit, or when the task edits/reviews research process. Ordinary one-shot investigation does
 not become a continuous loop merely because this document is relevant.
 
+`COLLABORATIVE-EXECUTION.md` is likewise **not** a general prerequisite. Read it when the
+projectholder explicitly starts/resumes collaborative execution, when an active loop enters a
+collaboration overlay, or when the task edits/reviews collaboration process. Reading it must not
+activate collaboration, widen authority or assign work by itself.
+
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into
 documentation, process or repository-maintenance tasks.
@@ -319,7 +324,7 @@ If the remote head changes after approval, stop and re-review.
 
 ## 6. Process-correction gate
 
-A governing process/Git/snapshot/execution-loop/development/interactive/research rule is changed
+A governing process/Git/snapshot/execution-loop/development/interactive/research/collaboration rule is changed
 only after read-only diagnosis, an explicit explanation of the proposed replacement and affected
 process artifacts, and explicit user agreement. Then change only the agreed scope under the
 normal write gate.
@@ -352,7 +357,12 @@ The top-level operating documents have deliberately non-overlapping responsibili
    research frontier, evidence classification, cheapest-sufficient-evidence discipline,
    hypothesis boundaries and research-specific continuation/escalation semantics. It grants no
    repository/GitHub authority.
-6. `PROJECT-CONVENTIONS.md` contains **project-artifact maintenance conventions**:
+6. `COLLABORATIVE-EXECUTION.md` contains **the collaboration overlay**:
+   stable roles/incarnations, event/task/artifact surfaces, independent first-pass and joint
+   reconciliation, task decomposition, obligations/readiness/passivation, peer review/rework and
+   collaboration handoff. It grants no repository/GitHub/tool authority and must not redefine
+   generic loop or work-mode semantics.
+7. `PROJECT-CONVENTIONS.md` contains **project-artifact maintenance conventions**:
    language, formatting, review/experiment artifact handling, repository layout/lineage facts,
    naming and CHANGELOG conventions. It must not define agent authorization or execution-loop
    timing.
@@ -370,6 +380,7 @@ Do not restate detailed subject rules here.
 - development work follows `CONTINUOUS-DEVELOPMENT.md`;
 - interactive/in-dialog execution follows `INTERACTIVE-DEVELOPMENT.md`;
 - research work follows `RESEARCH.md`;
+- collaborative multi-expert execution follows `COLLABORATIVE-EXECUTION.md`;
 - documentation/review/layout/lineage conventions follow `PROJECT-CONVENTIONS.md`.
 
 Implementation must not invent missing product semantics or silently convert implementation
