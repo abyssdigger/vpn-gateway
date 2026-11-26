@@ -427,6 +427,41 @@ Distinguish at least:
 A local role stopping or timing out does not imply collaborative semantic closure. Open obligations
 remain durable and may make the role READY later.
 
+### Event-room epoch rollover / Continue-As-New
+
+An immutable event in the configured current machine event-room that cannot be admitted under the
+current protocol keeps that event-room epoch fail-closed. Do not edit/delete the record, silently
+add it to a legacy/ignore list, or give a worker a reusable quarantine capability merely to make
+replay green.
+
+Recovery may use **event-room epoch rollover / Continue-As-New** only after the governing
+process-correction/authorization path has explicitly accepted that recovery. The rollover must:
+
+1. keep the failed event room, prior config/state and exact incident ref/actor/body digest as
+   immutable historical audit evidence;
+2. publish a task-room checkpoint that identifies the predecessor epoch, exact failure, last
+   proven semantic facts, closed historical work, genuinely live/pending work, active
+   role/incarnation identities, process/config head and unchanged authority boundary;
+3. cross-review that checkpoint for the live state it carries; an unavailable/unreviewed role
+   state remains explicit unresolved successor work rather than silently assumed state;
+4. create a **new event-room Issue/epoch**, update configuration to that exact room and start with
+   a **fresh local state file** rather than pretending the poisoned stream replayed successfully;
+5. reopen only genuinely live work under new successor obligation IDs. Do not use a cosmetic
+   revision of an old room-scoped obligation to imply uninterrupted machine continuity;
+6. leave completed/closed obligations historical and refer to their exact prior dispositions
+   without replaying them as live;
+7. preserve the predecessor/checkpoint/new-epoch linkage so audit can reconstruct why the
+   current stream begins where it does.
+
+Machine-event publication in a recovered/new epoch must use deterministic outgoing preflight
+against the exact current protocol schema/config before the external write. Preflight failure
+means **no publication**. This is prevention only; it never repairs or reinterprets an already
+published malformed event.
+
+Epoch rollover changes the control-plane execution stream, not product semantics or repository/
+tool authority. It must not widen capabilities, authenticate role claims beyond the existing
+transport model, or convert historical CONFLICT into a claim that the old epoch was valid.
+
 ## 11. Handoff
 
 A collaborative handoff adds to the generic/work-mode handoff:
