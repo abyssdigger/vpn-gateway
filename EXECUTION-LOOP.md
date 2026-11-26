@@ -157,16 +157,26 @@ Do not intentionally run materially beyond the interval to finish a unit.
 
 ## 7. User intervention and pause/resume
 
-Any new direct projectholder/user intervention pauses autonomous continuous execution
-immediately.
+A new direct projectholder/user intervention on the **active conversational/source execution
+surface** pauses autonomous continuous execution immediately.
 
-Handle the intervention first. Resume autonomous continuous execution only after an explicit
+Handle that intervention first. Resume autonomous continuous execution only after an explicit
 resume/continue instruction, except for a bounded operation explicitly requested by that
 intervention.
 
 Completing such a bounded operation does not silently resume the prior autonomous loop.
 
 The original `CYCLE_START_TIME` remains unchanged while paused.
+
+A governing overlay may configure a **durable external projectholder collaboration lane** that is
+not the active conversational/source execution surface. Input arriving there follows that
+overlay's admission/routing semantics and does not pause the loop merely because the author is
+the projectholder. Only an explicitly admitted stop/pause command (or other overlay-defined
+equivalent) from that lane pauses/stops the loop automatically.
+
+This exception must not be used to reinterpret ordinary free text as authority or to bypass
+`AGENTS.md`; the overlay must keep product/project input, stop/control commands and execution
+authority distinct.
 
 Peer/agent input in an admitted collaboration lane is work input, not direct projectholder
 intervention and not execution-authority expansion. Its authority consequences are governed by

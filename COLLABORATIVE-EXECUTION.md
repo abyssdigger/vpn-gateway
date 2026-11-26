@@ -67,6 +67,10 @@ Ordinary projectholder comments are accepted as **PRODUCT-MANAGER input**:
 The helper may turn each exact projectholder comment into a synthetic material input for routing,
 without interpreting its prose.
 
+Ordinary PRODUCT-MANAGER input from this durable room does **not** pause an active collaboration
+cycle merely by arriving. It is routed as material work input. A registered `STOP` command is
+the explicit collaboration-lane pause/stop primitive.
+
 A small versioned command registry is the only exception. A command is recognized only when the
 **entire comment body** matches one registered form. Everything else remains ordinary
 PRODUCT-MANAGER input.
