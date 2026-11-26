@@ -1,0 +1,21 @@
+{
+  "schema": "vpng-collab-role-bindings/1",
+  "bindings": [
+    {
+      "model": "GPT-5.6 Sol",
+      "transport_role": "GUARD",
+      "incarnation": "guard-gpt56-sol-current",
+      "additional_responsibilities": [
+        "SPEC"
+      ],
+      "status": "active"
+    },
+    {
+      "model": "GPT-6.2",
+      "transport_role": "BUILDER",
+      "incarnation": "builder-gpt62-current",
+      "additional_responsibilities": [],
+      "status": "active"
+    }
+  ]
+}

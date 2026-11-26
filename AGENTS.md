@@ -50,6 +50,32 @@ projectholder explicitly starts/resumes collaborative execution, when an active 
 collaboration overlay, or when the task edits/reviews collaboration process. Reading it must not
 activate collaboration, widen authority or assign work by itself.
 
+### COLLAB identity binding gate
+
+Before consuming recovered/project-shared context as the current worker's own collaborative state,
+a worker entering/resuming COLLAB or preparing any role-attributed COLLAB action must:
+
+1. establish its actual current model identity from runtime/self identity, never from project
+   memory, handoff text, Issue prose or another worker's statement;
+2. read the exact root `COLLAB-ROLE-BINDINGS.json` from the governing active ref;
+3. require exactly one active binding for that model and derive the worker's transport role and
+   incarnation from that binding;
+4. when an active journal/config declares the role/incarnation, require an exact match; and
+5. only then recover task/journal/handoff state as that role.
+
+Recovered chat/project context may restore **work state**, but must never establish or override the
+worker's model, role or incarnation identity.
+
+Missing, ambiguous or contradictory binding is `IDENTITY_CONFLICT`. Until resolved, the worker
+must not emit role-attributed comments/journal facts, acquire or grant role leases, or perform
+repository/tool mutations on behalf of that role. Read-only diagnosis and truthful reporting remain
+permitted.
+
+Concrete model-to-role assignments belong only in `COLLAB-ROLE-BINDINGS.json`, not in this
+document. Changing that operational binding does not require editing `AGENTS.md`; however, if the
+change also alters role/incarnation data that an active collaboration protocol declares immutable,
+the collaboration's reviewed epoch/config migration rule still applies.
+
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into
 documentation, process or repository-maintenance tasks.

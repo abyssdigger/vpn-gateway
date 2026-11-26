@@ -39,6 +39,31 @@ A future journal-epoch migration may materialize it as a distinct transport role
 `PROJECTHOLDER` is not a schedulable worker role in v0. Projectholder input arrives through the
 configured human lane and is routed to worker roles for triage/reconciliation.
 
+### 1.1. Runtime identity gate
+
+Concrete model-to-role-to-incarnation assignments are operational state, not normative process
+text. The current mapping is stored only in root `COLLAB-ROLE-BINDINGS.json` on the governing ref.
+
+Before a worker may recover collaborative state **as itself**, publish any role-attributed comment
+or journal fact, acquire/grant a role lease, or perform a repository/tool mutation on behalf of a
+COLLAB role, it must first pass the `AGENTS.md` COLLAB identity binding gate.
+
+The required order is:
+
+1. establish the worker's actual model identity from runtime/self identity;
+2. read `COLLAB-ROLE-BINDINGS.json`;
+3. derive exactly one active transport role/incarnation from that mapping;
+4. compare it with any active journal/config role/incarnation declaration;
+5. only after an exact match, consume shared project/chat/handoff context as that role's work state.
+
+Project memory, a previous chat summary, a handoff, Issue prose, a saved incarnation string or another
+agent's statement may describe collaboration state but **cannot identify the current worker**.
+
+Failure at any step is `IDENTITY_CONFLICT`: fail closed for role-attributed writes/mutations and
+continue only read-only diagnosis/reporting. A binding change that also changes immutable v1 semantic
+role/incarnation configuration requires the normal reviewed journal-epoch migration; editing the
+binding file alone cannot rewrite an existing epoch.
+
 ## 2. Activation and authority
 
 Explicit projectholder COLLAB/collaborative-cycle wording activates this overlay on the generic
