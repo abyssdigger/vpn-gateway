@@ -129,6 +129,8 @@ The following do **not** start or resume CD:
 - "исследуй";
 - "сделай эксперимент";
 - "давай попробуем";
+- "новый COLLAB";
+- "запускай/продолжай COLLAB";
 - requests to implement, review, test or investigate something;
 - a task that would normally or conveniently be performed under CD;
 - the agent's own proposal to use CD.
@@ -140,8 +142,8 @@ Explicit CD/CDC activation starts or resumes the generic execution loop from
 `EXECUTION-LOOP.md` with the development overlay active. It does **not** automatically activate
 the interactive or research overlay.
 
-Conversely, starting/resuming a generic loop, ID/IDC or a research loop without CD does not
-grant repository/GitHub write authority. Outside active CD, the ordinary outside-CD
+Conversely, starting/resuming a generic loop, COLLAB/collaborative cycle, ID/IDC or a research
+loop without explicit CD/CDC does not grant repository/GitHub write authority. Outside active CD, the ordinary outside-CD
 authorization rules below remain fully applicable.
 
 The agent must not convert an ordinary task into CD on the user's behalf.
