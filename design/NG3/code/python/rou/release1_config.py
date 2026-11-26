@@ -167,6 +167,11 @@ class Release1Config:
     log_level: OperationalLogLevel = OperationalLogLevel.INFO
 
 
+class ManagedReclaimPolicy(str, Enum):
+    CAREFUL = "careful"
+    STRICT = "strict"
+
+
 class ManagedVpnKind(str, Enum):
     WIREGUARD = "wireguard"
 
@@ -231,6 +236,8 @@ class CurrentConfig:
         default_factory=lambda: MappingProxyType({})
     )
 
+    managed_reclaim: ManagedReclaimPolicy = ManagedReclaimPolicy.CAREFUL
+
     def warm_target(self, profile_id: str) -> int:
         value = self.warm_paths.get(profile_id, "all")
         return (
@@ -277,6 +284,10 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
         raise CurrentConfigError("profile must be a TOML table")
 
     transformed = dict(raw)
+    raw_reclaim = transformed.pop("managed_reclaim", "careful")
+    if not isinstance(raw_reclaim, str) or raw_reclaim not in ("careful", "strict"):
+        raise CurrentConfigError('managed_reclaim must be "careful" or "strict"')
+    managed_reclaim = ManagedReclaimPolicy(raw_reclaim)
     transformed_devices: dict[str, Any] = {}
     managed_bases: dict[str, ManagedWireGuardConfig] = {}
 
@@ -286,6 +297,10 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
             continue
 
         body = dict(raw_body)
+        if "managed_reclaim" in body:
+            raise CurrentConfigError(
+                f"device.{device_id}.managed_reclaim is a domain-level field"
+            )
         if body.get("enabled") is True and "managed_vpn" in body:
             where = f"device.{device_id}"
             if "expected_interfaces" in body:
@@ -323,6 +338,10 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
             transformed_profiles[profile_id] = raw_body
             continue
         body = dict(raw_body)
+        if "managed_reclaim" in body:
+            raise CurrentConfigError(
+                f"profile.{profile_id}.managed_reclaim is a domain-level field"
+            )
         details = body.pop("device_membership", None)
         warm = body.pop("warm_paths", "all")
         if body.get("enabled") is True:
@@ -431,6 +450,7 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
         managed_vpns=MappingProxyType(managed),
         wireguard_groups=MappingProxyType(groups),
         warm_paths=MappingProxyType(warm_paths),
+        managed_reclaim=managed_reclaim,
     )
 
 
