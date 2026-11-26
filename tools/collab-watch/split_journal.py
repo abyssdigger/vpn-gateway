@@ -27,8 +27,8 @@ def validate_v2_config(cfg):
     common = {k: cfg[k] for k in ("repository", "roles", "projectholder", "command_registry")}
     validate_config(dict(common, event_room=cfg["signal_room"], task_rooms=cfg["journal_rooms"],
                          legacy_comments=[]))
-    require(set(cfg["roles"]) == {"BUILDER", "GUARD"}, "pilot role set mismatch")
-    require(len({r["incarnation"] for r in cfg["roles"].values()}) == 2, "role incarnation collision")
+    require(set(cfg["roles"]) == {"SPEC", "BUILDER", "GUARD"}, "pilot role set mismatch")
+    require(len({r["incarnation"] for r in cfg["roles"].values()}) == 3, "role incarnation collision")
     return cfg
 
 
@@ -46,7 +46,14 @@ def validate_event(cfg, event, room, actor):
             and ident(event["task"]) and positive(event["revision"]), "invalid task event identity")
     kind = event["kind"]
     require(kind in ("OPEN", "RESULT", "REVIEW", "DISPOSITION"), "unsupported v2 task event kind")
-    sender, recipient = ("BUILDER", "GUARD") if kind == "RESULT" else ("GUARD", "BUILDER")
+    if kind == "OPEN" or (kind == "DISPOSITION" and event.get("disposition") == "SUPERSEDED"):
+        sender, recipient = "SPEC", "BUILDER"
+    elif kind == "RESULT":
+        sender, recipient = "BUILDER", "GUARD"
+    elif kind == "REVIEW" and event.get("verdict") == "SPEC_REQUIRED":
+        sender, recipient = "GUARD", "SPEC"
+    else:
+        sender, recipient = "GUARD", "BUILDER"
     role = cfg["roles"][sender]
     require(event["from"] == sender and event["to"] == [recipient]
             and positive(actor) and actor == role["actor_id"]
@@ -63,7 +70,7 @@ def validate_event(cfg, event, room, actor):
         require(positive(event["attempt"]) and sha(event["commit_sha"]), "invalid candidate")
         material_reference(event["material_ref"])
         if kind == "REVIEW":
-            require(event["verdict"] in ("REWORK", "ACCEPT"), "invalid review verdict")
+            require(event["verdict"] in ("REWORK", "ACCEPT", "SPEC_REQUIRED"), "invalid review verdict")
     else:
         require(event.get("disposition") in ("SUPERSEDED", "CLOSED"), "invalid disposition")
         fields = COMMON | LINK | {"disposition"}
@@ -172,7 +179,7 @@ def _earliest(occurrences, event):
 
 def _reduce_revision(cfg, task, opened, relations, occurrences, ledger):
     """One causally linked attempt chain, independent of observation order."""
-    guard, builder = (cfg["roles"][name]["actor_id"] for name in ("GUARD", "BUILDER"))
+    spec_actor, guard, builder = (cfg["roles"][name]["actor_id"] for name in ("SPEC", "GUARD", "BUILDER"))
     earliest = lambda e: _earliest(occurrences, e)
     spec = opened["spec_ref"]
     if opened["revision"] == 1:
@@ -180,13 +187,16 @@ def _reduce_revision(cfg, task, opened, relations, occurrences, ledger):
                 and task["identity"]["created_at"] < earliest(opened), "initial spec digest/chronology mismatch")
     else:
         bind_material(task, spec, {"kind": "SPEC", "task": opened["task"],
-                                  "revision": opened["revision"]}, guard, earliest(opened), ledger)
+                                  "revision": opened["revision"], "role": "SPEC",
+                                  "incarnation": opened["incarnation"]},
+                      spec_actor, earliest(opened), ledger)
     successors = {}
     for e in relations:
         require(e["previous"] not in successors, "forked attempt or disposition")
         successors[e["previous"]] = e
         if e["kind"] in ("RESULT", "REVIEW"):
-            expected = {k: e[k] for k in ("kind", "task", "revision", "attempt", "commit_sha")}
+            expected = {k: e[k] for k in ("kind", "task", "revision", "attempt", "commit_sha", "incarnation")}
+            expected["role"] = e["from"]
             if e["kind"] == "REVIEW":
                 expected["verdict"] = e["verdict"]
             bind_material(task, e["material_ref"], expected,
@@ -210,6 +220,8 @@ def _reduce_revision(cfg, task, opened, relations, occurrences, ledger):
             if e["verdict"] == "ACCEPT":
                 accepted = e
                 state = "ACCEPTED"
+            elif e["verdict"] == "SPEC_REQUIRED":
+                state = "SPEC_REQUIRED"
             else:
                 state = "BUILDER_READY"
         else:
@@ -260,7 +272,7 @@ def project_v2(cfg, control, tasks, previous=None):
     for e in events.values():
         if e["kind"] != "OPEN":
             groups[(e["task"], e["revision"])].append(e)
-    projected, roles = [], {"BUILDER": [], "GUARD": []}
+    projected, roles = [], {"SPEC": [], "BUILDER": [], "GUARD": []}
     for name, (_, number, iid) in sorted(registry.items()):
         task = normalize_task(cfg, {"issue_number": number, "issue_id": iid}, tasks[str(number)])
         key = f"task:{iid}"
@@ -289,7 +301,9 @@ def project_v2(cfg, control, tasks, previous=None):
                 "accepted_sha": accepted["commit_sha"] if accepted and state != "SUPERSEDED" else None,
                 "eligible_accept_refs": eligible, "revisions": historical}
         projected.append(item)
-        role = "BUILDER" if state == "BUILDER_READY" else (None if state == "CLOSED" else "GUARD")
+        role = ("BUILDER" if state == "BUILDER_READY" else
+                "SPEC" if state in ("SPEC_REQUIRED", "SUPERSEDED") else
+                None if state == "CLOSED" else "GUARD")
         if role:
             roles[role].append({"task": name, "revision": revisions[-1], "state": state})
     if previous is not None:

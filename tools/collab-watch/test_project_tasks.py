@@ -4,8 +4,13 @@ from core import Conflict, canonical, digest
 from project_tasks import HEADER, comment, immutable, parse_header, stamp
 
 
-def task_body(kind="RESULT", task="O1", revision=1, attempt=1, commit_sha="a"*40, verdict="ACCEPT"):
-    meta = {"kind": kind, "task": task, "revision": revision}
+def task_body(kind="RESULT", task="O1", revision=1, attempt=1, commit_sha="a"*40, verdict="ACCEPT",
+              role=None, incarnation=None):
+    owner = {"RESULT": "BUILDER", "REVIEW": "GUARD", "SPEC": "SPEC"}[kind]
+    inc = {"RESULT": "b", "REVIEW": "g", "SPEC": "s"}[kind]
+    meta = {"kind": kind, "task": task, "revision": revision,
+            "role": owner if role is None else role,
+            "incarnation": inc if incarnation is None else incarnation}
     if kind != "SPEC":
         meta.update(attempt=attempt, commit_sha=commit_sha)
     if kind == "REVIEW":
@@ -34,6 +39,8 @@ class MaterialTests(unittest.TestCase):
                     body.replace('"revision":1', '"revision":true'),
                     body.replace('"revision":1', '"revision":1,"revision":1'),
                     body.replace("Evidence/specification.", ""),
+                    task_body("REVIEW", role="SPEC"),
+                    task_body("RESULT", incarnation=""),
                     "quoted\n" + body):
             with self.subTest(bad=bad), self.assertRaises(Conflict):
                 parse_header(bad)

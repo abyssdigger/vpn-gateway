@@ -94,18 +94,20 @@ def parse_header(body):
     require(isinstance(meta, dict), "material header object required")
     kind = meta.get("kind")
     require(kind in ("SPEC", "RESULT", "REVIEW"), "unknown material kind")
-    fields = {"kind", "task", "revision"}
+    fields = {"kind", "role", "incarnation", "task", "revision"}
     if kind != "SPEC":
         fields |= {"attempt", "commit_sha"}
     if kind == "REVIEW":
         fields.add("verdict")
     shape(meta, fields, "material header fields")
     require(ident(meta["task"]) and positive(meta["revision"]), "invalid material task/revision")
+    owner = {"SPEC": "SPEC", "RESULT": "BUILDER", "REVIEW": "GUARD"}[kind]
+    require(meta["role"] == owner and ident(meta["incarnation"]), "invalid material role/incarnation")
     prose = lines[3]
     if kind != "SPEC":
         require(positive(meta["attempt"]) and sha(meta["commit_sha"]), "invalid material candidate")
         if kind == "REVIEW":
-            require(meta["verdict"] in ("ACCEPT", "REWORK"), "invalid review verdict")
+            require(meta["verdict"] in ("ACCEPT", "REWORK", "SPEC_REQUIRED"), "invalid review verdict")
             prefix = "GUARD " + meta["verdict"] + ": "
         else:
             prefix = "Candidate SHA: "
@@ -131,7 +133,8 @@ def normalize_task(cfg, ref, raw):
             and raw["id"] == ref["issue_id"] and raw["is_pull_request"] is False,
             "wrong repository/Issue identity or PR")
     guard = cfg["roles"]["GUARD"]["actor_id"]
-    require(positive(raw["author_id"]) and raw["author_id"] == guard,
+    spec_actor = cfg["roles"]["SPEC"]["actor_id"]
+    require(positive(raw["author_id"]) and raw["author_id"] == spec_actor,
             "initial specification author mismatch")
     require(isinstance(raw["body"], str) and raw["body"].strip()
             and len(raw["body"].encode("utf-8")) <= MAX_MATERIAL, "invalid Issue body")

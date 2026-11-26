@@ -12,14 +12,22 @@ FENCE = chr(96)*3
 CFG = {"protocol": PROTOCOL, "repository": "owner/repo", "journal_rooms": [34],
        "signal_room": 37, "journal_epoch": "v2-test",
        "roles": {"GUARD": {"actor_id": 10, "incarnation": "g"},
-                 "BUILDER": {"actor_id": 11, "incarnation": "b"}},
+                 "BUILDER": {"actor_id": 11, "incarnation": "b"},
+                 "SPEC": {"actor_id": 13, "incarnation": "s"}},
        "projectholder": {"actor_id": 12, "room": 35, "route_to": ["GUARD"]},
        "command_registry": {"cycle": "test", "capability_scopes": {}, "condition_keys": [],
                             "utc_keys": [], "model_scopes": {}}}
 
 
 def control(mid, kind, cid, second, revision=1, task="O1", **fields):
-    sender, target, actor, inc = ("BUILDER", "GUARD", 11, "b") if kind == "RESULT" else ("GUARD", "BUILDER", 10, "g")
+    if kind == "OPEN" or (kind == "DISPOSITION" and fields.get("disposition") == "SUPERSEDED"):
+        sender, target, actor, inc = "SPEC", "BUILDER", 13, "s"
+    elif kind == "RESULT":
+        sender, target, actor, inc = "BUILDER", "GUARD", 11, "b"
+    elif kind == "REVIEW" and fields.get("verdict") == "SPEC_REQUIRED":
+        sender, target, actor, inc = "GUARD", "SPEC", 10, "g"
+    else:
+        sender, target, actor, inc = "GUARD", "BUILDER", 10, "g"
     event = {"protocol": PROTOCOL, "journal_epoch": "v2-test", "event_id": mid,
              "kind": kind, "room": 34, "from": sender, "to": [target], "incarnation": inc,
              "task": task, "revision": revision, **fields}
@@ -27,7 +35,7 @@ def control(mid, kind, cid, second, revision=1, task="O1", **fields):
 
 
 def material(cid, kind, second, revision=1, attempt=1, commit_sha=SHA, verdict="ACCEPT", task="O1"):
-    actor = 11 if kind == "RESULT" else 10
+    actor = 11 if kind == "RESULT" else 13 if kind == "SPEC" else 10
     return row(cid, actor, task_body(kind, task, revision, attempt, commit_sha, verdict), second)
 
 
@@ -37,7 +45,7 @@ def ref(m):
 
 def issue(number=42, iid=4002, body="Initial specification"):
     return {"repository": "owner/repo", "number": number, "id": iid, "is_pull_request": False,
-            "author_id": 10, "body": body, "created_at": ts(1), "state": "open",
+            "author_id": 13, "body": body, "created_at": ts(1), "state": "open",
             "closed_at": None, "closed_by": None, "comments": [], "events": []}
 
 
@@ -213,7 +221,110 @@ class JournalTests(unittest.TestCase):
         unknown = row(999, 99, rows[0]["body"], 4)
         self.assertEqual(run(rows+[unknown], i), run(rows, i))
         bad = copy.deepcopy(rows[0])
-        bad["body"] = bad["body"].replace('"incarnation":"g"', '"incarnation":"stale"')
+        bad["body"] = bad["body"].replace('"incarnation":"s"', '"incarnation":"stale"')
         with self.assertRaises(Conflict):
             run([bad]+rows[1:], i)
         self.assertEqual(discover_tasks(CFG, {"34": [row(100, 10, "ordinary issue:999", 3)]}), {})
+
+
+    def test_three_roles_and_same_actor(self):
+        i = issue()
+        opened = opening(i)
+        for change in ("missing", "collision"):
+            cfg = copy.deepcopy(CFG)
+            if change == "missing":
+                del cfg["roles"]["SPEC"]
+            else:
+                cfg["roles"]["SPEC"]["incarnation"] = "g"
+            with self.assertRaises(Conflict):
+                project_v2(cfg, {"34": [opened]}, {"42": i})
+        cfg = copy.deepcopy(CFG)
+        cfg["roles"]["SPEC"]["actor_id"] = 10
+        i["author_id"] = 10
+        opened["user"]["id"] = 10
+        p, _ = project_v2(cfg, {"34": [opened]}, {"42": i})
+        self.assertEqual(p["roles"]["BUILDER"]["state"], "READY")
+        self.assertEqual(p["roles"]["SPEC"]["state"], "WAITING")
+        bad = copy.deepcopy(opened)
+        bad["body"] = bad["body"].replace('"from":"SPEC"', '"from":"GUARD"').replace('"incarnation":"s"', '"incarnation":"g"')
+        with self.assertRaises(Conflict):
+            project_v2(cfg, {"34": [bad]}, {"42": i})
+
+    def test_spec_required_and_role_specific_readiness(self):
+        i = issue()
+        rows = [opening(i), candidate(i, "r1", "RESULT", 101, 6, "o"),
+                candidate(i, "v1", "REVIEW", 102, 9, "r1", verdict="SPEC_REQUIRED")]
+        p, _ = run(rows, i)
+        self.assertEqual(p["tasks"][0]["state"], "SPEC_REQUIRED")
+        self.assertEqual(p["roles"]["SPEC"]["state"], "READY")
+        self.assertEqual(p["roles"]["BUILDER"]["state"], "WAITING")
+        self.assertEqual(p["roles"]["GUARD"]["state"], "WAITING")
+        supersede = control("s", "DISPOSITION", 105, 12, open_id="o", previous="v1", disposition="SUPERSEDED")
+        self.assertEqual(run(rows+[supersede], i)[0]["roles"]["SPEC"]["state"], "READY")
+        spec = material(1200, "SPEC", 13, revision=2)
+        i["comments"].append(spec)
+        o2 = control("o2", "OPEN", 106, 15, revision=2,
+                     task_ref={"issue_number": 42, "issue_id": 4002},
+                     spec_ref={"kind": "issue_comment", **ref(spec)}, previous="s")
+        p, _ = run(rows+[supersede, o2], i)
+        self.assertEqual(p["tasks"][0]["state"], "BUILDER_READY")
+        self.assertEqual(p["roles"]["SPEC"]["state"], "WAITING")
+        self.assertEqual(p["roles"]["BUILDER"]["state"], "READY")
+        bad = copy.deepcopy(supersede)
+        bad["user"]["id"] = 10
+        bad["body"] = bad["body"].replace('"from":"SPEC"', '"from":"GUARD"').replace('"incarnation":"s"', '"incarnation":"g"')
+        with self.assertRaises(Conflict):
+            run(rows+[bad], i)
+        for p_rows in itertools.permutations(rows+[supersede, o2]):
+            self.assertEqual(run(list(p_rows), i)[0], p)
+
+    def test_spec_direct_amendment_and_postclose_forbidden(self):
+        i = issue()
+        opened = opening(i)
+        s = control("s", "DISPOSITION", 105, 5, open_id="o", previous="o", disposition="SUPERSEDED")
+        spec = material(1200, "SPEC", 6, revision=2)
+        i["comments"].append(spec)
+        o2 = control("o2", "OPEN", 106, 8, revision=2,
+                     task_ref={"issue_number": 42, "issue_id": 4002},
+                     spec_ref={"kind": "issue_comment", **ref(spec)}, previous="s")
+        self.assertEqual(run([opened, s, o2], i)[0]["tasks"][0]["state"], "BUILDER_READY")
+        rows, i = fixture()
+        close(i)
+        s = control("s", "DISPOSITION", 105, 22, open_id="o", previous="v1", disposition="SUPERSEDED")
+        with self.assertRaises(Conflict):
+            run(rows+[s], i)
+
+    def test_wrong_material_owner_incarnation_and_wrong_review_role(self):
+        rows, i = fixture()
+        for role, incarnation in (("SPEC", "s"), ("GUARD", "stale")):
+            x = copy.deepcopy(i)
+            m = x["comments"][1]
+            m["body"] = task_body("REVIEW", role=role, incarnation=incarnation)
+            modified = control("v1", "REVIEW", 102, 9, open_id="o", previous="r1",
+                               attempt=1, commit_sha=SHA, material_ref=ref(m), verdict="ACCEPT")
+            with self.assertRaises(Conflict):
+                run(rows[:2]+[modified], x)
+        bad = copy.deepcopy(rows[-1])
+        bad["user"]["id"] = 13
+        bad["body"] = bad["body"].replace('"from":"GUARD"', '"from":"SPEC"').replace('"incarnation":"g"', '"incarnation":"s"')
+        with self.assertRaises(Conflict):
+            run(rows[:2]+[bad], i)
+        close(i)
+        bad = disposition(rows[2])
+        bad["user"]["id"] = 13
+        bad["body"] = bad["body"].replace('"from":"GUARD"', '"from":"SPEC"').replace('"incarnation":"g"', '"incarnation":"s"')
+        with self.assertRaises(Conflict):
+            run(rows+[bad], i)
+
+    def test_spec_revision_material_actor_and_incarnation(self):
+        rows, i = fixture()
+        s = control("s", "DISPOSITION", 105, 12, open_id="o", previous="v1", disposition="SUPERSEDED")
+        for actor, inc in ((10, "s"), (13, "stale")):
+            x = copy.deepcopy(i)
+            spec = row(1200, actor, task_body("SPEC", revision=2, incarnation=inc), 13)
+            x["comments"].append(spec)
+            o2 = control("o2", "OPEN", 106, 15, revision=2,
+                         task_ref={"issue_number": 42, "issue_id": 4002},
+                         spec_ref={"kind": "issue_comment", **ref(spec)}, previous="s")
+            with self.assertRaises(Conflict):
+                run(rows+[s, o2], x)

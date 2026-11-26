@@ -20,13 +20,18 @@ or authority. Acquisition must prove completeness/stability separately.
 
 The v2 config uses protocol "vpng-collab/2", repository, journal_rooms (fixed
 control Issues), signal_room, journal_epoch, roles, projectholder and
-command_registry. The pilot has GUARD (also SPEC) and BUILDER; their actor IDs may
-be equal, but incarnations must be distinct. Role claims are cooperative and not
+command_registry. The pilot has three distinct roles: SPEC, BUILDER and GUARD.
+Their actor IDs may be equal and the same model may carry SPEC and GUARD,
+but incarnations must be distinct. Every action selects exactly one active role.
+A future v2 role-binding artifact must map a runtime model to one or more explicit
+role/incarnation pairs and require the selected pair to be authorized for that
+specific action; shared context cannot establish active identity. The transitional
+v1 root binding artifact remains unchanged. Role claims are cooperative and not
 cryptographic authentication. The runtime role gate and write authority remain
 external. A fresh epoch needs an explicitly reviewed clean control surface:
 legacy framed events must not silently enter v2 replay.
 
-Only fully structurally validated OPEN control facts from GUARD in a configured
+Only fully structurally validated OPEN control facts from SPEC in a configured
 control room discover a task. Task identity is a one-to-one binding of task key,
 control room, configured repository, numeric Issue number and immutable Issue ID.
 No dynamic Issue numbers in config. Neither prose nor RESULT/REVIEW references
@@ -38,25 +43,34 @@ Full material admission remains necessary after discovery.
 A control comment has first line "<!-- vpng-collab-journal/2 -->", then exactly
 one fenced json object and no trailing prose. Fields are closed. Every event
 carries protocol, journal_epoch, event_id, kind, room, from, to, incarnation,
-task, revision. All task relations are single-recipient. OPEN, REVIEW and
-DISPOSITION are GUARD -> BUILDER; RESULT is BUILDER -> GUARD.
+task, revision. All task relations are single-recipient. OPEN and SUPERSEDED
+are SPEC -> BUILDER, RESULT is BUILDER -> GUARD. REVIEW REWORK/ACCEPT and
+CLOSED are GUARD -> BUILDER; REVIEW SPEC_REQUIRED is GUARD -> SPEC. SPEC
+owns specifications only; BUILDER owns result/evidence; GUARD owns review,
+acceptance and closure. None of these role claims grants write authority.
 
 OPEN adds task_ref = {issue_number, issue_id}, spec_ref and previous.
 Revision 1: spec_ref = {kind:"issue_body",body_sha256}, previous = null.
 Later revisions: spec_ref = {kind:"issue_comment",comment_id,body_sha256},
-previous = exact SUPERSEDED disposition event ID of prior revision.
+previous = exact SPEC-owned SUPERSEDED disposition event ID of prior revision.
 The immutable r1 Issue body remains bound for all revisions. Later SPEC comments
 carry the complete new specification, not a delta or mutable body mirror.
+SPEC may supersede an exact current relation head while the Issue remains open,
+including before RESULT and after ACCEPT; this invalidates all prior candidates
+and acceptance for the superseded revision. A material specification change
+still needs an accepted product/project basis outside this protocol.
 
 RESULT adds open_id, previous, attempt, commit_sha, material_ref.
 First result cites OPEN; later result cites exact prior REWORK and increments
-attempt. REVIEW adds those same fields plus verdict (REWORK or ACCEPT);
+attempt. REVIEW adds those same fields plus verdict (REWORK, ACCEPT or SPEC_REQUIRED);
 previous cites exact RESULT. Its attempt and commit SHA must equal RESULT.
 material_ref = {comment_id,body_sha256}, scoped to the registered Issue.
 
-DISPOSITION adds open_id, previous and disposition. SUPERSEDED cites the exact
-current relation head; a new revision is permitted only after explicit
-supersession. CLOSED cites the ACCEPT head and adds accept_ref =
+DISPOSITION adds open_id, previous and disposition. SPEC's SUPERSEDED cites the
+exact current relation head; a new revision is permitted only after explicit
+supersession. In particular, SPEC_REQUIRED hands off to SPEC, which supersedes
+that exact review and publishes the next full specification. GUARD's CLOSED
+cites the ACCEPT head and adds accept_ref =
 {room,comment_id,body_sha256} and close_event = {id,actor_id,created_at}.
 accept_ref identifies a physical ACCEPT control occurrence, not just its logical
 event ID. No alternative closure or automatic issue mutation exists in pilot.
@@ -66,16 +80,19 @@ event ID. No alternative closure or automatic issue mutation exists in pilot.
 Referenced task comments start with this hidden header (one strict JSON line):
 
     <!-- vpng-collab-task-material/2
-    {"kind":"RESULT","task":"O1","revision":1,"attempt":1,"commit_sha":"<40hex>"}
+    {"kind":"RESULT","role":"BUILDER","incarnation":"builder-v2","task":"O1","revision":1,"attempt":1,"commit_sha":"<40hex>"}
     -->
     Candidate SHA: <same 40hex>
 
     Human-readable evidence prose
 
-REVIEW adds verdict to the header and uses visible "GUARD ACCEPT: <sha>" or
-"GUARD REWORK: <sha>" followed by nonempty substantive prose. SPEC r2+ header
-has only kind SPEC, task, revision, followed by complete specification prose.
-All header fields must match the referencing event exactly. Control records bind
+REVIEW adds verdict to the header and uses visible "GUARD ACCEPT: <sha>",
+"GUARD REWORK: <sha>" or "GUARD SPEC_REQUIRED: <sha>" followed by nonempty
+substantive prose. SPEC r2+ header has kind SPEC, role SPEC, incarnation, task,
+revision, followed by complete specification prose. The exact role and
+incarnation of each typed material must match the current configuration and
+referencing control owner. All header fields must match the referencing event
+exactly. Control records bind
 the raw whole material body SHA-256; no substantive payload copy in control room.
 
 ## Observation contract
@@ -96,7 +113,8 @@ the referencing control fact; each causal relation strictly follows its
 predecessor. Equality at timestamp precision is insufficient. This detects
 observable edits, not same-second or otherwise unobserved history. The Issue
 body is bound by exact bytes; aggregate Issue updated_at cannot prove its edit
-history. Initial Issue author must be configured GUARD/SPEC for this pilot.
+history. Initial Issue author must be configured SPEC for this pilot; the
+SPEC OPEN supplies the typed role/incarnation claim for the ordinary r1 body.
 The observer must reject PRs and verify the same-repository resource identity.
 Incidental title, labels, assignees and other UI metadata are not semantic inputs.
 
@@ -110,10 +128,13 @@ and fetch order never define causal order.
 One current revision derives readiness from its exact relation chain:
 BUILDER_READY -> GUARD_REVIEW -> BUILDER_READY (REWORK) or ACCEPTED
 (GUARD close-ready) -> CLOSE_OBSERVED (GUARD disposition-ready) -> CLOSED.
-A superseded revision is historical; if the next OPEN has not arrived, GUARD
-is ready to register the next specification. No generic v1 OPEN readiness is
-added. A second candidate requires exact REWORK. ACCEPT never implies physical
-closure. Green tests are not acceptance.
+GUARD's SPEC_REQUIRED yields SPEC_REQUIRED state and SPEC readiness, not
+implementation rework. A superseded revision is historical; if the next OPEN
+has not arrived, SPEC is ready to register the next specification. A task not
+yet registered is outside this task reducer, not an implied READY record.
+No generic v1 OPEN readiness is added. A second candidate requires exact REWORK.
+ACCEPT never implies physical closure. Green tests are not acceptance.
+Physical close forbids any further specification revision.
 
 For the pilot the issue must have no reopen and at most one close event.
 Open state requires no close event; closed state must match close ID actor and
