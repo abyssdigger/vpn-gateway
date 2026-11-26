@@ -2381,7 +2381,7 @@ Linux самостоятельно и не владеет lifecycle.
 - `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
 
 API
 
@@ -2430,9 +2430,14 @@ ordinary/reserve convergence, подтвержденной kernel integration. A
 actuation либо dependency release: этим объясняются partial edges к составному R7.R3
 и R7.R3.R3; computation не является незавершенной частью lifecycle Manager.
 
-F1 materialization frontier: текущий код еще публикует legacy baseline-selected present demand;
-новый independent per-Device contribution contract для R7.R4.R2 отсутствует (`none`).
-A.013 не получает current-use или reclaim policy и сохраняет нормативную R7.R3 demand semantics.
+F1 materialization: A.013 дополнительно публикует `external_ordinary_present` и упорядоченный
+по ordinary membership вектор `managed_ordinary_contributions` из `ManagedOrdinaryContribution`
+(включая нулевые `fresh_path_count`). Оба вклада вычисляются из той же дедуплицированной
+`LogicalPathId`-проекции, что и `regular_present`, с сохранением Profile-local membership.
+Передача этих наблюдений в status является диагностической, а не разрешением retirement.
+Legacy baseline-selected present demand пока остается неизменным. A.013 не получает reclaim
+policy, current-use, payload или availability; выбор survivor/reclaim остается за A.012,
+подтвержденный current-use — за A.004. Вклад A.013 в R7.R4.R2 частичный: требование еще не закрыто.
 
 # Annex B. Ordinary-side transition components
 
