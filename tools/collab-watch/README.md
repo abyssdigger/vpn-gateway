@@ -81,9 +81,13 @@ candidate appended under a synthetic physical ID. A conflict raises
 rejected even for identical text: reconcile delivery rather than resend.
 
 A successful return binds the event ID, kind, event room, exact body SHA-256,
-config hash and baseline integrity-ledger hash. Send only those exact bytes,
+config hash, baseline integrity-ledger hash (`observation_sha256`) and
+prospective integrity-ledger hash (`prospective_sha256`, excluding only the
+synthetic event's physical ref). The prospective hash binds newly referenced
+payloads; the exact event body is bound separately. Send only those exact bytes,
 under a separate mutation gate, after fresh acquisition; repeat the preview
-if the observation, config or candidate changes. This API neither acquires
+if the relevant observation, config or candidate changes. Valid known-stale
+claims follow canonical replay semantics; PASS is not a READY recommendation. This API neither acquires
 rooms nor saves state nor sends anything. It cannot prevent an intervening
 remote change between preview and send, establish transport identity or
 authorize publication. Re-read the actual remote comment and reconcile any

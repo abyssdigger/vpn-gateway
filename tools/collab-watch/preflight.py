@@ -25,7 +25,10 @@ def preflight(cfg, snapshots, actor, body, previous=None):
     cid = max([0, *legacy, *(row['id'] for rows in snapshots.values() for row in rows)]) + 1
     proposed = dict(snapshots)
     proposed[room] = [*snapshots[room], {'id': cid, 'user': {'id': actor}, 'body': body}]
-    project(cfg, proposed, state)
+    _, prospective = project(cfg, proposed, state)
+    # Bind newly referenced payloads without binding a fictitious comment ID.
+    del prospective['ledger'][f'issue:{room}#issuecomment-{cid}']
     return {'event_id': candidate['event_id'], 'kind': candidate['kind'],
             'body_sha256': digest(body), 'config_hash': state['config_hash'],
-            'event_room': cfg['event_room'], 'observation_sha256': digest(canonical(state))}
+            'event_room': cfg['event_room'], 'observation_sha256': digest(canonical(state)),
+            'prospective_sha256': digest(canonical(prospective))}

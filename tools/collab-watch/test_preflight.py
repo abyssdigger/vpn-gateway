@@ -105,6 +105,29 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(a['observation_sha256'], b['observation_sha256'])
         self.assertEqual((a['event_id'], a['kind']), ('i', 'INPUT'))
 
+    def test_new_payload_binding(self):
+        body = self.event('INPUT', 'i', outcome='ANSWER')
+        a = self.preview(body)
+        self.snap['34'][0]['body'] = 'changed previously unreferenced payload'
+        b = self.preview(body)
+        self.assertEqual(a['observation_sha256'], b['observation_sha256'])
+        self.assertEqual(a['body_sha256'], b['body_sha256'])
+        self.assertNotEqual(a['prospective_sha256'], b['prospective_sha256'])
+        # A different synthetic physical ID does not affect this binding.
+        self.snap['34'].append(row(10000000000, 'unreferenced task-room prose'))
+        self.assertEqual(b, self.preview(body))
+        self.snap['34'][0]['user']['id'] = HOLDER
+        with self.assertRaisesRegex(Conflict, 'payload actor mismatch'):
+            self.preview(body)
+
+    def test_known_stale_input_matches_core_replay(self):
+        self.opened()
+        self.append(self.event('DISPOSITION', 'c', obligation=self.ob, disposition='CLOSED', closure_ref='issue:34#issuecomment-7186572370'))
+        self.append(self.event('INPUT', 'late', obligation=self.ob, outcome='ANSWER'))
+        projection, _ = project(self.cfg, self.snap)
+        self.assertIn('late', projection['stale_events'])
+        self.assertEqual(projection['roles']['BUILDER']['state'], 'WAITING')
+
     def test_orphan_and_wrong_pong(self):
         with self.assertRaisesRegex(Conflict, 'missing admitted PING'):
             self.preview(self.event('PONG', 'q', 'BUILDER', 'GUARD', ping_id='p'))
