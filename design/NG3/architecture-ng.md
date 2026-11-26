@@ -1682,7 +1682,7 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R1` — [`full`]
-- `VPNG-U001-R1.R3.R7.R4` — [`none`]
+- `VPNG-U001-R1.R3.R7.R4` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
@@ -1739,7 +1739,7 @@ Architectural decisions
    *Profile нормализует canonical current field `warm_paths` как `0 | positive N | "all"`. Цель относится только к ordinary memberships; `:reserve` не входит в warm capacity. Отсутствие поля означает `"all"` для ordinary memberships. Конечное N больше суммарной configured ordinary capacity enabled memberships отклоняется до runtime mutation.*
 
 12. `Общая политика освобождения управляемых VPN`
-   *Canonical current surface принимает одно domain-level поле `managed_reclaim = "careful" | "strict"`; отсутствие поля нормализуется в `careful`. Иные значения, типы и локальные Profile/Device overrides отклоняются до network mutation. A.002 выпускает typed normalized value в `CurrentConfig`, снимая это расширение перед frozen Release-1 parser. A.012 потребляет его; A.013 не получает reclaim policy. Материализация нового R7.R4 contribution отсутствует: current parser/CurrentConfig пока не поддерживают это поле; требуется отдельная проверка обратной совместимости.*
+   *Canonical current surface принимает одно domain-level поле `managed_reclaim = "careful" | "strict"`; отсутствие поля нормализуется в `careful`. Иные значения, типы и локальные Profile/Device overrides отклоняются до network mutation. A.002 выпускает typed normalized value в `CurrentConfig`, снимая это расширение перед frozen Release-1 parser. A.012 потребляет его; A.013 не получает reclaim policy. A.002 materialized [`full`]: `parse_current_config` нормализует поле в `CurrentConfig.managed_reclaim: ManagedReclaimPolicy` (`CAREFUL` по умолчанию, `STRICT` при opt-in). Direct Profile/Device override отвергается даже на disabled placeholders; frozen `parse_release1_config` по-прежнему отвергает поле. Trailing defaulted field сохраняет прежний positional constructor. Проверено шестью целевыми тестами в `rou/tests/test_release1_config.py` и полным CI на commit `629bc935d5bcedbe0caab71418f49d4ce2ed5f01` (NG3 Python run `45843863577`: 955 unit tests, 25 jobs PASS). Это подтверждает только configuration contribution A.002, не reclaim behavior A.012 и не closure R7.R4.R1/R2.*
 
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
