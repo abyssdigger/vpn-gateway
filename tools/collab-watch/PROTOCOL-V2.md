@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Units 1–3d
+# COLLAB v2 — project Issue work plane, Units 1–4a
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -335,3 +335,43 @@ lifecycle point. The receipt binds exact material_ref, header, actor, time,
 original proof, baseline/post-state and post inventory hashes. Only a later
 real control fact referencing this material can make it semantically active.
 There is no HTTP write, control publication, retry, or mutation authority.
+
+
+## Unit 4a — durable noncanonical attempt integrity
+
+An explicitly provisioned SQLite file is a transport-attempt ledger, separate
+from canonical task semantics and authority. initialize(path, store_id) creates
+a new file only; open_store(path, expected_store_id) requires an existing exact
+schema/version and externally pinned store identity. No automatic recovery,
+recreation, migration, deletion, reset or rearm. SQLite uses DELETE journal
+mode, synchronous=FULL, bounded busy timeout, atomic transactions and a unique
+partial effect index. Each decision revalidates schema/store identity and all
+bounded stored rows, including canonical descriptor hashes and lifecycle
+metadata. The generic storage accepts bounded JSON identity metadata only, not
+arbitrary bodies/prose or credential fields; the semantic caller must provide
+closed non-secret action/effect schemas and must not hide secrets in IDs.
+
+prepare(action_descriptor, effect_descriptor) records exact canonical metadata,
+action_key and effect_key. A new exact proof for the same effect can create
+another PREPARED row because no transport was yet attempted. An identical
+action/effect prepare is idempotent observation; an action/effect mismatch
+conflicts. The atomic PREPARED -> STARTED transition commits before returning
+and permits at most one non-PREPARED action for an effect across concurrent
+connections and restarts. An effect already STARTED, UNRESOLVED or VERIFIED
+can never be started again through a refreshed preflight. STARTED may become
+UNRESOLVED or VERIFIED; UNRESOLVED may only become VERIFIED after readback.
+VERIFIED binds a receipt digest and optional bounded physical locator.
+There is no release or retry transition.
+
+The actuator must use one authoritative persistent store (or a separately
+reviewed equivalent), a stable effect descriptor independent of refreshable
+proof/inventory evidence, and retain original preflight/readback inputs outside
+this metadata-only ledger. Local SQLite cannot coordinate independent stores,
+detect an undetected rollback or a deliberately recreated database with the
+same externally pinned identity, or prove storage hardware durability; store
+identity must never be reused. An ephemeral sandbox is not a durable attempt
+backend. Loss, unknown identity, or unavailable storage fails closed and needs
+explicit investigation. STARTED only means an external side effect is possible,
+not that it happened. Absence after a crash permits read-only reconciliation,
+never another send. No HTTP mutation or PRE_MUTATION authority evaluation in
+this unit; the next actuator unit owns semantic action/effect schemas.
