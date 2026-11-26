@@ -23,6 +23,9 @@ A typical development collaboration may use:
 
 These names are project configuration, not universal product semantics.
 
+`PROJECTHOLDER` is not a schedulable worker role in v0. Projectholder input arrives through the
+configured human lane and is routed to worker roles for triage/reconciliation.
+
 ## 2. Activation and authority
 
 Explicit projectholder COLLAB/collaborative-cycle wording activates this overlay on the generic
@@ -49,6 +52,48 @@ exact references only. Do not use it for design essays, large reviews, code or e
 
 A task room holds substantive discussion for one collaborative unit: clarification, independent
 first-passes, architecture reconciliation, questions, findings and dispositions.
+
+### Projectholder room
+
+A configured projectholder room is the human-facing collaboration lane.
+
+Ordinary projectholder comments are accepted as **PRODUCT-MANAGER input**:
+- they are strong evidence of desired product behavior, priorities and expectations;
+- they are not assumed technically correct;
+- they are not execution authority;
+- GUARD/BUILDER must test them against requirements, architecture, evidence and counterexamples,
+  and surface material inconsistencies rather than conform automatically.
+
+The helper may turn each exact projectholder comment into a synthetic material input for routing,
+without interpreting its prose.
+
+A small versioned command registry is the only exception. A command is recognized only when the
+**entire comment body** matches one registered form. Everything else remains ordinary
+PRODUCT-MANAGER input.
+
+Initial v0 command forms are:
+
+```text
+!COLLAB STOP cycle=<cycle-key>
+!COLLAB DENY capability=<capability-key> scope=<scope-key>
+!COLLAB ALLOW capability=<capability-key> scope=<scope-key> [condition=<condition-key>] [until=<utc-key>]
+!COLLAB MODEL role=<role-key> model=<model-key> scope=<scope-key>
+```
+
+Arguments are opaque identifiers resolved through the active collaboration configuration. They
+are not arbitrary paths, shell fragments or free-text conditions.
+
+Semantics:
+
+- `STOP` — stop/pause the addressed collaboration cycle; no authority grant;
+- `DENY` — restrict/revoke the named registered capability/scope;
+- `ALLOW` — projectholder authorization input for the exact registered capability/scope under
+  stated registered condition/expiry; actual use remains subject to `AGENTS.md`;
+- `MODEL` — permit the named role/model change in the registered scope; no repository/tool
+  authority is implied.
+
+The registry is extensible only through normal process revision/review. Do not add natural-language
+aliases.
 
 ### Artifact plane
 
@@ -254,6 +299,14 @@ It must not:
 For v0, local state is a derivative integrity/replay ledger, not a second semantic database.
 A successful complete acquisition may atomically replace the current derived projection. Failed or
 incomplete acquisition must not advance durable processed/integrity state.
+
+Semantic replay is relation/revision driven, not publication-order driven. Numeric GitHub comment
+IDs, pagination order and fetch order are physical delivery facts and must not be used as a causal
+clock. Physical identity is the exact room/comment reference.
+
+Multiple `BLOCK` claims on one current obligation revision are monotone/conjunctive in v0: all
+named dependencies remain required until satisfied or that revision is explicitly superseded.
+Do not use last-write-wins to abandon a blocker.
 
 With a retained ledger, a changed/missing previously admitted event or payload is a conflict/
 unresolved condition rather than last-write-wins. If that ledger is lost, replay can reconstruct
