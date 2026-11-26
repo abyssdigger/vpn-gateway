@@ -101,6 +101,40 @@ Ordinary PRODUCT-MANAGER input from this durable room does **not** pause an acti
 cycle merely by arriving. It is routed as material work input. A registered `STOP` command is
 the explicit collaboration-lane pause/stop primitive.
 
+#### Projectholder-lane polling and read receipt
+
+While COLLAB is active, the worker role responsible for the configured projectholder routing must
+successfully re-read the projectholder room:
+
+- immediately on COLLAB activation or RESUME/recovery re-entry; and
+- thereafter at intervals of **no more than 5 minutes of live-session time** until the loop is
+  paused or stopped.
+
+The 5-minute value is a maximum poll interval, not a reconstructed wall-clock claim. At each
+`EXEC_NEXT`, a due projectholder poll takes precedence over starting another ordinary work unit.
+Do not intentionally start a bounded wait/work operation that would defer a due poll beyond the
+interval when a shorter scheduling choice is available. If an uninterruptible tool/external
+operation crosses the interval, poll immediately when execution control returns and do not claim
+that the blind interval was observed.
+
+A restart never infers successful polling from GitHub comment timestamps. On re-entry, poll
+immediately and start a fresh local cadence only after that successful read.
+
+For each newly observed projectholder-authored work input:
+
+1. classify it under the existing ordinary-input/registered-command rules;
+2. place the actionable item into the appropriate current work/triage queue without widening
+   authority; and
+3. post one **very short worker-authored receipt** in the projectholder room stating that the exact
+   holder comment(s) were read and what short work item/scope was queued.
+
+Multiple newly observed holder inputs from one poll may be acknowledged in one compact receipt.
+An empty poll produces no receipt. A control command or non-actionable input is acknowledged with
+its truthful classification rather than falsely claiming it was queued.
+
+The receipt is ordinary non-holder prose only. It is not a journal fact, HANDLED receipt,
+authorization grant, semantic disposition or substitute for canonical task/journal routing.
+
 A small versioned command registry is the only exception. A command is recognized only when the
 **entire comment body** matches one registered form. Everything else remains ordinary
 PRODUCT-MANAGER input.
