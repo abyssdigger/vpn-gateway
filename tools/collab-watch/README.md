@@ -154,3 +154,41 @@ Repeat preflight if relevant bindings change. This is not atomic remote
 publication or authorization. No API acquires, persists, sends, wakes, or
 deletes anything. GC candidates are evidence only; actual GitHub deletion is
 not authorized by the M process decision. No live M cutover is claimed here.
+
+### Standalone M publisher preflight
+
+`preflight_cli.py` composes the same canonical M previews with complete
+stable read-only acquisition. Prepare the exact UTF-8 candidate body in a
+local file, including its reserved frame, without adding a newline or other
+bytes to the body you intend to publish. Use the configured physical actor
+ID; it does not authenticate a cooperative role.
+
+```sh
+# Run from tools/collab-watch; paths and actor ID are operator inputs.
+python3 preflight_cli.py --config /path/to/m-config.json \
+  --actor 340153730 --kind journal --candidate /path/to/exact-body.txt \
+  --state /path/to/retained-m-state.json
+
+# Explicit fresh-current-only replay, without a historical integrity claim.
+python3 preflight_cli.py --config /path/to/m-config.json \
+  --actor 340153730 --kind journal --candidate /path/to/exact-body.txt \
+  --fresh
+```
+
+Use `--kind signal` for an exact signal body referencing a physically admitted
+journal fact. The required history choice is either an existing `--state`
+ledger or explicit `--fresh`; never silently substitute fresh for a missing
+or conflicting ledger. An optional `--fixture /path/to/snapshot.json` declares
+a complete offline fixture and bypasses live acquisition; such output is
+labeled `declared-fixture` and is not live transport evidence. Never reuse
+fixture state for live rooms. Live reads accept the same optional read-only
+`COLLAB_GITHUB_TOKEN` environment credential as the observer.
+
+Exit 0 emits PASS with the full observation hash, per-room observation
+bindings, config and actor binding, acquisition/history labels, and the
+canonical journal or signal preflight binding. Exit 2 emits CONFLICT with a
+sanitized error type. A changed relevant observation or exact candidate
+requires a new preview; a separate mutation gate and actual remote
+verification remain necessary. The CLI never persists state, sends, wakes,
+deletes, or evaluates authority. It is not an actuator, and does not solve
+`WAKE_REQUIRED`. Live HTTP success remains an operator-side acceptance check.
