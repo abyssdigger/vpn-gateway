@@ -56,6 +56,7 @@ jobs:
           mapfile -t workflows < <(git ls-files '.github/workflows/*' | sort)
           expected=(
             ".github/workflows/actual-main-hygiene.yml"
+            ".github/workflows/collab-watch.yml"
             ".github/workflows/ng3-python.yml"
             ".github/workflows/ng3-rust.yml"
           )
