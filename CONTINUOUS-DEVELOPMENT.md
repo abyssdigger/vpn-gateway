@@ -171,6 +171,11 @@ When governing requirements/model require a human product decision, stop the dep
 and apply the real-ambiguity check from `design/requirements-model.md`. Continue independent
 unblocked work when useful and permitted.
 
+If a projectholder decision remains genuinely required after that filtering, construct the
+request under the self-contained decision-request contract in `EXECUTION-LOOP.md` §8.1. A
+pointer to a review, Issue, task room or prior discussion is supporting evidence, not the
+decision request itself.
+
 If no meaningful unblocked work remains, the generic loop may use a human-decision/external-
 blocker stop basis or `WAIT` when an active interaction overlay provides an applicable lane.
 

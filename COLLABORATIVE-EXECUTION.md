@@ -134,6 +134,10 @@ After first-pass:
 4. escalate a genuine unresolved product/project ambiguity to `PROJECTHOLDER`;
 5. do not treat peer agreement alone as proof of correctness or authority.
 
+Any surviving projectholder product/project decision request must satisfy the self-contained
+decision-request contract in `EXECUTION-LOOP.md` §8.1. A task-room, review or artifact ref may
+support the request but cannot substitute for its semantic payload.
+
 A joint architecture decision is working collaboration state, not a substitute for any required
 normative project artifact or holder decision.
 
@@ -433,7 +437,7 @@ A collaborative handoff adds to the generic/work-mode handoff:
 - open obligations and blockers;
 - derived readiness/waiting reason per role;
 - exact artifact/result/review refs;
-- holder decisions or authority gates genuinely required;
+- holder decisions or authority gates genuinely required; product/project decisions use `EXECUTION-LOOP.md` §8.1;
 - conflicts/ambiguous deliveries requiring reconciliation.
 
 Do not duplicate large payloads in the handoff when exact durable refs suffice.
