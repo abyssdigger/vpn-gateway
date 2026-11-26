@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Units 1–3a
+# COLLAB v2 — project Issue work plane, Units 1–3b-1
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -203,3 +203,31 @@ A trusted expected digest binds exact bytes, not acquisition completeness, hones
 classification, GitHub provenance or unseen history. The producer is responsible
 for the Unit-2 acquisition boundary. No prospective OPEN extension, preflight,
 CLI dispatch, publisher, close actuator, live pilot or epoch migration here.
+
+## Unit 3b-1 — existing-task conditional preflight
+
+`v2_preflight` admits exact outgoing control candidate bytes for an already
+registered task (RESULT, REVIEW, SUPERSEDED, revision OPEN, and CLOSED), or an
+exact Issue-close request. Raw and compact callers share the Unit-3a inventory
+binding and the canonical reducer. Shared `inspect_material` and
+`advance_relation` helpers preserve the existing replay predicates; preflight
+validates the exact current predecessor and prospective registry without adding
+any physical row. No synthetic GitHub comment ID, timestamp, close event,
+readiness or retained state is returned or admitted.
+
+A conditional control proof binds config/epoch, candidate exact bytes digest,
+role/incarnation/actor, current task/head and predecessor physical occurrence,
+material/accept/close identities as applicable, baseline semantic state and full
+inventory hashes. The future real immutable comment must bind the exact body,
+actor, room and logical event ID and have created_at strictly greater than the
+applicable physical predecessor/material/close timestamps. Equal seconds do not
+prove chronology. An already-observed logical event ID requires reconciliation,
+not another preflight/send. Actual admission remains fresh acquired replay.
+
+A conditional close proof requires exact current ACCEPTED open Issue, revision,
+attempt/SHA and nominated physical ACCEPT occurrence. It binds exact Issue ID,
+GUARD actor and a strict future real close-event time bound; it creates no close
+event. CLOSED control proof is possible only after canonical CLOSE_OBSERVED and
+must bind exact observed close + eligible physical ACCEPT. Initial new-task OPEN,
+prospective acquisition, post-send actuator/retry, CLI, writes and epoch migration
+remain out of scope.

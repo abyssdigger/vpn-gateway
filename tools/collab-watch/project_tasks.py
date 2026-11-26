@@ -174,16 +174,22 @@ def normalize_task(cfg, ref, raw):
     return {"identity": identity, "comments": comments, "close": close}
 
 
-def bind_material(task, ref, expected, actor, before, ledger):
-    """Resolve exactly one same-task referenced comment, never arbitrary text/URL."""
+def inspect_material(task, ref, expected, actor):
+    """Validate exact existing material, independent of a future control timestamp."""
     row = task["comments"].get(ref["comment_id"])
     require(row is not None, "referenced task material missing")
     immutable(row)
     require(row["actor_id"] == actor and digest(row["body"]) == ref["body_sha256"],
             "task material actor/digest mismatch")
-    require(task["identity"]["created_at"] <= row["created_at"] < before,
-            "task material chronology unproved")
+    require(task["identity"]["created_at"] <= row["created_at"], "task material chronology unproved")
     require(parse_header(row["body"]) == expected, "task material header mismatch")
+    return row
+
+
+def bind_material(task, ref, expected, actor, before, ledger):
+    """Resolve exactly one same-task referenced comment, never arbitrary text/URL."""
+    row = inspect_material(task, ref, expected, actor)
+    require(row["created_at"] < before, "task material chronology unproved")
     key = "task:" + str(task["identity"]["id"]) + ":comment:" + str(row["id"])
     ledger[key] = fingerprint(row)
     return row

@@ -177,6 +177,34 @@ def _earliest(occurrences, event):
     return occurrences[event["event_id"]][0]["created_at"]
 
 
+def advance_relation(state, current, attempt, accepted, e):
+    """Shared pure one-successor predicate; no physical chronology or mutation."""
+    if e["kind"] == "RESULT":
+        require(state == "BUILDER_READY" and e["attempt"] == attempt + 1,
+                "unlinked, stale or post-ACCEPT result")
+        attempt = e["attempt"]
+        state = "GUARD_REVIEW"
+    elif e["kind"] == "REVIEW":
+        require(state == "GUARD_REVIEW" and current["kind"] == "RESULT"
+                and e["attempt"] == attempt and e["commit_sha"] == current["commit_sha"],
+                "review does not match exact current result")
+        if e["verdict"] == "ACCEPT":
+            accepted = e
+            state = "ACCEPTED"
+        elif e["verdict"] == "SPEC_REQUIRED":
+            state = "SPEC_REQUIRED"
+        else:
+            state = "BUILDER_READY"
+    else:
+        require(state not in ("SUPERSEDED", "CLOSED"), "relation after disposition")
+        if e["disposition"] == "SUPERSEDED":
+            state = "SUPERSEDED"
+        else:
+            require(state == "ACCEPTED", "CLOSED disposition without ACCEPT")
+            state = "CLOSED"
+    return state, attempt, accepted
+
+
 def _reduce_revision(cfg, task, opened, relations, occurrences, ledger):
     """One causally linked attempt chain, independent of observation order."""
     spec_actor, guard, builder = (cfg["roles"][name]["actor_id"] for name in ("SPEC", "GUARD", "BUILDER"))
@@ -208,29 +236,7 @@ def _reduce_revision(cfg, task, opened, relations, occurrences, ledger):
         mid = e["event_id"]
         require(mid not in visited and earliest(current) < earliest(e), "cyclic or unproved relation chronology")
         visited.add(mid)
-        if e["kind"] == "RESULT":
-            require(state == "BUILDER_READY" and e["attempt"] == attempt + 1,
-                    "unlinked, stale or post-ACCEPT result")
-            attempt = e["attempt"]
-            state = "GUARD_REVIEW"
-        elif e["kind"] == "REVIEW":
-            require(state == "GUARD_REVIEW" and current["kind"] == "RESULT"
-                    and e["attempt"] == attempt and e["commit_sha"] == current["commit_sha"],
-                    "review does not match exact current result")
-            if e["verdict"] == "ACCEPT":
-                accepted = e
-                state = "ACCEPTED"
-            elif e["verdict"] == "SPEC_REQUIRED":
-                state = "SPEC_REQUIRED"
-            else:
-                state = "BUILDER_READY"
-        else:
-            require(state not in ("SUPERSEDED", "CLOSED"), "relation after disposition")
-            if e["disposition"] == "SUPERSEDED":
-                state = "SUPERSEDED"
-            else:
-                require(state == "ACCEPTED", "CLOSED disposition without ACCEPT")
-                state = "CLOSED"
+        state, attempt, accepted = advance_relation(state, current, attempt, accepted, e)
         current = e
     require(len(visited) == len(relations), "disconnected task relation")
     return {"state": state, "head": current, "accepted": accepted, "attempt": attempt}
