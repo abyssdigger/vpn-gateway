@@ -129,8 +129,16 @@ Semantics:
 The registry is extensible only through normal process revision/review. Do not add natural-language
 aliases.
 
-The command-registry cycle key is independent of the durable journal epoch. Starting a new
-execution window does not automatically roll or truncate the journal.
+The execution-loop clock/window is independent of the durable journal epoch and does not change
+journal semantics.
+
+For the v1 pilot, the **semantic journal configuration is immutable within one journal epoch**:
+repository, task/journal rooms, roles/incarnations, projectholder actor/room/routing and the complete
+command registry (including its cycle key) are fixed. A semantic-config change requires an explicit
+reviewed journal-epoch migration/rollover; it is never reinterpreted in place.
+
+The signal-room identity is transport configuration and may rotate independently under §10 without
+changing the semantic journal configuration.
 
 ### Artifact plane
 
@@ -294,9 +302,15 @@ Common semantic fields are:
 The GitHub actor is transport identity. `from` and `incarnation` remain cooperative routing claims
 and are not authentication or authority.
 
-`journal_epoch` is configured explicitly and is independent of command-registry cycle key and
-signal-room identity. v1 begins with one persistent journal epoch; archival/compaction or journal
-epoch rollover requires a later explicit process design.
+`journal_epoch` is configured explicitly. For the v1 pilot it binds one immutable semantic
+configuration: repository, task/journal rooms, roles/incarnations, projectholder actor/room/routing
+and the complete command registry. These values are replay semantics and must not change in place.
+
+The execution-loop window is not part of journal identity. The signal-room identity is separate
+transport configuration and may rotate without rolling the journal after reconciliation.
+
+A semantic-config change requires explicit reviewed journal-epoch migration/rollover. General
+journal archival/compaction remains a later process problem.
 
 For configured worker actors:
 - any comment whose first line begins `<!-- vpng-collab-journal/` is intended machine input;
@@ -545,8 +559,10 @@ semantic obligations/mailbox/readiness.
 
 For v1, local state is a derivative integrity/replay ledger, not a second semantic database.
 Canonical retained ledger covers admitted journal physical records, holder inputs and referenced
-payload/closure rows. A successful complete acquisition may atomically replace the current derived
-projection. Failed/incomplete acquisition must not advance canonical processed/integrity state.
+payload/closure rows. Canonical state binds a **semantic-config hash** that excludes signal-room
+identity; signal/transport validation may bind the current signal room separately. A successful
+complete acquisition may atomically replace the current derived projection. Failed/incomplete
+acquisition must not advance canonical processed/integrity state.
 
 SIGNAL history is not canonical ledger state. Previously seen SIGNAL disappearance after GC is not
 canonical conflict. A helper may retain advisory signal hashes for current diagnostics/compare, but
@@ -657,18 +673,23 @@ Cutover from a legacy event-room replay epoch to M requires:
 8. no transplant/republication of closed v0 physical events into the v1 journal;
 9. first new live work created as a fresh v1 journal fact.
 
-The command-registry cycle key may change between execution windows without rolling the journal
-epoch. Old command-like holder comments never gain current authority merely because they replay;
-actual authority still requires the exact current registry and `AGENTS.md` gate.
+The command-registry cycle key is fixed inside the current journal epoch. A later execution window
+may reuse that collaboration key; the wall-clock execution interval is not the command cycle.
+Changing registry semantics, holder routing or roles/incarnations requires an explicit reviewed
+journal-epoch migration/rollover rather than in-place replay under new classification.
+
+Old command-like holder comments never gain current authority merely because they replay; actual
+authority still requires the exact current registry and `AGENTS.md` gate.
 
 Old event-room comments are not deleted by cutover.
 
 ### v1 signal-room rollover
 
 A signal room may be replaced independently when transport/UI maintenance requires it, because it is
-not semantic state. The cutover must still preserve exact current journal/config identity and
-reconcile any ambiguous in-flight signal send/delete. Signal-room replacement must never imply
-journal closure, obligation disposition or authority change.
+not semantic state. The cutover must preserve the exact semantic journal configuration/hash and
+journal epoch, change only the transport signal-room identity, and reconcile any ambiguous in-flight
+signal send/delete. Signal-room replacement must never imply journal closure, obligation disposition
+or authority change.
 
 Journal archival/compaction/epoch rollover is intentionally outside v1 M scope and requires a later
 explicit process design.
