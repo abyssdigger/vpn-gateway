@@ -305,6 +305,35 @@ The following are never authorization to update `main`:
 If the check cannot name a valid authorization source, do not mutate `main`. Leave the
 verified result on the working branch and report its exact head/tree for user approval.
 
+### COLLAB project-task acceptance gate
+
+For development work governed by a dedicated COLLAB project-task Issue, repository authorization
+and green CI are necessary but **not sufficient** to publish that work to `main`.
+
+Immediately before a `main` publication that includes such work, verify all of the following:
+
+1. the project-task Issue contains an explicit terminal `GUARD ACCEPT` verdict against the
+   current accepted specification;
+2. the acceptance names the exact accepted source commit SHA and, when the publication mechanism
+   uses tree-equivalent snapshots, the accepted source tree is known;
+3. the final task comment links the exact accepted source commit and the Issue has then been
+   honestly closed;
+4. no commit affecting the accepted task scope was added after that acceptance without a new
+   GUARD review/acceptance;
+5. every task-scoped delta included in the proposed `main` result is covered by an accepted
+   project-task Issue; an aggregate snapshot must not smuggle unrelated or still-unaccepted
+   development through another task's verdict;
+6. the proposed source/tree is the reviewed result. Any material delta discovered after acceptance
+   invalidates the gate and returns the affected task to review.
+
+`BUILDER READY FOR REVIEW`, successful compilation, unit/integration tests, green CI, a clean
+runtime start, peer consensus or an implementation-complete claim are evidence only. None of them
+is task acceptance, Issue-closure authority or a substitute for the GUARD terminal verdict.
+
+This gate does not replace the ordinary authorization check above: **both** authorization and
+task acceptance must hold. Non-task repository maintenance/process operations continue to use
+their owning gates and are not retroactively forced into a project-task Issue.
+
 A normal snapshot:
 
 - is one linear commit on `main`;

@@ -16,12 +16,25 @@ does not silently change authority.
 
 A typical development collaboration may use:
 
-- `GUARD` — requirements/process/authority/safety/acceptance and independent verification;
+- `SPEC` — turns accepted product/project intent into an executable project-task specification:
+  normative basis, scope/non-scope, acceptance criteria and required evidence;
+- `GUARD` — requirements/process/authority/safety plus adversarial independent verification,
+  terminal task acceptance and the COLLAB project-task gate protecting `main`;
 - `BUILDER` — technical analysis, implementation, tests/evidence and finding correction;
 - `ARCHITECTURE` — joint reconciliation responsibility rather than a third autonomous manager;
 - `PROJECTHOLDER` — product/project decisions and execution-authority expansion.
 
 These names are project configuration, not universal product semantics.
+
+`SPEC` does not invent missing product semantics. If a complete executable specification requires
+a genuine projectholder decision, SPEC routes that decision request under the normal holder contract
+instead of silently choosing an option.
+
+One incarnation may carry both `SPEC` and `GUARD` responsibilities. Their lifecycle meanings
+remain distinct: authoring/maintaining a task specification is not acceptance of BUILDER's result.
+In the current v1 pilot, SPEC is carried by the GUARD incarnation as a process responsibility and
+does **not** add a new journal transport actor or mutate the immutable current-epoch role config.
+A future journal-epoch migration may materialize it as a distinct transport role if useful.
 
 `PROJECTHOLDER` is not a schedulable worker role in v0. Projectholder input arrives through the
 configured human lane and is routed to worker roles for triage/reconciliation.
@@ -43,18 +56,60 @@ Collaboration never widens authority:
 
 Keep canonical semantics, delivery hints and substantive payloads separate.
 
-### Durable task/journal room
+### Project-task Issue — work plane
 
-A configured task room holds substantive discussion for one collaborative unit: clarification,
-independent first-passes, architecture reconciliation, questions, findings and dispositions.
+For new implementation work tied to project Requirements/Constraints/architecture, the normal
+human-facing unit of work is one dedicated GitHub **project-task Issue** created/curated by SPEC.
 
-Under control protocol v1 the same physical Issue may also contain the **durable typed collaboration
-journal**. Journal facts use the exact reserved first-line framing defined in §7. Ordinary prose,
-quoted examples and payload comments remain prose unless their first line is that reserved marker.
+Its initial specification must be sufficient for BUILDER and GUARD to work without reconstructing
+the assignment from chat history. It contains, as applicable:
 
-The journal is canonical collaboration state. A journal fact is physically in the task room named
-by its semantic `room` field. Journal-framed comments are never reused as ordinary
-`payload_ref`/`closure_ref` material.
+- concise task objective and why it exists now;
+- exact normative basis: relevant Requirement/Constraint IDs and accepted product/project decisions;
+- relevant architecture/component/review/evidence refs;
+- explicit in-scope and non-scope boundaries;
+- observable acceptance criteria;
+- required tests/evidence, including negative/fail-closed cases when safety semantics require them;
+- documentation/traceability obligations;
+- known dependencies/blockers and any decision that still belongs to PROJECTHOLDER.
+
+After SPEC declares the Issue ready, the shared COLLAB coordination room receives only a short
+routing notice containing the Issue number/ref and readiness/assignee information. From that point,
+**task-specific substantive communication lives in the project-task Issue**: clarification,
+implementation plan, technical findings, rework, evidence, review findings and acceptance.
+
+Changes to the accepted task meaning must remain visible in that Issue. SPEC may clarify an
+unambiguous specification; a material product/scope choice still requires its owning decision source.
+Do not silently replace the original contract through off-thread chat or control-plane prose.
+
+The project-task Issue is a work record, not repository/tool authority.
+
+### Coordination/journal room — control plane
+
+Configured shared pseudo-Issue(s) carry collaboration **control-plane** traffic:
+
+- project-task readiness/routing by Issue ref;
+- role/lease ownership and handoff;
+- liveness/PING/PONG and bounded-wait coordination;
+- scheduler/helper state;
+- cross-task synchronization and process/recovery events;
+- machine journal facts required by the active COLLAB protocol.
+
+They do not become the ordinary discussion thread for a project task once a dedicated project-task
+Issue exists. Do not duplicate long task specifications, implementation reports or GUARD reviews
+there merely for transport.
+
+Under control protocol v1 the current durable typed collaboration journal still has same-room
+`payload_ref`/`closure_ref` constraints. Therefore this new work-plane split is a **prospective
+protocol target** for new project tasks: current already-open v1 obligations may finish under their
+existing task/journal-room contract. Before admitting the first new project-task obligation under
+the split model, the helper/protocol must be adapted and reviewed so control-plane facts can bind the
+project Issue without copying its substantive content back into the pseudo-Issue. Do not fake
+compatibility by duplicating payloads.
+
+Journal facts use the exact reserved first-line framing defined in §7. The journal remains canonical
+for collaboration control semantics; the project-task Issue is canonical for the human-readable task
+specification, implementation/review record and acceptance history.
 
 ### Signal room
 
@@ -577,24 +632,97 @@ presence cannot directly alter canonical semantic state.
 
 ## 8. Development collaboration loop
 
-When the development overlay is also active, the default non-trivial flow is:
+When the development overlay is also active, the default project-task lifecycle is:
 
 ```text
-task
-  -> independent first-pass
-  -> joint architecture reconciliation
-  -> BUILDER implementation/evidence
-  -> GUARD independent verification
-  -> findings -> BUILDER rework
-  -> GUARD re-verification
-  -> convergence or PROJECTHOLDER gate
+accepted product/project intent
+  -> SPEC creates/curates project-task Issue
+  -> SPEC declares specification READY
+  -> short control-plane notice: Issue #N ready for BUILDER
+  -> BUILDER analysis / implementation / exact-SHA evidence in Issue #N
+  -> BUILDER: READY FOR REVIEW
+  -> GUARD adversarial terminal review
+  -> findings -> BUILDER rework -> GUARD re-review
+  -> GUARD ACCEPT
+  -> final Issue comment links exact accepted commit SHA
+  -> Issue CLOSED
+  -> eligible for the additional AGENTS.md pre-main acceptance gate
 ```
 
 The named roles are configurable; the invariant is separation of implementation and independent
 verification where the task requires it.
 
-A review result can make rework READY without itself deciding product semantics. A corrected result
-invalidates only the evidence/review scope actually affected.
+### 8.1. SPEC contract
+
+SPEC owns specification quality, not product authority. Before declaring a project-task Issue READY,
+SPEC checks that the Issue has enough normative basis, scope, acceptance criteria and evidence
+requirements to make implementation and later acceptance falsifiable.
+
+A projectholder decision is requested when the residual ambiguity is genuinely product/project
+semantic. SPEC must not hide that ambiguity by picking the technically convenient interpretation.
+
+### 8.2. Builder completion is not acceptance
+
+The process deliberately distinguishes:
+
+```text
+implementation success != task acceptance != Issue closure
+```
+
+BUILDER may report `IMPLEMENTATION COMPLETE` or `READY FOR REVIEW`, but never turns that fact into
+a GUARD acceptance.
+
+Compilation, successful startup, unit tests, integration tests, green CI and local/manual checks are
+evidence. They establish only the properties they actually test.
+
+### 8.3. GUARD terminal review and acceptance
+
+GUARD reviews the proposed final result adversarially: the goal is to find a way the result fails the
+accepted task contract despite apparently successful implementation/evidence, not to rationalize a
+green build.
+
+Before `GUARD ACCEPT`, GUARD independently verifies at least the applicable parts of:
+
+- the **current accepted Issue specification**, including every accepted clarification/amendment;
+- relevant Requirements/Constraints, architecture/component contracts and prior accepted decisions;
+- exact final diff and absence of undeclared scope creep;
+- correctness of tests/evidence and whether they prove the required properties rather than merely
+  execute code;
+- negative, ambiguity, drift, failure and fail-closed cases where the contract requires them;
+- exact published commit SHA and durable CI/evidence bound to that SHA;
+- documentation, architecture status and traceability changes required by the task;
+- unresolved findings, known defects, TODOs, temporary bypasses or unverified assumptions that are
+  incompatible with acceptance;
+- compatibility/regression evidence materially affected by the change.
+
+A GUARD finding returns the Issue to BUILDER rework. A corrected result invalidates the affected
+evidence/review scope and must be reverified.
+
+`GUARD ACCEPT` names the exact accepted source commit SHA. Any later task-affecting commit creates
+a new candidate and invalidates the old acceptance until GUARD reviews the delta/new result.
+
+### 8.4. Honest Issue closure
+
+A project-task Issue is closed only after explicit GUARD acceptance.
+
+The final pre-close comment must contain:
+- the explicit acceptance verdict/ref;
+- a direct exact commit SHA/link for the accepted final result;
+- concise final evidence identity when useful.
+
+Only after that comment is published and verified is the Issue moved to `closed`. BUILDER completion,
+green CI, consensus or inactivity never closes the Issue by itself.
+
+A newly discovered separate defect/requirement after honest closure normally creates a new linked
+Issue instead of silently extending the accepted old task. Reopen only when the original acceptance
+record itself is invalid or the same task was closed incorrectly.
+
+### 8.5. Miscellaneous and holder-request work
+
+Projectholder wishes, exploratory requests and work not yet attributable to a concrete project
+Requirement/implementation task remain in the projectholder lane or a dedicated triage/misc Issue.
+Once such work becomes a concrete project task, SPEC promotes it into a dedicated project-task Issue
+and the work-plane lifecycle above applies.
 
 ## 9. Helper/scheduler and GC boundaries
 
