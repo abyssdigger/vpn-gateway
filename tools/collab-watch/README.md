@@ -32,8 +32,9 @@ python3 collab_watch.py --once --config "$HOME/collab-config.json" \
 ```
 
 Review the example config against the active cycle before running. It identifies
-this pilot's #33, #34, #35 rooms and cooperative role incarnations. The #32 research
-room is not acquired. Optional `COLLAB_GITHUB_TOKEN` must come from a read-only
+this pilot's current event-room epoch #36, task room #34 and projectholder room #35
+with the cooperative role incarnations. Failed predecessor event room #33 is historical
+audit evidence and is not acquired by the current config. The #32 research room is not acquired. Optional `COLLAB_GITHUB_TOKEN` must come from a read-only
 credential source in the process environment, never a command or event payload.
 For public rooms unauthenticated reading may be possible within rate limits.
 The helper neither stores the token nor forwards it to a redirect. No live HTTP

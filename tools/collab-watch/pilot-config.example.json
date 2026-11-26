@@ -1,6 +1,6 @@
 {
   "repository": "abyssdigger/vpn-gateway",
-  "event_room": 33,
+  "event_room": 36,
   "task_rooms": [
     34
   ],
@@ -21,14 +21,7 @@
       "GUARD"
     ]
   },
-  "legacy_comments": [
-    7184233064,
-    7184271124,
-    7184289024,
-    7184324433,
-    7184364789,
-    7184407105
-  ],
+  "legacy_comments": [],
   "command_registry": {
     "cycle": "collab-v0-20261126-4h",
     "capability_scopes": {},
