@@ -129,6 +129,19 @@ def classify_holder_command(body, registry):
     return None
 
 
+def holder_input(cfg, ref, body):
+    """Classify admitted holder text without granting or evaluating authority."""
+    command = classify_holder_command(body, cfg['command_registry'])
+    result = {'kind': 'INPUT', 'room': cfg['projectholder']['room'],
+              'to': sorted(cfg['roles']) if command else list(cfg['projectholder']['route_to']),
+              'payload_ref': ref, 'outcome': 'HOLDER_COMMAND' if command else 'PRODUCT_MANAGER'}
+    if command:
+        result['command'] = command
+    elif body.startswith('!COLLAB'):
+        result['command_diagnostic'] = 'unregistered or non-exact syntax; product-manager input only'
+    return result
+
+
 def read_comment(comment):
     require(isinstance(comment, dict) and positive(comment.get('id')), 'invalid comment identity')
     require(isinstance(comment.get('user'), dict) and positive(comment['user'].get('id')), 'invalid comment actor')
@@ -147,8 +160,8 @@ def envelope(body):
     return event
 
 
-def validate_event(e, actor, cfg, payloads):
-    require(e.get('protocol') == PROTOCOL, 'unknown protocol')
+def validate_event(e, actor, cfg, payloads, *, protocol=PROTOCOL, payload_actor_required=True):
+    require(e.get('protocol') == protocol, 'unknown protocol')
     require(ident(e.get('event_id')) and not e['event_id'].startswith('holder:'), 'invalid or reserved event_id')
     kind = e.get('kind')
     require(isinstance(kind, str) and kind in SCHEMAS, 'unknown event kind')
@@ -192,7 +205,8 @@ def validate_event(e, actor, cfg, payloads):
         ref = e[field]
         match = COMMENT_REF.fullmatch(ref) if isinstance(ref, str) else None
         require(match is not None and int(match[1]) == e['room'] and ref in payloads, 'missing or wrong-room payload')
-        require(payloads[ref][0] == actor, 'payload actor mismatch')
+        if field == 'closure_ref' or payload_actor_required:
+            require(payloads[ref][0] == actor, 'payload actor mismatch')
     return e
 
 
@@ -241,16 +255,7 @@ def project(cfg, snapshots, previous=None):
             elif room == cfg['projectholder']['room']:
                 if actor == cfg['projectholder']['actor_id']:
                     ledger[ref] = key
-                    command = classify_holder_command(body, cfg['command_registry'])
-                    holder_inputs[f'holder:{cid}'] = {
-                        'kind': 'INPUT', 'room': room,
-                        'to': sorted(cfg['roles']) if command else list(cfg['projectholder']['route_to']),
-                        'payload_ref': ref, 'outcome': 'HOLDER_COMMAND' if command else 'PRODUCT_MANAGER',
-                    }
-                    if command:
-                        holder_inputs[f'holder:{cid}']['command'] = command
-                    elif body.startswith('!COLLAB'):
-                        holder_inputs[f'holder:{cid}']['command_diagnostic'] = 'unregistered or non-exact syntax; product-manager input only'
+                    holder_inputs[f'holder:{cid}'] = holder_input(cfg, ref, body)
                 else:
                     ignored.append(ref)
             else:
@@ -274,11 +279,34 @@ def project(cfg, snapshots, previous=None):
             events[mid] = e
         except Conflict as exc:
             raise Conflict(f'event comment {cid}: {exc}') from exc
+    state = integrity_state(cfg, ledger, previous)
+    projection = reduce_events(cfg, events, holder_inputs, ignored,
+                               'fresh observation' if previous is None else 'prior observed comments matched')
+    return projection, state
+
+
+def checked_config_hash(cfg, previous):
     config_hash = digest(canonical(cfg))
     if previous is not None:
         require(isinstance(previous, dict) and set(previous) == {'config_hash', 'ledger'} and previous['config_hash'] == config_hash and isinstance(previous['ledger'], dict), 'state/config mismatch; explicit operator reconciliation required')
+    return config_hash
+
+
+def integrity_state(cfg, ledger, previous):
+    """Check retained physical evidence; return a fresh derivative ledger."""
+    config_hash = checked_config_hash(cfg, previous)
+    if previous is not None:
         for ref, old in previous['ledger'].items():
             require(ledger.get(ref) == old, f'prior observed comment missing or changed: {ref}')
+    return {'config_hash': config_hash, 'ledger': ledger}
+
+
+def reduce_events(cfg, events, holder_inputs, ignored, integrity, protocol=PROTOCOL):
+    """Project admitted semantic claims once, independently of physical transport.
+
+    Admission, physical identity, payload refs and ledger validation remain the
+    responsibility of the caller. No signal or receipt may enter this reducer.
+    """
     # A complete snapshot is a set of claims. Neither physical IDs nor the
     # order in which pages were fetched constitute a semantic causal clock.
     current, revisions, inputs, handled, dormant, stale = {}, {}, dict(holder_inputs), set(), {}, set()
@@ -393,5 +421,5 @@ def project(cfg, snapshots, previous=None):
     for item in roles.values():
         if item['reasons']:
             item['state'] = 'READY'
-    projection = {'protocol': PROTOCOL, 'roles': roles, 'health': health, 'obligations': list(revisions.values()), 'stale_events': sorted(stale), 'ignored_external': sorted(ignored), 'integrity': 'fresh observation' if previous is None else 'prior observed comments matched', 'authority': 'not evaluated; coordination claims only'}
-    return projection, {'config_hash': config_hash, 'ledger': ledger}
+    projection = {'protocol': protocol, 'roles': roles, 'health': health, 'obligations': list(revisions.values()), 'stale_events': sorted(stale), 'ignored_external': sorted(ignored), 'integrity': integrity, 'authority': 'not evaluated; coordination claims only'}
+    return projection
