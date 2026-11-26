@@ -1,0 +1,39 @@
+{
+  "repository": "abyssdigger/vpn-gateway",
+  "event_room": 33,
+  "task_rooms": [
+    34
+  ],
+  "roles": {
+    "GUARD": {
+      "actor_id": 340153730,
+      "incarnation": "guard-gpt56-sol-current"
+    },
+    "BUILDER": {
+      "actor_id": 340153730,
+      "incarnation": "builder-gpt62-current"
+    }
+  },
+  "projectholder": {
+    "actor_id": 114166706,
+    "room": 35,
+    "route_to": [
+      "GUARD"
+    ]
+  },
+  "legacy_comments": [
+    7184233064,
+    7184271124,
+    7184289024,
+    7184324433,
+    7184364789,
+    7184407105
+  ],
+  "command_registry": {
+    "cycle": "collab-v0-20261126-4h",
+    "capability_scopes": {},
+    "condition_keys": [],
+    "utc_keys": [],
+    "model_scopes": {}
+  }
+}

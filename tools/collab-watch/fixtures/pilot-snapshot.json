@@ -1,0 +1,64 @@
+{
+  "33": [
+    {
+      "id": 99,
+      "user": {
+        "id": 1
+      },
+      "body": "legacy bootstrap"
+    },
+    {
+      "id": 100,
+      "user": {
+        "id": 1
+      },
+      "body": "```json\n{\"event_id\": \"open\", \"from\": \"GUARD\", \"incarnation\": \"g1\", \"kind\": \"OPEN\", \"obligation\": {\"assignee\": \"BUILDER\", \"disposition_by\": \"GUARD\", \"id\": \"O\", \"kind\": \"implementation\", \"revision\": 1}, \"payload_ref\": \"issue:34#issuecomment-900\", \"protocol\": \"vpng-collab/0\", \"room\": 34, \"to\": [\"BUILDER\"]}\n```"
+    },
+    {
+      "id": 101,
+      "user": {
+        "id": 1
+      },
+      "body": "```json\n{\"event_id\": \"reply\", \"from\": \"BUILDER\", \"incarnation\": \"b1\", \"kind\": \"INPUT\", \"obligation\": {\"id\": \"O\", \"revision\": 1}, \"outcome\": \"ANSWER\", \"payload_ref\": \"issue:34#issuecomment-900\", \"protocol\": \"vpng-collab/0\", \"room\": 34, \"to\": [\"GUARD\"]}\n```"
+    },
+    {
+      "id": 102,
+      "user": {
+        "id": 1
+      },
+      "body": "```json\n{\"event_id\": \"ack\", \"event_ids\": [\"reply\"], \"from\": \"GUARD\", \"incarnation\": \"g1\", \"kind\": \"HANDLED\", \"payload_ref\": \"issue:34#issuecomment-900\", \"protocol\": \"vpng-collab/0\", \"room\": 34, \"to\": [\"GUARD\"]}\n```"
+    }
+  ],
+  "34": [
+    {
+      "id": 900,
+      "user": {
+        "id": 1
+      },
+      "body": "durable task prose"
+    },
+    {
+      "id": 901,
+      "user": {
+        "id": 2
+      },
+      "body": "holder input"
+    }
+  ],
+  "35": [
+    {
+      "id": 800,
+      "user": {
+        "id": 2
+      },
+      "body": "Please consider product behavior"
+    },
+    {
+      "id": 801,
+      "user": {
+        "id": 2
+      },
+      "body": "!COLLAB STOP cycle=trial"
+    }
+  ]
+}

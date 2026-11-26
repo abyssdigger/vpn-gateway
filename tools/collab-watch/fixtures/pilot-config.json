@@ -1,0 +1,48 @@
+{
+  "repository": "owner/repo",
+  "event_room": 33,
+  "task_rooms": [
+    34
+  ],
+  "roles": {
+    "GUARD": {
+      "actor_id": 1,
+      "incarnation": "g1"
+    },
+    "BUILDER": {
+      "actor_id": 1,
+      "incarnation": "b1"
+    }
+  },
+  "projectholder": {
+    "actor_id": 2,
+    "room": 35,
+    "route_to": [
+      "GUARD"
+    ]
+  },
+  "legacy_comments": [
+    99
+  ],
+  "command_registry": {
+    "cycle": "trial",
+    "capability_scopes": {
+      "write": [
+        "pilot"
+      ]
+    },
+    "condition_keys": [
+      "reviewed"
+    ],
+    "utc_keys": [
+      "cycle-end"
+    ],
+    "model_scopes": {
+      "BUILDER": {
+        "gpt6": [
+          "pilot"
+        ]
+      }
+    }
+  }
+}

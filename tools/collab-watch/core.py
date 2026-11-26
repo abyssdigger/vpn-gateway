@@ -64,8 +64,8 @@ def ident(value):
 
 
 def validate_config(cfg):
-    require(isinstance(cfg, dict) and set(cfg) == {'repository', 'event_room', 'task_rooms', 'roles', 'legacy_comments', 'projectholder'}, 'invalid config fields')
-    require(isinstance(cfg['repository'], str) and REPO.fullmatch(cfg['repository']), 'invalid repository')
+    require(isinstance(cfg, dict) and set(cfg) == {'repository', 'event_room', 'task_rooms', 'roles', 'legacy_comments', 'projectholder', 'command_registry'}, 'invalid config fields')
+    require(isinstance(cfg['repository'], str) and REPO.fullmatch(cfg['repository']) and all(x not in ('.', '..') for x in cfg['repository'].split('/')), 'invalid repository')
     require(positive(cfg['event_room']), 'invalid event room')
     rooms = cfg['task_rooms']
     require(isinstance(rooms, list) and rooms and all(positive(x) for x in rooms) and len(set(rooms)) == len(rooms) and cfg['event_room'] not in rooms, 'invalid task rooms')
@@ -83,7 +83,48 @@ def validate_config(cfg):
     require('PROJECTHOLDER' not in roles, 'holder is not a scheduled role')
     legacy = cfg['legacy_comments']
     require(isinstance(legacy, list) and all(positive(x) for x in legacy) and len(set(legacy)) == len(legacy), 'invalid legacy comments')
+    validate_registry(cfg['command_registry'], roles)
     return cfg
+
+
+def key_list(value):
+    return isinstance(value, list) and all(ident(x) for x in value) and len(set(value)) == len(value)
+
+
+def validate_registry(registry, roles):
+    require(isinstance(registry, dict) and set(registry) == {'cycle', 'capability_scopes', 'condition_keys', 'utc_keys', 'model_scopes'}, 'invalid command registry fields')
+    require(ident(registry['cycle']), 'invalid cycle key')
+    require(key_list(registry['condition_keys']) and key_list(registry['utc_keys']), 'invalid condition/utc keys')
+    caps = registry['capability_scopes']
+    require(isinstance(caps, dict) and all(ident(k) and key_list(v) for k, v in caps.items()), 'invalid capability/scope registry')
+    models = registry['model_scopes']
+    require(isinstance(models, dict) and all(role in roles and isinstance(m, dict) and all(ident(k) and key_list(v) for k, v in m.items()) for role, m in models.items()), 'invalid role/model/scope registry')
+
+
+def classify_holder_command(body, registry):
+    """Recognize only registered whole-comment syntax; do not evaluate authority."""
+    key = r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}'
+    forms = (
+        ('STOP', rf'!COLLAB STOP cycle=(?P<cycle>{key})'),
+        ('DENY', rf'!COLLAB DENY capability=(?P<capability>{key}) scope=(?P<scope>{key})'),
+        ('ALLOW', rf'!COLLAB ALLOW capability=(?P<capability>{key}) scope=(?P<scope>{key})(?: condition=(?P<condition>{key}))?(?: until=(?P<until>{key}))?'),
+        ('MODEL', rf'!COLLAB MODEL role=(?P<role>{key}) model=(?P<model>{key}) scope=(?P<scope>{key})'),
+    )
+    for kind, pattern in forms:
+        match = re.fullmatch(pattern, body)
+        if match is None:
+            continue
+        args = {k: v for k, v in match.groupdict().items() if v is not None}
+        if kind == 'STOP':
+            valid = args['cycle'] == registry['cycle']
+        elif kind in ('DENY', 'ALLOW'):
+            valid = (args['scope'] in registry['capability_scopes'].get(args['capability'], [])
+                     and ('condition' not in args or args['condition'] in registry['condition_keys'])
+                     and ('until' not in args or args['until'] in registry['utc_keys']))
+        else:
+            valid = args['scope'] in registry['model_scopes'].get(args['role'], {}).get(args['model'], [])
+        return {'id': kind, 'args': args} if valid else None
+    return None
 
 
 def read_comment(comment):
@@ -164,10 +205,10 @@ def project(cfg, snapshots, previous=None):
             cid, actor, body = read_comment(row)
             ref = f'issue:{room}#issuecomment-{cid}'
             key = digest(canonical([actor, body]))
-            if cid in seen:
-                require(seen[cid] == (ref, key), f'conflicting physical comment: {ref}')
+            if ref in seen:
+                require(seen[ref] == key, f'conflicting physical comment: {ref}')
                 continue
-            seen[cid] = (ref, key)
+            seen[ref] = key
             if room == cfg['event_room']:
                 if actor not in known_actors:
                     ignored.append(ref)
@@ -177,11 +218,16 @@ def project(cfg, snapshots, previous=None):
             elif room == cfg['projectholder']['room']:
                 if actor == cfg['projectholder']['actor_id']:
                     ledger[ref] = key
+                    command = classify_holder_command(body, cfg['command_registry'])
                     holder_inputs[f'holder:{cid}'] = {
                         'kind': 'INPUT', 'room': room,
-                        'to': list(cfg['projectholder']['route_to']),
-                        'payload_ref': ref, 'outcome': 'HOLDER_INPUT',
+                        'to': sorted(cfg['roles']) if command else list(cfg['projectholder']['route_to']),
+                        'payload_ref': ref, 'outcome': 'HOLDER_COMMAND' if command else 'PRODUCT_MANAGER',
                     }
+                    if command:
+                        holder_inputs[f'holder:{cid}']['command'] = command
+                    elif body.startswith('!COLLAB'):
+                        holder_inputs[f'holder:{cid}']['command_diagnostic'] = 'unregistered or non-exact syntax; product-manager input only'
                 else:
                     ignored.append(ref)
             else:
@@ -298,8 +344,9 @@ def project(cfg, snapshots, previous=None):
         for role in e['to']:
             if (role, mid) not in handled:
                 reason = {'input': mid, 'payload_ref': e['payload_ref'], 'outcome': e['outcome']}
-                if 'artifact_ref' in e:
-                    reason['artifact_ref'] = e['artifact_ref']
+                for field in ('artifact_ref', 'command', 'command_diagnostic'):
+                    if field in e:
+                        reason[field] = e[field]
                 roles[role]['reasons'].append(reason)
     for ob in current.values():
         if ob['status'] != 'OPEN':

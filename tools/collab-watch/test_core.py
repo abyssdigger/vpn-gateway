@@ -8,7 +8,10 @@ CFG = {'repository': 'owner/repo', 'event_room': 33, 'task_rooms': [34],
        'roles': {'GUARD': {'actor_id': 1, 'incarnation': 'g1'},
                  'BUILDER': {'actor_id': 1, 'incarnation': 'b1'}},
        'projectholder': {'actor_id': 2, 'room': 35, 'route_to': ['GUARD']},
-       'legacy_comments': [99]}
+       'legacy_comments': [99],
+       'command_registry': {'cycle': 'trial', 'capability_scopes': {'write': ['pilot']},
+                            'condition_keys': ['reviewed'], 'utc_keys': ['cycle-end'],
+                            'model_scopes': {'BUILDER': {'gpt6': ['pilot']}}}}
 REF = 'issue:34#issuecomment-900'
 HREF = 'issue:34#issuecomment-901'
 SHA = 'a' * 40
@@ -52,6 +55,58 @@ def run(events=(), prior=None, payloads=None, holder=()):
 
 
 class ReplayTests(unittest.TestCase):
+    def test_registered_commands(self):
+        forms = [('!COLLAB STOP cycle=trial', 'STOP', {'cycle': 'trial'}),
+                 ('!COLLAB DENY capability=write scope=pilot', 'DENY', {'capability': 'write', 'scope': 'pilot'}),
+                 ('!COLLAB ALLOW capability=write scope=pilot', 'ALLOW', {'capability': 'write', 'scope': 'pilot'}),
+                 ('!COLLAB ALLOW capability=write scope=pilot condition=reviewed until=cycle-end', 'ALLOW', {'capability': 'write', 'scope': 'pilot', 'condition': 'reviewed', 'until': 'cycle-end'}),
+                 ('!COLLAB MODEL role=BUILDER model=gpt6 scope=pilot', 'MODEL', {'role': 'BUILDER', 'model': 'gpt6', 'scope': 'pilot'})]
+        for body, kind, args in forms:
+            with self.subTest(kind=kind, args=args):
+                p, _ = run(holder=[row(800, body, actor=2)])
+                reason = p['roles']['GUARD']['reasons'][0]
+                self.assertEqual(reason['outcome'], 'HOLDER_COMMAND')
+                self.assertEqual(reason['command'], {'id': kind, 'args': args})
+                self.assertEqual(p['roles']['BUILDER']['reasons'], p['roles']['GUARD']['reasons'])
+                self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
+                self.assertNotIn(body, json.dumps(p))
+
+    def test_command_ack_is_per_worker(self):
+        holder = [row(800, '!COLLAB STOP cycle=trial', actor=2)]
+        p, _ = run([handled(100, ids=['holder:800'])], holder=holder)
+        self.assertEqual(p['roles']['GUARD']['state'], 'WAITING')
+        self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
+        p, _ = run([handled(100, ids=['holder:800']),
+                    handled(101, mid='ack-b', sender='BUILDER', ids=['holder:800'])], holder=holder)
+        self.assertEqual(p['roles']['BUILDER']['state'], 'WAITING')
+
+    def test_command_not_guessed(self):
+        forms = ['!COLLAB STOP cycle=another', '!COLLAB STOP cycle=trial\n',
+                 ' !COLLAB STOP cycle=trial', '!COLLAB stop cycle=trial',
+                 '```\n!COLLAB STOP cycle=trial\n```',
+                 '!COLLAB ALLOW capability=write scope=other',
+                 '!COLLAB ALLOW capability=write scope=pilot until=unknown',
+                 '!COLLAB ALLOW capability=write scope=pilot condition=unknown',
+                 '!COLLAB MODEL role=GUARD model=gpt6 scope=pilot',
+                 '!COLLAB DENY capability=unknown scope=pilot',
+                 'please stop the cycle']
+        for body in forms:
+            with self.subTest(body=body):
+                p, _ = run(holder=[row(800, body, actor=2)])
+                reason = p['roles']['GUARD']['reasons'][0]
+                self.assertEqual(reason['outcome'], 'PRODUCT_MANAGER')
+                self.assertNotIn('command', reason)
+
+    def test_nonholder_command_ignored(self):
+        p, _ = run(holder=[row(800, '!COLLAB STOP cycle=trial', actor=1)])
+        self.assertEqual(p['roles']['GUARD']['state'], 'WAITING')
+
+    def test_room_qualified_physical_identity(self):
+        p, state = run([op(900)], holder=[row(900, 'ordinary', actor=2)])
+        self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
+        self.assertEqual(p['roles']['GUARD']['state'], 'READY')
+        self.assertEqual(set(state['ledger']), {'issue:33#issuecomment-900', 'issue:34#issuecomment-900', 'issue:35#issuecomment-900'})
+
     def test_open_only_builder_ready(self):
         p, _ = run([op()])
         self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
