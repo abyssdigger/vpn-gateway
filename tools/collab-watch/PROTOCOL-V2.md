@@ -1,4 +1,4 @@
-# COLLAB v2 — project Issue work plane, Units 1–3c
+# COLLAB v2 — project Issue work plane, Units 1–3d
 
 Status: staged implementation for independent review; not an active epoch.
 The v0/v1 modules, protocol, configurations and current journal are unchanged.
@@ -302,3 +302,36 @@ The caller supplies fresh trusted observations; the verifier cannot prove
 GitHub provenance or attribute identical actions to a particular HTTP call.
 Fresh pre-mutation inventory comparison, HTTP send/PATCH, retry policy, CLI,
 live evidence, holder/signal composition and epoch cutover remain outside 3c.
+
+
+## Unit 3d — task material publication contract
+
+Pure preflight_material accepts an exact compact baseline, task key, physical
+actor, explicit selected role/incarnation, candidate bytes and optional retained
+state. Canonical replay and parse_header establish the exact current open task,
+header and owner. RESULT requires BUILDER_READY at the next attempt/current
+revision; REVIEW requires GUARD_REVIEW and the current RESULT's exact revision,
+attempt and SHA; SPEC requires SUPERSEDED and the next revision (>1).
+Revision-1 specification is the Issue body. A matching already-observed
+immutable same-actor body is a reconciliation/reuse conflict, not permission
+to publish again; an edited matching body also fails closed.
+
+The conditional proof binds the full config, selected role/incarnation,
+actor, task/Issue identity and lifecycle point, exact header and body digest,
+baseline retained-state and full inventory hashes. No physical material_ref
+is invented. The future exact immutable comment must be in the same Issue
+with created_at >= Issue.created_at. Unlike control chronology, equality with
+Issue creation is permitted by canonical material admission.
+
+verify_material recomputes the original preflight and requires its independently
+retained digest, then canonically replays the fresh complete stable post-read
+with the full derived original baseline state. It resolves the exact immutable
+actor/body/header occurrence, either by returned physical comment ID or by
+unique occurrence if no ID was returned. Zero or multiple exact occurrences
+without a locator are unresolved; neither permits retry. It checks the same
+Issue identity and the material creation bound. Legitimate later canonical
+activity and ordinary comments need not leave the task at its original
+lifecycle point. The receipt binds exact material_ref, header, actor, time,
+original proof, baseline/post-state and post inventory hashes. Only a later
+real control fact referencing this material can make it semantically active.
+There is no HTTP write, control publication, retry, or mutation authority.
