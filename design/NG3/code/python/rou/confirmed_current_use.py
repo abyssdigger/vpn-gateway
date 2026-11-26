@@ -167,11 +167,30 @@ def _managed_proof(
         or realization.interface_ifindex != binding.endpoint.ifindex
     ):
         return None
+    # D.002 generation covers the complete Device-wide group set.
+    groups = {
+        key[0]: value for key, value in config.wireguard_groups.items()
+        if key[1] == device_id
+    }
+    owners = realization.group_owners
+    if (
+        len(owners) != len(groups)
+        or {row.profile_id for row in owners} != set(groups)
+    ):
+        return None
+    for row in owners:
+        current_group = groups[row.profile_id]
+        if (current_group.profile_id, current_group.device_id) != (row.profile_id, device_id):
+            return None
+        if row.owner_peer_id is not None and row.owner_peer_id not in {
+            membership.peer_id for membership in current_group.peer_memberships
+        }:
+            return None
     try:
         owner = realization.owner_for(profile_id)
     except KeyError:
         return None
-    if not _text(owner) or owner not in {row.peer_id for row in group.peer_memberships}:
+    if not _text(owner):
         return None
     return expected, realization.generation, owner
 

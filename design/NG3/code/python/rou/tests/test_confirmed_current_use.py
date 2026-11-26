@@ -237,7 +237,7 @@ class ConfirmedCurrentUseTests(unittest.TestCase):
                     self.assertEqual(row, ConfirmedCurrentUse(row.profile_id, CurrentUseState.UNKNOWN))
 
     def test_selected_wireguard_gap_including_reserve(self):
-        owners = (("other", "peer"), ("z", "peer"))
+        owners = (("corp", "peer"), ("other", "peer"), ("z", "peer"))
         for rows in (
             (), (wg(A, owners), wg(A, owners)),
             (replace(wg(A, owners), group_owners=(), generation=None, problem="failed"),),
@@ -254,19 +254,32 @@ class ConfirmedCurrentUseTests(unittest.TestCase):
                     CurrentUseState.CONFIRMED, CurrentUseState.UNKNOWN, CurrentUseState.UNKNOWN,
                 ))
 
+    def test_device_wide_group_set_and_owners_are_cross_linked(self):
+        for owners in (
+            (("other", "peer"), ("z", "peer")),
+            (("corp", "peer"), ("other", "peer"), ("z", "peer"), ("stale", "peer")),
+            (("corp", "foreign"), ("other", "peer"), ("z", "peer")),
+        ):
+            with self.subTest(owners=owners):
+                self.assertEqual(self.states(replace(
+                    self.ctx, wireguard_peer_realizations=(wg(A, owners),)
+                )), (CurrentUseState.CONFIRMED, CurrentUseState.UNKNOWN, CurrentUseState.UNKNOWN))
+
     def test_exact_group_evidence_is_profile_local(self):
-        peer = wg(A, (("other", "peer"),))
+        peer = wg(A, (("corp", None), ("other", "peer"), ("z", None)))
         self.assertEqual(self.states(replace(self.ctx, wireguard_peer_realizations=(peer,))), (
             CurrentUseState.CONFIRMED, CurrentUseState.CONFIRMED, CurrentUseState.UNKNOWN,
         ))
         groups = {key: value for key, value in self.cfg.wireguard_groups.items() if key != ("other", "a")}
         cfg = replace(self.cfg, wireguard_groups=groups)
-        result = project_confirmed_current_use(cfg, self.ctx)
+        result = project_confirmed_current_use(cfg, replace(self.ctx, wireguard_peer_realizations=(
+            wg(A, (("corp", "peer"), ("z", "peer"))),
+        )))
         self.assertEqual(tuple(row.state for row in result), (
             CurrentUseState.CONFIRMED, CurrentUseState.UNKNOWN, CurrentUseState.NONE,
         ))
         changed = replace(self.ctx, wireguard_peer_realizations=(
-            wg(A, (("other", "peer"), ("z", "peer")), generation="wg-next"),
+            wg(A, (("corp", "peer"), ("other", "peer"), ("z", "peer")), generation="wg-next"),
         ))
         self.assertEqual(self.result(changed)[1].wireguard_generation, "wg-next")
         self.assertEqual(self.result(self.ctx)[1].wireguard_generation, "wg-a")
