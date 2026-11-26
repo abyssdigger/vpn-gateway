@@ -67,6 +67,17 @@ Ordinary projectholder comments are accepted as **PRODUCT-MANAGER input**:
 The helper may turn each exact projectholder comment into a synthetic material input for routing,
 without interpreting its prose.
 
+Ordinary PRODUCT-MANAGER input is routed to configured triage roles; the v0 default is
+`GUARD`.
+
+An exact registered PROJECTHOLDER command is routed as one synthetic material input to **all
+configured worker roles**. Each worker independently acknowledges that command input through the
+normal handled/frontier mechanism. Routing does not execute the command and does not decide
+whether its arguments satisfy an authority gate.
+
+A comment beginning like a command but failing exact grammar/registry validation remains ordinary
+PRODUCT-MANAGER input; a helper may expose a diagnostic but must not partially execute/infer it.
+
 Ordinary PRODUCT-MANAGER input from this durable room does **not** pause an active collaboration
 cycle merely by arriving. It is routed as material work input. A registered `STOP` command is
 the explicit collaboration-lane pause/stop primitive.
