@@ -8,7 +8,7 @@ import re
 PROTOCOL = 'vpng-collab/0'
 IDENT = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z')
 COMMENT_REF = re.compile(r'issue:([1-9][0-9]*)#issuecomment-([1-9][0-9]*)\Z')
-ARTIFACT_REF = re.compile(r'[^\s@]+@[0-9a-f]{40}\Z')
+ARTIFACT_REF = re.compile(r'[^\s@:\\]+@[0-9a-f]{40}\Z')
 REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z')
 BASE = {'protocol', 'event_id', 'kind', 'room', 'from', 'to', 'incarnation', 'payload_ref'}
 SCHEMAS = {
@@ -64,7 +64,7 @@ def ident(value):
 
 
 def validate_config(cfg):
-    require(isinstance(cfg, dict) and set(cfg) == {'repository', 'event_room', 'task_rooms', 'roles', 'legacy_comments'}, 'invalid config fields')
+    require(isinstance(cfg, dict) and set(cfg) == {'repository', 'event_room', 'task_rooms', 'roles', 'legacy_comments', 'projectholder'}, 'invalid config fields')
     require(isinstance(cfg['repository'], str) and REPO.fullmatch(cfg['repository']), 'invalid repository')
     require(positive(cfg['event_room']), 'invalid event room')
     rooms = cfg['task_rooms']
@@ -74,6 +74,13 @@ def validate_config(cfg):
     for role, spec in roles.items():
         require(ident(role) and isinstance(spec, dict) and set(spec) == {'actor_id', 'incarnation'}, 'invalid role config')
         require(positive(spec['actor_id']) and ident(spec['incarnation']), 'invalid actor/incarnation')
+    holder = cfg['projectholder']
+    require(isinstance(holder, dict) and set(holder) == {'actor_id', 'room', 'route_to'}, 'invalid projectholder config')
+    require(positive(holder['actor_id']) and holder['actor_id'] not in {spec['actor_id'] for spec in roles.values()}, 'holder must have distinct transport actor')
+    require(positive(holder['room']) and holder['room'] not in [cfg['event_room'], *rooms], 'invalid holder room')
+    route = holder['route_to']
+    require(isinstance(route, list) and route and all(isinstance(role, str) and role in roles for role in route) and len(set(route)) == len(route), 'invalid holder routing')
+    require('PROJECTHOLDER' not in roles, 'holder is not a scheduled role')
     legacy = cfg['legacy_comments']
     require(isinstance(legacy, list) and all(positive(x) for x in legacy) and len(set(legacy)) == len(legacy), 'invalid legacy comments')
     return cfg
@@ -99,7 +106,7 @@ def envelope(body):
 
 def validate_event(e, actor, cfg, payloads):
     require(e.get('protocol') == PROTOCOL, 'unknown protocol')
-    require(ident(e.get('event_id')), 'invalid event_id')
+    require(ident(e.get('event_id')) and not e['event_id'].startswith('holder:'), 'invalid or reserved event_id')
     kind = e.get('kind')
     require(isinstance(kind, str) and kind in SCHEMAS, 'unknown event kind')
     mandatory, optional = SCHEMAS[kind]
@@ -131,7 +138,7 @@ def validate_event(e, actor, cfg, payloads):
     if kind == 'DISPOSITION':
         require(e['disposition'] in ('CLOSED', 'CANCELLED', 'SUPERSEDED'), 'invalid terminal disposition')
     if 'artifact_ref' in e:
-        require(isinstance(e['artifact_ref'], str) and ARTIFACT_REF.fullmatch(e['artifact_ref']), 'invalid exact artifact ref')
+        require(isinstance(e['artifact_ref'], str) and ARTIFACT_REF.fullmatch(e['artifact_ref']) and all(part not in ('', '.', '..') for part in e['artifact_ref'].rsplit('@', 1)[0].split('/')), 'invalid exact artifact ref')
     for field in ('payload_ref', 'closure_ref'):
         if field not in e:
             continue
@@ -145,11 +152,12 @@ def validate_event(e, actor, cfg, payloads):
 def project(cfg, snapshots, previous=None):
     """Replay complete selected-room snapshots; caller must not pass partial scans."""
     validate_config(cfg)
-    require(isinstance(snapshots, dict) and set(snapshots) == {str(x) for x in [cfg['event_room'], *cfg['task_rooms']]}, 'missing or unexpected room snapshot')
-    ledger, payloads, event_comments, ignored = {}, {}, [], []
+    rooms = [cfg['event_room'], *cfg['task_rooms'], cfg['projectholder']['room']]
+    require(isinstance(snapshots, dict) and set(snapshots) == {str(x) for x in rooms}, 'missing or unexpected room snapshot')
+    ledger, payloads, event_comments, ignored, holder_inputs = {}, {}, [], [], {}
     known_actors = {spec['actor_id'] for spec in cfg['roles'].values()}
     seen = {}
-    for room in [cfg['event_room'], *cfg['task_rooms']]:
+    for room in rooms:
         rows = snapshots[str(room)]
         require(isinstance(rows, list), 'snapshot is not a complete comment list')
         for row in rows:
@@ -166,6 +174,16 @@ def project(cfg, snapshots, previous=None):
                     continue
                 ledger[ref] = key
                 event_comments.append((cid, actor, body))
+            elif room == cfg['projectholder']['room']:
+                if actor == cfg['projectholder']['actor_id']:
+                    ledger[ref] = key
+                    holder_inputs[f'holder:{cid}'] = {
+                        'kind': 'INPUT', 'room': room,
+                        'to': list(cfg['projectholder']['route_to']),
+                        'payload_ref': ref, 'outcome': 'HOLDER_INPUT',
+                    }
+                else:
+                    ignored.append(ref)
             else:
                 payloads[ref] = (actor, body)
     events, fingerprints = {}, {}
@@ -192,59 +210,90 @@ def project(cfg, snapshots, previous=None):
         require(isinstance(previous, dict) and set(previous) == {'config_hash', 'ledger'} and previous['config_hash'] == config_hash and isinstance(previous['ledger'], dict), 'state/config mismatch; explicit operator reconciliation required')
         for ref, old in previous['ledger'].items():
             require(ledger.get(ref) == old, f'prior observed comment missing or changed: {ref}')
-    current, revisions, inputs, handled, dormant, stale = {}, {}, {}, set(), {}, []
+    # A complete snapshot is a set of claims. Neither physical IDs nor the
+    # order in which pages were fetched constitute a semantic causal clock.
+    current, revisions, inputs, handled, dormant, stale = {}, {}, dict(holder_inputs), set(), {}, set()
+    events = dict(sorted(events.items()))
+
+    # Pass 1: collect unique OPEN declarations keyed by explicit revision.
     for mid, e in events.items():
-        kind, room, sender = e['kind'], e['room'], e['from']
-        spec = e.get('obligation')
-        oid = (room, spec['id']) if spec else None
-        rev = spec['revision'] if spec else None
-        ob = current.get(oid)
-        historical = revisions.get((*oid, rev)) if oid else None
-        if kind == 'OPEN':
-            require((ob is None and rev == 1) or (ob is not None and ob['status'] == 'SUPERSEDED' and rev == ob['revision'] + 1 and sender == ob['opened_by_role']), f'invalid OPEN/revision: {mid}')
-            ob = dict(room=room, id=spec['id'], revision=rev, kind=spec['kind'], opened_by_role=sender, assignee=spec['assignee'], disposition_by=spec['disposition_by'], status='OPEN', wait_for_event_id=e.get('wait_for_event_id'), subject=e['payload_ref'], opened_by=mid)
-            if 'artifact_ref' in e:
-                ob['artifact_ref'] = e['artifact_ref']
-            current[oid] = ob
-            revisions[(*oid, rev)] = ob
-        elif kind in {'INPUT', 'BLOCK', 'DISPOSITION'}:
-            if oid:
-                require(historical is not None, f'unknown obligation/revision: {mid}')
-            if kind == 'INPUT':
-                if historical:
-                    parties = {historical['opened_by_role'], historical['assignee'], historical['disposition_by']}
-                    require(sender in parties and set(e['to']) <= parties, f'INPUT outside obligation roles: {mid}')
-                inputs[mid] = e
-                if historical and (historical is not ob or ob['status'] != 'OPEN'):
-                    stale.append(mid)
-            elif kind == 'BLOCK':
-                require(historical['assignee'] == sender, f'BLOCK not from assignee: {mid}')
-                if historical is not ob or ob['status'] != 'OPEN':
-                    stale.append(mid)
-                    continue
-                ob['wait_for_event_id'] = e['wait_for_event_id']
-            else:
-                require(historical['disposition_by'] == sender and e['to'] == [historical['assignee']], f'DISPOSITION not from configured closer: {mid}')
-                if historical['status'] != 'OPEN':
-                    require(historical['status'] == e['disposition'] and historical.get('closure_ref') == e['closure_ref'], f'conflicting terminal disposition: {mid}')
-                    stale.append(mid)
-                    continue
-                require(historical is ob, f'non-current open revision: {mid}')
-                ob.update(status=e['disposition'], closure_ref=e['closure_ref'])
-                if 'artifact_ref' in e:
-                    ob['closure_artifact_ref'] = e['artifact_ref']
-        elif kind == 'HANDLED':
+        if e['kind'] != 'OPEN':
+            continue
+        spec = e['obligation']
+        key = (e['room'], spec['id'], spec['revision'])
+        require(key not in revisions, f'multiple OPEN claims for revision: {key}')
+        ob = dict(room=e['room'], id=spec['id'], revision=spec['revision'],
+                  kind=spec['kind'], opened_by_role=e['from'], assignee=spec['assignee'],
+                  disposition_by=spec['disposition_by'], status='OPEN',
+                  wait_for_event_ids=[e['wait_for_event_id']] if 'wait_for_event_id' in e else [],
+                  subject=e['payload_ref'], opened_by=mid)
+        if 'artifact_ref' in e:
+            ob['artifact_ref'] = e['artifact_ref']
+        revisions[key] = ob
+
+    def revision_for(e):
+        spec = e['obligation']
+        key = (e['room'], spec['id'], spec['revision'])
+        require(key in revisions, f'unknown obligation/revision: {e["event_id"]}')
+        return revisions[key]
+
+    # Pass 2: terminal claims, independent of delivery ordering. No last-write-wins.
+    for mid, e in events.items():
+        if e['kind'] != 'DISPOSITION':
+            continue
+        ob = revision_for(e)
+        require(ob['disposition_by'] == e['from'] and e['to'] == [ob['assignee']], f'DISPOSITION not from configured closer: {mid}')
+        if ob['status'] != 'OPEN':
+            require(ob['status'] == e['disposition'] and ob['closure_ref'] == e['closure_ref'] and ob.get('closure_artifact_ref') == e.get('artifact_ref'), f'conflicting terminal disposition: {mid}')
+            continue
+        ob.update(status=e['disposition'], closure_ref=e['closure_ref'])
+        if 'artifact_ref' in e:
+            ob['closure_artifact_ref'] = e['artifact_ref']
+
+    # Pass 3: validate contiguous, explicitly superseded revision chains.
+    revisions = dict(sorted(revisions.items()))
+    for key, ob in revisions.items():
+        oid = key[:2]
+        prior = current.get(oid)
+        require((prior is None and ob['revision'] == 1) or (
+            prior is not None and prior['status'] == 'SUPERSEDED'
+            and ob['revision'] == prior['revision'] + 1
+            and ob['opened_by_role'] == prior['opened_by_role']
+        ), f'invalid OPEN/revision: {ob["opened_by"]}')
+        current[oid] = ob
+
+    # Pass 4: validate INPUT and BLOCK references against complete revisions.
+    # BLOCK is monotone within a revision: all named dependencies must arrive.
+    # An abandoned unresolved dependency requires an explicit new revision.
+    for mid, e in events.items():
+        kind, sender = e['kind'], e['from']
+        if kind not in {'INPUT', 'BLOCK'}:
+            continue
+        ob = revision_for(e) if 'obligation' in e else None
+        if kind == 'INPUT':
+            if ob:
+                parties = {ob['opened_by_role'], ob['assignee'], ob['disposition_by']}
+                require(sender in parties and set(e['to']) <= parties, f'INPUT outside obligation roles: {mid}')
+            inputs[mid] = e
+        else:
+            require(ob['assignee'] == sender, f'BLOCK not from assignee: {mid}')
+            ob['wait_for_event_ids'] = sorted(set(ob['wait_for_event_ids']) | {e['wait_for_event_id']})
+        if ob and (current[(ob['room'], ob['id'])] is not ob or ob['status'] != 'OPEN'):
+            stale.add(mid)
+
+    # Pass 5: handling references exact input identities, not publication order.
+    for mid, e in events.items():
+        kind, sender = e['kind'], e['from']
+        if kind == 'HANDLED':
             for target in e['event_ids']:
                 item = inputs.get(target)
-                require(item is not None and sender in item['to'] and room == item['room'], f'HANDLED references non-addressed input: {mid}')
+                require(item is not None and sender in item['to'] and (e['room'] == item['room'] or target in holder_inputs), f'HANDLED references non-addressed input: {mid}')
                 handled.add((sender, target))
         elif kind == 'DORMANT':
-            dormant[sender] = {'event_id': mid, 'payload_ref': e['payload_ref'], 'wait_for_event_id': e.get('wait_for_event_id')}
-    roles = {role: {'state': 'WAITING', 'reasons': [], 'blocked': [], 'dormant_claim': dormant.get(role)} for role in cfg['roles']}
-    stale_set = set(stale)
-    for mid, e in inputs.items():
-        spec = e.get('obligation')
-        if mid in stale_set or (spec and current[(e['room'], spec['id'])]['revision'] != spec['revision']):
+            dormant.setdefault(sender, []).append({'event_id': mid, 'payload_ref': e['payload_ref'], 'wait_for_event_id': e.get('wait_for_event_id')})
+    roles = {role: {'state': 'WAITING', 'reasons': [], 'blocked': [], 'dormant_claims': dormant.get(role, [])} for role in cfg['roles']}
+    for mid, e in sorted(inputs.items()):
+        if mid in stale:
             continue
         for role in e['to']:
             if (role, mid) not in handled:
@@ -256,19 +305,22 @@ def project(cfg, snapshots, previous=None):
         if ob['status'] != 'OPEN':
             continue
         role = ob['assignee']
-        pred = ob['wait_for_event_id']
-        target = inputs.get(pred) if pred else None
-        if pred and pred in events:
-            require(target is not None and pred not in stale_set and target['room'] == ob['room'] and role in target['to'] and target.get('obligation') == {'id': ob['id'], 'revision': ob['revision']}, f'wait predicate does not match obligation: {pred}')
-        if pred is None or target is not None:
+        missing = []
+        for pred in ob['wait_for_event_ids']:
+            if pred in events or pred in inputs:
+                target = inputs.get(pred)
+                require(target is not None and pred not in stale and target['room'] == ob['room'] and role in target['to'] and target.get('obligation') == {'id': ob['id'], 'revision': ob['revision']}, f'wait predicate does not match obligation: {pred}')
+            else:
+                missing.append(pred)
+        if not missing:
             reason = {'obligation': ob['id'], 'revision': ob['revision'], 'payload_ref': ob['subject']}
             if 'artifact_ref' in ob:
                 reason['artifact_ref'] = ob['artifact_ref']
             roles[role]['reasons'].append(reason)
         else:
-            roles[role]['blocked'].append({'obligation': ob['id'], 'revision': ob['revision'], 'awaiting': pred})
+            roles[role]['blocked'].append({'obligation': ob['id'], 'revision': ob['revision'], 'awaiting': missing})
     for item in roles.values():
         if item['reasons']:
             item['state'] = 'READY'
-    projection = {'protocol': PROTOCOL, 'roles': roles, 'obligations': list(revisions.values()), 'stale_events': stale, 'ignored_external': sorted(ignored), 'integrity': 'fresh observation' if previous is None else 'prior observed comments matched', 'authority': 'not evaluated; coordination claims only'}
+    projection = {'protocol': PROTOCOL, 'roles': roles, 'obligations': list(revisions.values()), 'stale_events': sorted(stale), 'ignored_external': sorted(ignored), 'integrity': 'fresh observation' if previous is None else 'prior observed comments matched', 'authority': 'not evaluated; coordination claims only'}
     return projection, {'config_hash': config_hash, 'ledger': ledger}

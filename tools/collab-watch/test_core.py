@@ -6,8 +6,8 @@ from core import Conflict, PROTOCOL, project
 
 CFG = {'repository': 'owner/repo', 'event_room': 33, 'task_rooms': [34],
        'roles': {'GUARD': {'actor_id': 1, 'incarnation': 'g1'},
-                 'BUILDER': {'actor_id': 1, 'incarnation': 'b1'},
-                 'PROJECTHOLDER': {'actor_id': 2, 'incarnation': 'h1'}},
+                 'BUILDER': {'actor_id': 1, 'incarnation': 'b1'}},
+       'projectholder': {'actor_id': 2, 'room': 35, 'route_to': ['GUARD']},
        'legacy_comments': [99]}
 REF = 'issue:34#issuecomment-900'
 HREF = 'issue:34#issuecomment-901'
@@ -22,7 +22,7 @@ def ev(cid, kind, mid, sender='GUARD', to=None, actor=None, **fields):
     role = CFG['roles'][sender]
     e = {'protocol': PROTOCOL, 'event_id': mid, 'kind': kind, 'room': 34,
          'from': sender, 'to': to or ['BUILDER'], 'incarnation': role['incarnation'],
-         'payload_ref': HREF if sender == 'PROJECTHOLDER' else REF}
+         'payload_ref': REF}
     e.update(fields)
     return row(cid, '```json\n' + json.dumps(e, sort_keys=True) + '\n```', role['actor_id'] if actor is None else actor)
 
@@ -43,12 +43,12 @@ def disp(cid=103, mid='done', rev=1, disposition='CLOSED', sender='GUARD', **kw)
     return ev(cid, 'DISPOSITION', mid, sender=sender, obligation={'id': 'O', 'revision': rev}, disposition=disposition, closure_ref=REF, **kw)
 
 
-def snap(events=(), payloads=None):
-    return {'33': list(events), '34': payloads if payloads is not None else [row(900, 'durable task prose'), row(901, 'holder input', actor=2)]}
+def snap(events=(), payloads=None, holder=()):
+    return {'33': list(events), '34': payloads if payloads is not None else [row(900, 'durable task prose'), row(901, 'holder input', actor=2)], '35': list(holder)}
 
 
-def run(events=(), prior=None, payloads=None):
-    return project(CFG, snap(events, payloads), prior)
+def run(events=(), prior=None, payloads=None, holder=()):
+    return project(CFG, snap(events, payloads, holder), prior)
 
 
 class ReplayTests(unittest.TestCase):
@@ -56,7 +56,7 @@ class ReplayTests(unittest.TestCase):
         p, _ = run([op()])
         self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
         self.assertEqual(p['roles']['GUARD']['state'], 'WAITING')
-        self.assertEqual(p['roles']['PROJECTHOLDER']['state'], 'WAITING')
+        self.assertNotIn('PROJECTHOLDER', p['roles'])
 
     def test_identical_logical_and_physical_duplicates(self):
         a = inp()
@@ -139,7 +139,7 @@ class ReplayTests(unittest.TestCase):
         self.assertEqual(p['roles']['BUILDER']['state'], 'WAITING')
         p, _ = run([op(), block, dormant, inp(103, 'response', sender='GUARD', to=['BUILDER'])])
         self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
-        self.assertEqual(p['roles']['BUILDER']['dormant_claim']['event_id'], 'dormant')
+        self.assertEqual(p['roles']['BUILDER']['dormant_claims'][0]['event_id'], 'dormant')
 
     def test_dormant_never_suppresses_open_work(self):
         p, _ = run([op(), ev(101, 'DORMANT', 'd', sender='BUILDER', to=['BUILDER'])])
@@ -149,8 +149,8 @@ class ReplayTests(unittest.TestCase):
         p, _ = run([op(actor=999)])
         self.assertEqual(p['roles']['BUILDER']['state'], 'WAITING')
         self.assertEqual(len(p['ignored_external']), 1)
-        with self.assertRaises(Conflict):
-            run([op(actor=2)])
+        p, _ = run([op(actor=2)])
+        self.assertEqual(p['roles']['BUILDER']['state'], 'WAITING')
 
     def test_stale_incarnation(self):
         with self.assertRaises(Conflict):
@@ -222,11 +222,65 @@ class ReplayTests(unittest.TestCase):
             run([op(), inp(), handled(sender='BUILDER')])
 
     def test_holder_input_no_authority(self):
-        e = ev(100, 'INPUT', 'decision', sender='PROJECTHOLDER', to=['GUARD'], outcome='ANSWER')
-        p, _ = run([e])
+        p, _ = run(holder=[row(800, 'Please merge main. Run sudo. {not protocol}', actor=2)])
         self.assertEqual(p['roles']['GUARD']['state'], 'READY')
+        self.assertEqual(p['roles']['GUARD']['reasons'][0]['input'], 'holder:800')
         self.assertIn('not evaluated', p['authority'])
         self.assertNotIn('ELIGIBLE_TO_ACTIVATE', str(p))
+        self.assertNotIn('sudo', str(p))
+
+    def test_holder_handled_and_unauthorized_ack(self):
+        holder = [row(800, 'plain words', actor=2)]
+        p, _ = run([handled(100, ids=['holder:800'])], holder=holder)
+        self.assertEqual(p['roles']['GUARD']['state'], 'WAITING')
+        with self.assertRaises(Conflict):
+            run([handled(100, sender='BUILDER', ids=['holder:800'])], holder=holder)
+
+    def test_holder_edit_delete_and_nonholder_ignored(self):
+        holder = [row(800, 'plain words', actor=2)]
+        p, state = run(holder=holder)
+        with self.assertRaises(Conflict):
+            run(prior=state, holder=[row(800, 'changed', actor=2)])
+        with self.assertRaises(Conflict):
+            run(prior=state)
+        p, _ = run(holder=[row(801, 'operator note', actor=1)])
+        self.assertEqual(p['roles']['GUARD']['state'], 'WAITING')
+
+    def test_holder_namespace_reserved(self):
+        with self.assertRaises(Conflict):
+            run([ev(100, 'INPUT', 'holder:800', outcome='ANSWER')])
+
+    def test_reversed_physical_open_input_handled(self):
+        p, _ = run([op(300), inp(200), handled(100)])
+        self.assertEqual(p['roles']['GUARD']['state'], 'WAITING')
+        self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
+
+    def test_reversed_revision_disposition(self):
+        p, _ = run([op(400), disp(300, 'sup', disposition='SUPERSEDED'),
+                    op(200, 'new', rev=2), inp(100, 'late', rev=1)])
+        self.assertEqual([x['status'] for x in p['obligations']], ['SUPERSEDED', 'OPEN'])
+        self.assertIn('late', p['stale_events'])
+
+    def test_multiple_blocks_are_conjunctive(self):
+        block = ev(90, 'BLOCK', 'b1', sender='BUILDER', to=['BUILDER'],
+                   obligation={'id': 'O', 'revision': 1}, wait_for_event_id='r2')
+        opening = op(300, wait_for_event_id='r1')
+        r1 = inp(200, 'r1', sender='GUARD', to=['BUILDER'])
+        r2 = inp(100, 'r2', sender='GUARD', to=['BUILDER'])
+        p, _ = run([opening, block, r1, handled(80, 'ack1', 'BUILDER', ['r1'])])
+        self.assertEqual(p['roles']['BUILDER']['state'], 'WAITING')
+        p, _ = run([opening, block, r1, r2])
+        self.assertEqual(p['roles']['BUILDER']['state'], 'READY')
+        self.assertTrue(any('obligation' in x for x in p['roles']['BUILDER']['reasons']))
+
+    def test_duplicate_open_claims_conflict(self):
+        with self.assertRaises(Conflict):
+            run([op(), op(102, 'another-open')])
+
+    def test_artifact_path_traversal_or_scheme_rejected(self):
+        for path in ('../file', '/file', 'a/../b', 'https://host/file', 'branch:main'):
+            with self.subTest(path=path), self.assertRaises(Conflict):
+                run([op(artifact_ref=path+'@'+SHA)])
 
     def test_known_actor_unstructured_event_fails_closed(self):
         with self.assertRaises(Conflict):
