@@ -109,12 +109,17 @@ The following do **not** start or resume CD:
 - "исследуй";
 - "сделай эксперимент";
 - "давай попробуем";
+- "новый COLLAB";
+- "запускай/продолжай COLLAB";
 - requests to implement, review, test or investigate something;
 - a task that would normally or conveniently be performed under CD;
 - the agent's own proposal to use CD.
 
 If explicit CD activation wording is absent, treat CD as inactive and apply the outside-CD
 authorization rules, even when the requested work is substantial or experimental.
+
+Starting/resuming a generic loop, COLLAB/collaborative cycle, ID/IDC or a research loop without
+explicit CD/CDC does not activate development and does not grant repository/GitHub write authority.
 
 The agent must not convert an ordinary task into CD on the user's behalf.
 
