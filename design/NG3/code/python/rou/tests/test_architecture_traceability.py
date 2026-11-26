@@ -207,7 +207,7 @@ def validate_component_trace_syntax(body: str) -> None:
             raise AssertionError(f"trace heading has non-canonical form: {line}")
 
         status_like = re.search(
-            r"—\s*\[\s*\x60?(?:full|partial|none)\x60?\s*\]\s*$",
+            r"—\s*\[\s*\x60?(?:full|partial|none)\x60?\s*\]",
             line,
         )
         if status_like is not None:
@@ -574,11 +574,20 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
             "**Constrained by:**\n- VPNG-X — [\x60full\x60]",
             "**Implements:**\n- VPNG-X — [\x60partial\x60]",
             "plain prose\n- VPNG-X — [\x60none\x60]",
+            "plain prose\n- VPNG-X — [full] (stale)",
+            "**Implements:**\n- VPNG-X — [partial] (annotation)",
         )
         for body in cases:
             with self.subTest(body=body):
                 with self.assertRaises(AssertionError):
                     validate_component_trace_syntax(body)
+
+        validate_component_trace_syntax(
+            "**Implements:**\n- \x60VPNG-X\x60 — [\x60full\x60]"
+        )
+        validate_component_trace_syntax(
+            "ordinary prose without a materialization marker"
+        )
 
     def test_component_edges_are_typed_requirement_vs_constraint(self):
         nodes = {str(node["id"]): node for node in requirement_nodes()}
