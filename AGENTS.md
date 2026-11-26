@@ -30,6 +30,32 @@ explicitly starts/resumes CD, or when the task itself edits/reviews CD process.
 Do not read `CONTINUOUS-DEVELOPMENT.md` merely because a task resembles CD work; reading or
 planning under that document must not itself activate CD.
 
+### COLLAB identity binding gate
+
+Before consuming recovered/project-shared context as the current worker's own collaborative state,
+a worker entering/resuming COLLAB or preparing any role-attributed COLLAB action must:
+
+1. establish its actual current model identity from runtime/self identity, never from project
+   memory, handoff text, Issue prose or another worker's statement;
+2. read the exact root `COLLAB-ROLE-BINDINGS.json` from the governing active ref;
+3. require exactly one active binding for that model and derive the worker's transport role and
+   incarnation from that binding;
+4. when an active journal/config declares the role/incarnation, require an exact match; and
+5. only then recover task/journal/handoff state as that role.
+
+Recovered chat/project context may restore **work state**, but must never establish or override the
+worker's model, role or incarnation identity.
+
+Missing, ambiguous or contradictory binding is `IDENTITY_CONFLICT`. Until resolved, the worker
+must not emit role-attributed comments/journal facts, acquire or grant role leases, or perform
+repository/tool mutations on behalf of that role. Read-only diagnosis and truthful reporting remain
+permitted.
+
+Concrete model-to-role assignments belong only in `COLLAB-ROLE-BINDINGS.json`, not in this
+document. Changing that operational binding does not require editing `AGENTS.md`; however, if the
+change also alters role/incarnation data that an active collaboration protocol declares immutable,
+the collaboration's reviewed epoch/config migration rule still applies.
+
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into
 documentation, process or repository-maintenance tasks.
@@ -202,6 +228,35 @@ The following are never authorization to update `main`:
 
 If the check cannot name a valid authorization source, do not mutate `main`. Leave the
 verified result on the working branch and report its exact head/tree for user approval.
+
+### COLLAB project-task acceptance gate
+
+For development work governed by a dedicated COLLAB project-task Issue, repository authorization
+and green CI are necessary but **not sufficient** to publish that work to `main`.
+
+Immediately before a `main` publication that includes such work, verify all of the following:
+
+1. the project-task Issue contains an explicit terminal `GUARD ACCEPT` verdict against the
+   current accepted specification;
+2. the acceptance names the exact accepted source commit SHA and, when the publication mechanism
+   uses tree-equivalent snapshots, the accepted source tree is known;
+3. the final task comment links the exact accepted source commit and the Issue has then been
+   honestly closed;
+4. no commit affecting the accepted task scope was added after that acceptance without a new
+   GUARD review/acceptance;
+5. every task-scoped delta included in the proposed `main` result is covered by an accepted
+   project-task Issue; an aggregate snapshot must not smuggle unrelated or still-unaccepted
+   development through another task's verdict;
+6. the proposed source/tree is the reviewed result. Any material delta discovered after acceptance
+   invalidates the gate and returns the affected task to review.
+
+`BUILDER READY FOR REVIEW`, successful compilation, unit/integration tests, green CI, a clean
+runtime start, peer consensus or an implementation-complete claim are evidence only. None of them
+is task acceptance, Issue-closure authority or a substitute for the GUARD terminal verdict.
+
+This gate does not replace the ordinary authorization check above: **both** authorization and
+task acceptance must hold. Non-task repository maintenance/process operations continue to use
+their owning gates and are not retroactively forced into a project-task Issue.
 
 A normal snapshot:
 
