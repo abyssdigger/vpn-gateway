@@ -401,6 +401,32 @@ accepted scope, without a new human product decision, history rewrite, force-upd
 exceptional recovery, make the corrective change, publish it normally and validate again.
 Otherwise stop and report the blocker.
 
+### WIP, candidate and accepted commits
+
+Keep development durability distinct from review/acceptance state:
+
+- **WIP commit** — a durable checkpoint of materially useful but incomplete work on the authorized
+  working branch. It is not a review submission and carries no acceptance claim.
+- **Candidate commit** — one coherent result explicitly submitted for the applicable review or
+  acceptance gate.
+- **Accepted commit** — the exact candidate commit that has passed the required independent
+  acceptance/review gate.
+
+A lease or task instruction requiring one coherent candidate commit constrains candidate
+submission. It does **not** prohibit intermediate WIP commits unless it explicitly says that WIP
+publication itself is forbidden.
+
+Do not keep material development state only in a local workspace, transient session filesystem,
+chat attachment, or other non-repository carrier when an authorized working branch is available
+and loss of that state would materially impair continuation. Such carriers may preserve
+supplemental evidence or transfer data, but they do not replace durable working-branch state.
+
+Do not create WIP commits merely to satisfy a cycle boundary. Create and publish a WIP checkpoint
+when materially useful unfinished work would otherwise remain only transient at a handoff,
+cycle/session end, expected context transition, or before a risky next step that could destroy or
+obscure the current result. Every WIP commit remains subject to the ordinary authorization,
+publication and verification rules above.
+
 ## 5. `main` protection and snapshots
 
 `main` is not a development branch.

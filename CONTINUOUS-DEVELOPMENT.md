@@ -260,9 +260,15 @@ Do not end a development cycle merely because the originally mentioned subsystem
 
 The common handoff is defined by `EXECUTION-LOOP.md`.
 
+Before a development cycle/session ends or hands off, apply the WIP durability rule from
+`AGENTS.md`. If materially useful unfinished work exists only in transient state, publish a WIP
+checkpoint to the authorized working branch before final handoff when publication remains safe and
+authorized. This checkpoint is not a candidate submission and does not imply completion.
+
 When development is active, additionally include:
 
 - active branch and current verified head;
+- whether that head is WIP, Candidate, or Accepted when the distinction matters to continuation;
 - base/`main` snapshot when relevant;
 - completed review units/development blocks;
 - current unfinished development block and technical state;
@@ -271,7 +277,8 @@ When development is active, additionally include:
   active/resolved `decomp`, active `unreal`, active `broken`, and `rejected_closure`.
 
 Do not create an artificial completion commit or snapshot merely because the session boundary
-was reached.
+was reached. A required WIP durability checkpoint preserves unfinished state; it does not convert
+that state into a completed development block or review candidate.
 
 ## 12. Completion of development scope
 
