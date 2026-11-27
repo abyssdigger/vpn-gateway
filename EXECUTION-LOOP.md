@@ -54,44 +54,42 @@ Loop or overlay activation never grants repository/GitHub authority. The only es
 authorization shortcut remains explicit CD/CDC activation as defined by `AGENTS.md`; all other
 loop modes use the ordinary authorization rules.
 
-## 3. Entering a loop
+## 3. Activating and resuming a loop
 
-A **loop entry** is either:
-- the initial start of a continuous execution cycle; or
-- an explicit RESUME/recovery re-entry into an already active cycle after user intervention,
-  context loss or another pause that requires reconstruction.
+Initial activation has a **pre-loop setup** phase. It is not yet active loop execution.
 
-At **every** loop entry, before autonomous work resumes:
+For a new continuous-execution cycle, before the loop becomes active:
 
-1. obtain fresh real current time in UTC and record it as `LOOP_ENTRY_TIME` with an explicit
+1. choose `CYCLE_INTERVAL`: the user-specified interval, otherwise **30 minutes**;
+2. obtain fresh real current time in UTC and record it as `CYCLE_START_TIME` with an explicit
    UTC offset (`Z` or `+00:00`);
-2. emit one concise **non-terminal** progress notice to the projectholder stating that loop entry
-   time;
-3. on an initial start, choose `CYCLE_INTERVAL`: the user-specified interval, otherwise
-   **30 minutes**, and set `CYCLE_START_TIME = LOOP_ENTRY_TIME`;
-4. on RESUME/recovery re-entry, preserve the existing `CYCLE_START_TIME`,
-   `CYCLE_INTERVAL`, safety boundary, active overlays and authority boundary unless the
-   projectholder explicitly changed them;
-5. read this document if it has not already been read unchanged in the active context;
-6. apply the `AGENTS.md` reading gate and read the active overlay documents;
-7. establish or reconstruct the current work frontier and any external-input processed frontier;
-8. preserve the current authorization boundary exactly as established by `AGENTS.md`.
+3. read this document if it has not already been read unchanged in the active context;
+4. apply the `AGENTS.md` reading gate and read the active overlay documents;
+5. establish the initial work frontier and any external-input processed frontier;
+6. preserve the authorization boundary exactly as established by `AGENTS.md`;
+7. perform any overlay-defined **one-time pre-loop startup summary**; the generic loop itself
+   defines no user-visible startup/progress report;
+8. activate the loop and enter `EXEC_NEXT`.
 
-The entry notice is observational only. It is not a STOP/final response and does not return
-control to the projectholder. After the notice, continue through the normal work/frontier
-reconstruction and `EXEC_NEXT` path.
+If fresh real UTC time cannot be obtained, do not activate autonomous continuous execution.
 
-If fresh real UTC time cannot be obtained, do not begin or resume autonomous continuous execution.
+The cycle clock starts before mandatory reading or preparation. Commit timestamps, local timezone
+and inferred location are not substitutes for `CYCLE_START_TIME`.
 
-The cycle clock starts before mandatory reading or preparation on the initial entry. Commit
-timestamps, local timezone and inferred location are not substitutes for `CYCLE_START_TIME` or
-`LOOP_ENTRY_TIME`.
+A **RESUME/recovery** of an existing cycle is not a second activation and does not create a new
+entry timestamp or startup report. Preserve the existing `CYCLE_START_TIME`,
+`CYCLE_INTERVAL`, safety boundary, active overlays and authority boundary unless the
+projectholder explicitly changed them. Reconstruct the current work/frontier state, obtain fresh
+UTC only when needed as an ordinary clock/safety checkpoint, and return directly to
+`EXEC_NEXT`.
+
+The generic loop emits no user-visible entry, resume, heartbeat, waiting or liveness reports.
+Such output is not part of loop state and is never required to prove that execution is alive.
 
 Maintain a compact control marker in active execution context:
 
 ```text
 LOOP_STATE: WORK | WAIT | STOPPING
-LOOP_ENTRY_TIME: <latest initial/resume entry UTC time>
 ACTIVE_OVERLAYS: <development/research/ID/...>
 ACTIVE_UNIT: <current work frontier>
 NEXT: <concrete next operation or awaited event>
@@ -156,9 +154,14 @@ WAIT != STOP
 WAIT = bounded in-turn suspension followed by EXEC_NEXT
 ```
 
-A progress/status update is permitted only when the execution surface can emit it without ending
-the active turn. If an ordinary user-visible response is terminal on the current execution surface,
-do not send it while the loop remains active; remain in `WORK`/`WAIT` instead.
+The active loop itself does not emit progress/status/heartbeat reports. User-visible reporting is
+not a `WAIT` primitive and must not be used as a liveness mechanism.
+
+Scheduled tasks, reminders, automations, cron-like jobs and detached/background runs are outside
+the loop lifecycle. Do not create or use them as wake-up, re-entry, continuation, liveness or
+recovery machinery for an active loop. A separately authorized experiment may test such a
+mechanism, but the experiment is outside normal loop semantics and must not be treated as proof of
+same-turn continuation unless that property is actually demonstrated.
 
 ## 6. Clock and session-safety boundary
 
@@ -200,11 +203,10 @@ active frontier. Perform the requested item as the first resumed `WORK` item whe
 then return to `EXEC_NEXT`. Completing that item does not create a `STOP` basis and does not
 return control to the user.
 
-After explicit RESUME, do not emit a terminal response merely to acknowledge that execution was
-resumed or that the first requested item completed. Such acknowledgement may be a non-terminal
-progress update only when the execution surface can emit it without ending the turn. If an
-ordinary user-visible response would end the turn, remain in `WORK`/`WAIT` and return a final
-response only through `STOP -> PRE_FINAL_GATE`.
+After explicit RESUME, reconstruct the required state and return directly to `EXEC_NEXT`. Do not
+emit an entry/resume/status acknowledgement as part of the loop lifecycle merely to announce that
+execution resumed or that the first requested item completed. A final response remains permitted
+only through `STOP -> PRE_FINAL_GATE`.
 
 When the intervention does **not** explicitly resume the loop, handle it first and keep the prior
 autonomous loop paused. A bounded operation explicitly requested by that intervention may be
@@ -283,13 +285,19 @@ minimal action and do not disguise them as product alternatives.
 
 ## 9. Recovery
 
+Recovery is **reactive** to an actual execution/context loss; it is not a normal continuation
+mechanism and is never pre-scheduled merely to keep a loop alive.
+
 Do not infer a platform limitation from one recoverable wait/tool failure.
 
-- recoverable/transient failure -> bounded recovery, then `EXEC_NEXT`;
+- recoverable/transient failure inside the active turn -> bounded recovery, then `EXEC_NEXT`;
 - confirmed unrecoverable failure preventing meaningful continuation -> external-blocker stop
   basis may apply;
-- context/turn loss -> on explicit resume, replay durable state, reconstruct the control marker
-  and processed frontier before dependent work.
+- actual context/turn loss -> on a later explicit resume, replay durable state, reconstruct the
+  control marker and processed frontier before dependent work.
+
+A scheduled task/reminder/automation is not recovery of the same active turn and cannot establish
+that the loop remained live.
 
 Recovery/resume does not reset the loop clock or widen authority.
 
