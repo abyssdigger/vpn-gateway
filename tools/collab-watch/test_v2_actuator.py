@@ -144,7 +144,7 @@ class ActuatorTests(unittest.TestCase):
     def transport_factory(self):
         return _write_transport() if self.write_context.real else self.write_context.remote
 
-    def material_case(self, extra_row=False, cfg=CFG):
+    def material_case(self, extra_row=False, cfg=CFG, extra_control=()):
         task = issue()
         task["repository"] = cfg["repository"]
         rows = [opening(task)]
@@ -154,15 +154,22 @@ class ActuatorTests(unittest.TestCase):
                 '"journal_epoch":"' + cfg["journal_epoch"] + '"', 1)
         if extra_row:
             rows.append(row(800, 99, "ordinary new prose", 7))
+        rows.extend(extra_control)
         out = material(1001, "RESULT", 5)
-        baseline = compact_v2(cfg, {"34": rows}, {"42": task})
-        proof = preflight_material(cfg, baseline, "O1", 11, out["body"], **BUILDER)
+        previous = project_aux(cfg, {"34": rows}, {"42": task}, [], [])[1]
+        baseline = compact_v2(cfg, {"34": rows}, {"42": task}, previous["task"])
+        proof = preflight_material(cfg, baseline, "O1", 11, out["body"], previous["task"], **BUILDER)
         original = freeze_inputs("material_comment", cfg, baseline, 11, **BUILDER,
-                                 expected_proof_sha256=digest(canonical(proof)), task_key="O1", body=out["body"])
+                                 expected_proof_sha256=digest(canonical(proof)), task_key="O1",
+                                 body=out["body"], previous=previous["task"])
         post = copy.deepcopy(task)
         post["comments"].append(out)
         remote = Remote(snapshots(rows, [task]), snapshots(rows, [post]), 11,
                         dict(out, issue_url=ROOT+"/issues/42"))
+        for graph in (remote.before, remote.after):
+            graph[f'/issues/{cfg["projectholder"]["room"]}/comments'] = []
+            graph[f'/issues/{cfg["signal_room"]}/comments'] = []
+        attach_checkpoint(self, remote, previous, cfg)
         return original, remote
 
     def control_case(self, witness=True):
@@ -381,19 +388,25 @@ class ActuatorTests(unittest.TestCase):
         self.assertEqual(len(remote.sent),1)
         self.assertEqual(len(op.sent),1)
 
-    def close_case(self):
+    def close_case(self, extra_control=()):
         rows, task = fixture()
-        rows = rows+[row(800, 99, "ordinary witness", 12)]
-        baseline = compact_v2(CFG, {"34": rows}, {"42": task})
+        rows = rows+[row(800, 99, "ordinary witness", 12)]+list(extra_control)
+        previous = project_aux(CFG, {"34": rows}, {"42": task}, [], [])[1]
+        baseline = compact_v2(CFG, {"34": rows}, {"42": task}, previous["task"])
         request = dict(task="O1", issue_number=42, issue_id=4002, revision=1, attempt=1,
                        commit_sha=SHA, accept_ref={"room":34, **ref(rows[2])})
-        proof = preflight_close_compact(CFG, baseline, 10, request, **GUARD)
+        proof = preflight_close_compact(CFG, baseline, 10, request, previous["task"], **GUARD)
         original = freeze_inputs("issue_close", CFG, baseline, 10, **GUARD,
-                                 expected_proof_sha256=digest(canonical(proof)), request=request)
+                                 expected_proof_sha256=digest(canonical(proof)), request=request,
+                                 previous=previous["task"])
         post = copy.deepcopy(task)
         close(post)
         remote = Remote(snapshots(rows, [task]), snapshots(rows, [post]), 10,
                         {"id":4002, "number":42, "state":"closed", "url":ROOT+"/issues/42"})
+        for graph in (remote.before, remote.after):
+            graph["/issues/35/comments"] = []
+            graph["/issues/37/comments"] = []
+        attach_checkpoint(self, remote, previous)
         return original, remote
 
     def run_case(self, original, remote, authorize=lambda _: True, *, real_transport=False, **kwargs):

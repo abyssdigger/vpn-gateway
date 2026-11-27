@@ -1103,3 +1103,21 @@ material/request prose or authority. Holder/signal churn may change
 aggregate identity without changing the task proof; task, opaque and aux
 inventory changes remain bound. No acquisition, persistence, clock,
 actuator, STARTED or send is performed.
+
+
+### Unit 8d-B — aggregate-safe material and close new sends
+
+New material_comment and issue_close effects use task-scoped retained
+checkpoint matching and the existing owner/attempt/checkpoint chain.
+Their frozen task CompactV2, effect/action/request and receipt identities
+remain unchanged. Claimed effects still reconcile before fresh eligibility.
+
+After frozen witness and durable input, actor/authority and input
+revalidation precede one final aggregate acquisition. The 8d-A gate
+consumes the exact compact; derived task/inventory and aggregate/proof
+bindings are checked and the witness is reconstructed from that same
+task compact. Material has not_applicable witness; close preserves its
+deterministic chronology. No task-only pre-send acquisition or invented
+global journal event ID. Checkpoint fence holds through durable STARTED
+and releases before one POST/PATCH. Possible STARTED uncertainty sends
+nothing and remains reconciliation-only. Existing readback is unchanged.
