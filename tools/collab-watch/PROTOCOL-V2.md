@@ -1706,3 +1706,51 @@ and narrowly authorized live evidence/cutover. Concrete manager, paths,
 resource policies and quota mechanisms remain engineering bindings; actual
 external permission/credential changes and cutover require their owning
 explicit projectholder/setup authority. No VPN-GATE operator behavior changes.
+
+### 9c-B1 — staged containment lifecycle (WIP checkpoint, not accepted)
+
+B1 is a fixed synthetic evidence harness, not a production launcher, generic
+cgroup administrator or admission mechanism. The external trusted provisioner
+must supply exclusive custody of an empty writable delegated cgroup-v2 test
+root and bind its independently observed device/inode/mount and relevant
+namespace identities. The single-threaded dedicated owner must be outside that
+root. Required controllers are cpu, memory and pids. The harness rejects
+mixed hierarchies, unsupported mount views, root/owner ancestors, stale pins,
+foreign descendants and unavailable prerequisites; it cannot repair the host.
+The provisioner and interpreter/source trust remain external premises.
+
+A fresh generation is created exclusively below the pinned test root. Only
+that name and identity are eligible for placement, kill and removal. Unexpected
+siblings, nested generations or path substitution fail closed. The trusted
+child receives an exact placement descriptor and a local sequenced-packet
+control channel. It self-places while trusted and verifies membership before
+PLACED. The dedicated parent checks the actual live pidfd and membership before
+RELEASE. EOF, invalid or expired RELEASE do not enter the fixed probe. On the
+positive path the child closes inherited authority descriptors, clears
+capabilities, groups and all saved/real/effective privileged IDs, sets NNP and
+execs fixed code. The probe verifies the post-exec state, rejects accessible
+migration/delegation controls along its ancestor chain, immediately forks and
+exits. A live adopted descendant must remain in the exact generation. No
+worker-selected path, PID, command or executable is accepted.
+
+Generation kill is only fd-relative cgroup.kill after identity checks. The
+single-purpose subreaper observes and reaps actual direct/adopted children,
+records exit statuses, requires a fresh ECHILD observation and populated=0
+before exact nonrecursive removal. A numeric PID, caller boolean, pidfd
+readiness alone or an old drain observation is insufficient. Failed cleanup
+quarantines and stops the evidence harness; no broadened kill or reuse.
+Root emptiness is verified again before another case and at final completion.
+The generation's exclusive custody throughout the sequence is a trusted
+premise, not established by a point-in-time pin comparison.
+
+The strict runner requires all four fixed cases (release, EOF, invalid,
+timeout), exact typed outcomes, no required skips, matching source digests,
+namespace/root preconditions, and actual exit/reap and cleanup facts. A source
+commit field is a trusted provisioner's declaration; observed file hashes do
+not independently authenticate that commit or interpreter. A nonzero result
+on a read-only mount is unavailable positive evidence, not PASS. Ordinary
+unit tests and mocked filesystem negatives do not establish actual kernel
+cgroup containment. Actual dedicated runner provisioning/CI remains pending
+review. No aggregate reserve, hostile external deputy exclusion, deployment,
+credentials, GitHub effects, production admission or VPN-GATE operator behavior
+is established by B1.
