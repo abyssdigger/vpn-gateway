@@ -1314,7 +1314,14 @@ The returned client endpoint in the direct test API is transferred to its
 trusted caller, not retained. No additional listening endpoint exists.
 An abrupt process exit must not be masked by a retained supervisor copy.
 A duplicated client endpoint delegates the same pinned session, not a
-new identity or admission.
+new identity or admission. Cleanup has an invocation-scoped identity: the
+watcher remains inert behind an activation gate until successful transfer
+from the launcher. A failed or interrupted thread start leaves cleanup with
+the launcher, even if the thread actually started. A successful transfer
+leaves reaping and control closure with the watcher alone. Slot release
+checks the exact active invocation identity after closure and reaping; a
+stale watcher cannot release a later invocation. Diagnostic failure is not
+reaping failure and does not suppress publication of the completion record.
 
 One absolute monotonic deadline covers spawn, trusted bootstrap, IPC
 request, handler, response and exit. The supervisor independently waits

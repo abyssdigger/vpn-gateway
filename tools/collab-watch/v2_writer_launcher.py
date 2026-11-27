@@ -153,6 +153,16 @@ def _kill_reap(children):
     return not failed and all(child.returncode is not None for child in children)
 
 
+def _close_all(endpoints):
+    closed = True
+    for endpoint in endpoints:
+        try:
+            endpoint.close()
+        except BaseException:
+            closed = False
+    return closed
+
+
 def _control_report(sock):
     data = bytearray()
     sock.settimeout(0.5)
@@ -202,7 +212,20 @@ class Supervisor:
     def __init__(self, spec):
         _require(type(spec) is LaunchSpec)
         self._spec = spec
-        self._slot = threading.Lock()
+        self._admission = threading.Lock()
+        self._active = None
+
+    def _reserve(self, invocation):
+        with self._admission:
+            if self._active is not None:
+                raise Busy("staged invocation slot busy")
+            self._active = invocation
+
+    def _release(self, invocation):
+        # A stale or duplicate cleanup must never release a later invocation.
+        with self._admission:
+            if self._active is invocation:
+                self._active = None
 
     def start(self):
         """Return sole client endpoint to trusted test caller and reaper handle."""
@@ -218,13 +241,14 @@ class Supervisor:
         return invocation
 
     def _start(self, paired, worker_first, abrupt):
-        if not self._slot.acquire(blocking=False):
-            raise Busy("staged invocation slot busy")
         spec = self._spec
         deadline = time.monotonic() + spec.wall_seconds
         invocation = Invocation(deadline)
         endpoints, children = [], []
         writer = worker = None
+        handoff = threading.Event()
+        watcher_owned = False
+        self._reserve(invocation)
         try:
             server, client = socket.socketpair()
             endpoints.extend((server, client))
@@ -266,18 +290,33 @@ class Supervisor:
             if paired and not worker_first:
                 spawn_worker()
             _remaining(deadline)
-            threading.Thread(target=self._watch, args=(invocation, writer, worker, parent),
-                             daemon=True).start()
+            def watch_after_transfer():
+                handoff.wait()
+                if watcher_owned:
+                    self._watch(invocation, writer, worker, parent)
+
+            threading.Thread(target=watch_after_transfer, daemon=True).start()
+            # Thread.start can raise after actually starting the thread. Until
+            # this assignment the watcher cannot own cleanup, even if running.
+            watcher_owned = True
+            handoff.set()
             return (None if paired else client), invocation
         except BaseException:
-            for endpoint in endpoints:
-                endpoint.close()
-            try:
-                if _kill_reap(children):
-                    self._slot.release()
-            except BaseException:
-                # Fail closed: do not reuse a slot with unconfirmed child exit.
-                pass
+            # Publish cancel or commit to any already-started watcher. Only the
+            # selected owner may close control, reap children and release.
+            handoff.set()
+            if watcher_owned:
+                # No client endpoint was successfully returned to the caller.
+                if not paired:
+                    client.close()
+            else:
+                try:
+                    closed = _close_all(endpoints)
+                    if _kill_reap(children) and closed:
+                        self._release(invocation)
+                except BaseException:
+                    # Fail closed on unconfirmed closure/exit, never release.
+                    pass
             raise LaunchError("staged launch failed; no result established") from None
 
     def _watch(self, invocation, writer, worker, control):
@@ -300,9 +339,10 @@ class Supervisor:
             except BaseException:
                 pass
             finally:
-                control.close()
-                if reaped:
-                    self._slot.release()
-                invocation._completion = Completion(writer.returncode, worker.returncode if worker else None,
-                                                    timed_out, reaped, entered, report)
-                invocation._done.set()
+                try:
+                    if _close_all((control,)) and reaped:
+                        self._release(invocation)
+                finally:
+                    invocation._completion = Completion(writer.returncode, worker.returncode if worker else None,
+                                                        timed_out, reaped, entered, report)
+                    invocation._done.set()

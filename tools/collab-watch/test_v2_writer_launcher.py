@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import signal
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -98,6 +99,41 @@ class LauncherTests(unittest.TestCase):
             self.assertIsNotNone(started[0].returncode)
             done = sup.start_pair().wait(15)
             self.assertEqual((done.writer_status, done.worker_status), (0, 0))
+
+    def test_interrupted_watcher_start_cannot_release_next_invocation(self):
+        sup = launch.Supervisor(spec())
+        real_start = threading.Thread.start
+        release = threading.Event()
+        interrupted = []
+
+        def start_then_interrupt(thread):
+            target = thread._target
+            def delayed():
+                release.wait(5)
+                target()
+            thread._target = delayed
+            real_start(thread)
+            interrupted.append(thread)
+            raise KeyboardInterrupt("injected after actual thread start")
+
+        self.addCleanup(release.set)
+        with patch.object(threading.Thread, "start", start_then_interrupt), self.assertRaises(launch.LaunchError):
+            sup.start()
+        self.assertEqual(len(interrupted), 1)
+        client, run = sup.start()
+        with client:
+            release.set()
+            interrupted[0].join(5)
+            self.assertFalse(interrupted[0].is_alive())
+            self.assertFalse(run._done.is_set())
+            # The old watcher must not release the second invocation's slot.
+            with self.assertRaises(launch.Busy):
+                sup.start()
+            self.assertEqual(exchange(client.dup(), run), OK)
+            self.assertTrue(run.wait(15).reaped)
+        c, r = sup.start()
+        self.assertEqual(exchange(c, r), OK)
+        self.assertTrue(r.wait(15).reaped)
 
     def test_crash_and_wall_no_retry(self):
         for probe, deadline in (("crash", 12), ("wall", 2)):
