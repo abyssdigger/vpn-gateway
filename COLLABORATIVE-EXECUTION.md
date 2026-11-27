@@ -81,6 +81,22 @@ Collaboration never widens authority:
 
 Keep canonical semantics, delivery hints and substantive payloads separate.
 
+### Human-facing Issue text
+
+Human-facing prose published to GitHub Issues must use readable Markdown structure rather than a
+long flat paragraph. Use paragraph breaks, headings and lists when they improve the message, and
+preserve natural line breaks so a human can scan the task, review, finding or decision without
+reformatting it manually.
+
+This applies to project-task Issues, shared collaboration/research rooms, projectholder rooms and
+other mixed human-facing Issues. Do not collapse substantial human communication into one
+unbroken text block merely because the transport accepts it.
+
+The exception is a future **dedicated service Issue** whose reviewed protocol explicitly defines
+machine-only wire records. In a mixed Issue, exact machine-framed records keep their required
+wire format, while any surrounding human prose still follows the readable Markdown rule. A
+machine protocol never authorizes reformatting bytes that are required to remain exact.
+
 ### Project-task Issue — work plane
 
 For new implementation work tied to project Requirements/Constraints/architecture, the normal
