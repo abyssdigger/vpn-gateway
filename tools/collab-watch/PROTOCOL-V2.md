@@ -844,3 +844,26 @@ Missing store/checkpoint permits only explicit fresh-current reconstruction
 with no historical continuity claim. No acquisition/scheduler orchestration,
 actuator, model invocation, CLI, remote mutation, activation or epoch change.
 7b-B must bind checkpoint load/save to accepted aggregate replay.
+
+
+## Unit 7b-B — bounded one-shot runtime read/checkpoint commit
+
+run_once binds an already-open exact RuntimeStateStore to the staged
+config repository/epoch. The caller supplies the parsed binding document,
+independent runtime model, optional explicit role, read credential/opener
+and explicit retained or fresh-current history mode. Retained requires
+an existing checkpoint; fresh-current requires an empty provisioned store
+and labels its result fresh-current-only. No fallback or reset.
+
+The sequence is load once, accepted two-pass aggregate acquisition,
+accepted selected-role scheduler with exact previous state or None, then
+save the exact returned canonical state using the loaded generation CAS.
+Only after successful save is the view returned with committed generation
+and state digest. No checkpoint DB transaction spans network reads.
+Acquisition/identity/replay conflict or failed/uncertain CAS yields no
+authoritative view/commit claim. A competing commit requires a new load
+and acquisition; no silent retry. Signal churn remains noncanonical.
+Retained mode does not prove historical continuity beyond externally
+pinned checkpoint trust. Results exclude raw checkpoint bytes/credentials.
+Holder commands remain data. No remote writes, actuator, owner change,
+command execution, model invocation, timer, CLI, daemon or activation.
