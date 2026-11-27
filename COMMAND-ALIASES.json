@@ -103,6 +103,10 @@
           ]
         }
       }
+    },
+    "iteration_count": {
+      "number": "positive_integer",
+      "canonical_output": "integer"
     }
   },
   "aliases": [
@@ -128,6 +132,33 @@
         "direct_overlay_entry_forbidden": true
       },
       "equivalent_explicit_request": "Start a new {duration} CDC+COLLAB cycle. Enter only through `EXECUTION-LOOP.md` -> `START`. Do not enter through `CONTINUOUS-DEVELOPMENT.md` or `COLLABORATIVE-EXECUTION.md` directly. Follow `START` exactly."
+    },
+    {
+      "id": "start-cdc-with-collab-iteration-budget",
+      "patterns": [
+        "коллаб {iterations}/{duration}",
+        "collab {iterations}/{duration}"
+      ],
+      "parameters": {
+        "iterations": {
+          "type": "iteration_count"
+        },
+        "duration": {
+          "type": "duration"
+        }
+      },
+      "canonical_intent": {
+        "action": "start_new_cdc_with_collab",
+        "iteration_budget": "{iterations}",
+        "duration_seconds": "{duration}",
+        "entrypoint": "EXECUTION-LOOP.md#START",
+        "overlays": [
+          "CONTINUOUS-DEVELOPMENT.md",
+          "COLLABORATIVE-EXECUTION.md"
+        ],
+        "direct_overlay_entry_forbidden": true
+      },
+      "equivalent_explicit_request": "Start a new CDC+COLLAB cycle with at most {iterations} WORK/WAIT iterations and maximum wall-clock duration {duration}. Enter only through `EXECUTION-LOOP.md` -> `START`. Stop at whichever limit is reached first. Do not enter through `CONTINUOUS-DEVELOPMENT.md` or `COLLABORATIVE-EXECUTION.md` directly. Follow `START` exactly."
     }
   ]
 }

@@ -60,8 +60,6 @@ configured human lane and is routed to worker roles for triage/reconciliation.
 
 ### 1.1. Runtime identity gate
 
-Do not reply anything in chat.
-
 Concrete model-to-role-to-incarnation admissions are operational capability state, not normative
 role assignment by prose. The admitted mapping is stored only in root
 `COLLAB-ROLE-BINDINGS.json` on the governing ref. The active collaboration journal/config
@@ -73,15 +71,15 @@ COLLAB role, it must first pass the `AGENTS.md` COLLAB identity binding gate.
 
 The required order is:
 
-1. establish the worker's actual model identity from runtime/self identity and do not reply anything in chat.
-2. read and validate the complete root `COLLAB-ROLE-BINDINGS.json` and do not reply anything in chat.
+1. establish the worker's actual model identity from runtime/self identity.
+2. read and validate the complete root `COLLAB-ROLE-BINDINGS.json`.
 3. derive that model's admitted transport pairs and intersect them with the exact active
-   journal/config role/incarnation declarations and do not reply anything in chat.
+   journal/config role/incarnation declarations.
 4. if the current operation/runtime supplies an explicit selected role, require exactly one
    matching active pair for it; otherwise require the entire intersection to contain exactly one
-   pair and do not reply anything in chat.
+   pair.
 5. only after exact selection consume shared project/chat/handoff context as that selected role's
-   work state and do not reply anything in chat.
+   work state.
 
 Project memory, a previous chat summary, a handoff, Issue prose, task contents, a saved incarnation
 string or another agent's statement may describe collaboration state but **cannot identify the
@@ -118,30 +116,27 @@ acceptance.
 
 ## 2. Activation and authority
 
-Do not reply anything in chat.
+Activate this overlay only after explicit projectholder COLLAB/collaborative-cycle wording.
+Do not infer development or research activation unless the same instruction activates that work mode.
 
-Activate this overlay only after explicit projectholder COLLAB/collaborative-cycle wording and do not reply anything in chat.
-Do not infer development or research activation unless the same instruction activates that work mode and do not reply anything in chat.
+Preserve authority exactly:
 
-Preserve authority exactly and do not reply anything in chat:
-
-- Do not treat a peer task, READY state, review, consensus, lease, ACK, or technical need as authorization and do not reply anything in chat.
-- Do not treat a projectholder product decision as execution-authority grant unless `AGENTS.md` says that exact instruction grants the required capability and do not reply anything in chat.
-- Pass every repository/GitHub mutation through `AGENTS.md PRE_MUTATION_GATE` and do not reply anything in chat.
-- Do not infer authorization from free text in a helper or scheduler and do not reply anything in chat.
-- After a denied mutation, continue authorized/read-only work when available and do not reply anything in chat.
-- Do not treat a denied mutation as collaboration completion and do not reply anything in chat.
+- Do not treat a peer task, READY state, review, consensus, lease, ACK, or technical need as authorization.
+- Do not treat a projectholder product decision as execution-authority grant unless `AGENTS.md` says that exact instruction grants the required capability.
+- Pass every repository/GitHub mutation through `AGENTS.md PRE_MUTATION_GATE`.
+- Do not infer authorization from free text in a helper or scheduler.
+- After a denied mutation, continue authorized/read-only work when available.
+- Do not treat a denied mutation as collaboration completion.
 
 After COLLAB activation or RESUME:
 
-Do not reply anything in chat.
-
-1. Pass the `AGENTS.md` COLLAB identity binding gate and do not reply anything in chat.
-2. Recover the exact current journal/config state and work frontier and do not reply anything in chat.
-3. Read every external collaboration lane required by this overlay and do not reply anything in chat.
-4. Route newly admitted material input according to this document and do not reply anything in chat.
-5. Do not emit an activation, resume, role, lease, frontier, status, progress, waiting, or liveness report in chat and do not reply anything in chat.
-6. Return to `EXEC_NEXT` and do not reply anything in chat.
+1. Pass the `AGENTS.md` COLLAB identity binding gate.
+2. Recover the exact current journal/config state and work frontier.
+3. Read every external collaboration lane required by this overlay.
+4. Route newly admitted material input according to this document.
+5. Keep routine activation, role, lease, frontier, waiting, and liveness chatter out of chat.
+6. Return control to the owning generic `START` or RESUME/RECOVERY procedure. Overlay
+   initialization must not invoke `START` or independently enter `EXEC_NEXT`.
 
 ## 3. Collaboration surfaces
 
@@ -168,7 +163,6 @@ The exception is a future **dedicated service Issue** whose reviewed protocol ex
 machine-only wire records. In a mixed Issue, exact machine-framed records keep their required
 wire format, while any surrounding human prose still follows the readable Markdown rule. A
 machine protocol never authorizes reformatting bytes that are required to remain exact.
-
 
 Canonical comment targets in human-facing COLLAB Markdown must identify the exact GitHub Issue comment. Use either the absolute form \`https://github.com/abyssdigger/vpn-gateway/issues/<issue_id>#issuecomment-<comment_id>\` or, where a repository-local Issue target is appropriate, \`<issue_id>#issuecomment-<comment_id>\` (for example, \`[#34](34#issuecomment-7222871530)\`). Do not use pseudo-links such as \`#34/#7222871530\`, and do not add tracking/query parameters when they are not required for the link target. The visible label may be \`#34\`, \`comment\`, or a short description; the target must identify the exact \`issuecomment-<comment_id>\`.
 
@@ -274,8 +268,6 @@ the explicit collaboration-lane pause/stop primitive.
 
 #### Projectholder-lane polling and read receipt
 
-Do not reply anything in chat.
-
 While COLLAB is active, the worker role responsible for the configured projectholder routing must
 successfully re-read the projectholder room:
 
@@ -295,11 +287,11 @@ immediately and start a fresh local cadence only after that successful read.
 
 For each newly observed projectholder-authored work input:
 
-1. classify it under the existing ordinary-input/registered-command rules and do not reply anything in chat.
+1. classify it under the existing ordinary-input/registered-command rules.
 2. place the actionable item into the appropriate current work/triage queue without widening
-   authority; and and do not reply anything in chat.
+   authority; and.
 3. post one **very short worker-authored receipt** in the projectholder room stating that the exact
-   holder comment(s) were read and what short work item/scope was queued and do not reply anything in chat.
+   holder comment(s) were read and what short work item/scope was queued.
 
 Multiple newly observed holder inputs from one poll may be acknowledged in one compact receipt.
 An empty poll produces no receipt. A control command or non-actionable input is acknowledged with
@@ -358,8 +350,6 @@ canonical journal semantics, ephemeral delivery signals and material payloads.
 
 ## 4. Independent first-pass and architecture reconciliation
 
-Do not reply anything in chat.
-
 For non-trivial work, roles whose independent judgment matters should first analyze the original
 task/evidence independently where practical.
 
@@ -367,11 +357,11 @@ The purpose is to reduce premature conformity, not to prohibit necessary shared 
 
 After first-pass:
 
-1. compare requirements, unknowns, risks and technical decomposition and do not reply anything in chat.
-2. reconcile architecture jointly and do not reply anything in chat.
-3. preserve material disagreement explicitly and do not reply anything in chat.
-4. escalate a genuine unresolved product/project ambiguity to `PROJECTHOLDER` and do not reply anything in chat.
-5. do not treat peer agreement alone as proof of correctness or authority and do not reply anything in chat.
+1. compare requirements, unknowns, risks and technical decomposition.
+2. reconcile architecture jointly.
+3. preserve material disagreement explicitly.
+4. escalate a genuine unresolved product/project ambiguity to `PROJECTHOLDER`.
+5. do not treat peer agreement alone as proof of correctness or authority.
 
 Any surviving projectholder product/project decision request must satisfy the self-contained
 decision-request contract in `EXECUTION-LOOP.md` §8.1. A task-room, review or artifact ref may
@@ -431,43 +421,37 @@ The exact receipt format and GC relationship are defined in §7.
 
 ## 6. Readiness and passivation
 
-Do not reply anything in chat.
-
 Treat a role as `READY` only when at least one admitted unprocessed material input or open
-unblocked obligation permits useful collaborative work and do not reply anything in chat.
+unblocked obligation permits useful collaborative work.
 
-Use `READY` only as work-state evidence and do not reply anything in chat.
+Use `READY` only as work-state evidence.
 Do not use it as proof that a chat/session is terminal or awake, as authentication, as
 repository/GitHub/tool authority, as activation eligibility, or as a replacement for generic
-`EXEC_NEXT`, `WAIT`, clock, stop, or final gates and do not reply anything in chat.
+`EXEC_NEXT`, `WAIT`, clock, stop, or final gates.
 
 When no runnable work remains for a role and a `DORMANT` record is appropriate:
 
-Do not reply anything in chat.
-
-1. Record `DORMANT` only as that role's durable diagnostic self-claim with the exact waiting reason and do not reply anything in chat.
-2. Do not treat `DORMANT` as a generic `STOP` basis and do not reply anything in chat.
-3. Do not end the live execution turn because `DORMANT` was recorded and do not reply anything in chat.
-4. If an applicable bounded wait can observe the unresolved dependency, enter bounded `WAIT` and do not reply anything in chat.
-5. After bounded `WAIT` returns, do not treat timeout as successful passivation or semantic completion and do not reply anything in chat.
-6. Return to `EXEC_NEXT` and do not reply anything in chat.
+1. Record `DORMANT` only as that role's durable diagnostic self-claim with the exact waiting reason.
+2. Do not treat `DORMANT` as a generic `STOP` basis.
+3. Do not end the live execution turn because `DORMANT` was recorded.
+4. If an applicable bounded wait can observe the unresolved dependency, enter bounded `WAIT`.
+5. After bounded `WAIT` returns, do not treat timeout as successful passivation or semantic completion.
+6. Return to `EXEC_NEXT`.
 
 When no applicable bounded wait exists or the session-safety boundary is reached:
 
-Do not reply anything in chat.
-
-1. Record the exact operational blocker in the collaboration handoff/projectholder lane when the governing process requires it and do not reply anything in chat.
-2. Do not use `DORMANT` itself as the stop reason and do not reply anything in chat.
-3. Apply the generic `STOP -> PRE_FINAL_GATE` procedure and do not reply anything in chat.
-4. If `PRE_FINAL_GATE` fails, return to `EXEC_NEXT` and do not reply anything in chat.
+1. Record the exact operational blocker in the collaboration handoff/projectholder lane when the governing process requires it.
+2. Do not use `DORMANT` itself as the stop reason.
+3. Apply the generic `STOP -> PRE_FINAL_GATE` procedure.
+4. If `PRE_FINAL_GATE` fails, return to `EXEC_NEXT`.
 
 Do not define terminal passivation semantics until a concrete post-turn wake mechanism has been
-separately demonstrated and a governing overlay explicitly defines that mechanism and do not reply anything in chat.
+separately demonstrated and a governing overlay explicitly defines that mechanism.
 
 Treat a terminal exit immediately after a correct `DORMANT` record as a process failure unless the
-generic `PRE_FINAL_GATE -> FINAL` path actually passed and do not reply anything in chat.
+generic `PRE_FINAL_GATE -> FINAL` path actually passed.
 
-Use level-triggered readiness and do not reply anything in chat:
+Use level-triggered readiness:
 - keep readiness true until relevant material input is handled or the blocking obligation is
   dispositioned/blocked;
 - coalesce bursts into one readiness state/reason set;
@@ -481,35 +465,29 @@ Use level-triggered readiness and do not reply anything in chat:
 COLLAB does not define how ChatGPT/API/UI execution is activated and does not infer terminality
 from silence, timeout or a `DORMANT` claim.
 
-
-
 A projectholder dependency on one bounded scope does not terminalize COLLAB. Absence, waiting or delay of projectholder agreement for a particular decision or permission is not by itself a basis to leave COLLAB or enter \`STOP\`, \`PRE_FINAL_GATE\` or \`FINAL\`. Keep the dependent scope waiting on projectholder input, return to the ordinary scheduler, and continue other permitted \`WORK\`, applicable bounded \`WAIT\`, or productive-WAIT maintenance. The generic human-decision STOP rule from \`EXECUTION-LOOP.md\` applies only when the required human decision actually blocks **all** meaningful permitted continuation.
 
 No response is not a refusal, and lack of agreement never expands authority or permits the blocked change. Do not turn repeated requests into a busy loop or spam. If the projectholder explicitly refuses, keep the dependent scope prohibited or reformulate it consistently with that refusal; the refusal still does not end COLLAB while other permitted meaningful continuation exists. This paragraph classifies partial holder dependency for COLLAB and does not redefine the generic STOP semantics.
 
 ### 6.1. Productive WAIT maintenance
 
+A selected COLLAB role may use otherwise idle WAIT time for bounded maintenance only when the original unresolved WAIT relation is preserved and no ordinary READY, assigned, holder-directed or newly admitted peer work is runnable for that role. Establish this through the applicable current scheduler/readiness and mandatory external-input observation checks; stale or unavailable observations do not establish absence of ordinary work.
 
-Do not reply anything in chat.
+Set PRODUCTIVE_WAIT_BUDGET = 5 minutes as a maximum continuous slice, not a quota. Establish a monotonic local deadline at entry, bounded also by the generic session-safety boundary. Before each maintenance operation, check the remaining slice and require its established execution bound to fit that remainder. An operation without an established execution bound is ineligible to start inside productive WAIT; do not invent timeouts. Recheck ordinary readiness and required external-input lanes at each available scheduler/tool boundary.
 
-A selected COLLAB role may use otherwise idle WAIT time for bounded maintenance only when the original unresolved WAIT relation is preserved and no ordinary READY, assigned, holder-directed or newly admitted peer work is runnable for that role. Establish this through the applicable current scheduler/readiness and mandatory external-input observation checks; stale or unavailable observations do not establish absence of ordinary work and do not reply anything in chat.
+An eligible gap is an existing project object within an accepted permanent Requirement that lacks unambiguously required coverage/conformance. Record the exact Requirement, object and baseline, observed missing property, accepted sources, and falsifiable acceptance condition. The required semantic effect must follow from these sources without choosing new support, scope, architecture, recovery or version semantics or resolving an ambiguous normative source. Different equivalent implementations or wording are not by themselves a semantic choice. If materially different semantic effects remain permissible, or the basis is insufficient, route the affected gap to SPEC.
 
-Set PRODUCTIVE_WAIT_BUDGET = 5 minutes as a maximum continuous slice, not a quota. Establish a monotonic local deadline at entry, bounded also by the generic session-safety boundary. Before each maintenance operation, check the remaining slice and require its established execution bound to fit that remainder. An operation without an established execution bound is ineligible to start inside productive WAIT; do not invent timeouts. Recheck ordinary readiness and required external-input lanes at each available scheduler/tool boundary and do not reply anything in chat.
+Before creating a narrow maintenance task, check the current ordinary task inventory for existing compatible work. Identify the gap by Requirement ID, affected object and gap class as coordination metadata, not authority. Reuse compatible work and ordinary branch/lease coordination. An inventory check is not an atomic reservation; revalidate before implementation if overlapping tasks were discovered concurrently. On a later slice revalidate the accepted Requirement and source baseline; preserve partial state only within the still-applicable scope.
 
-An eligible gap is an existing project object within an accepted permanent Requirement that lacks unambiguously required coverage/conformance. Record the exact Requirement, object and baseline, observed missing property, accepted sources, and falsifiable acceptance condition. The required semantic effect must follow from these sources without choosing new support, scope, architecture, recovery or version semantics or resolving an ambiguous normative source. Different equivalent implementations or wording are not by themselves a semantic choice. If materially different semantic effects remain permissible, or the basis is insufficient, route the affected gap to SPEC and do not reply anything in chat.
+Discovery/task creation is separate from implementation. Before taking a mechanically determined task into implementation without prior SPEC task specification, establish an independent terminal-review/acceptance path under the current role/process contract. A producer of the candidate may not terminally accept it. In the current pilot GUARD may discover/scope and route to BUILDER but may not implement a candidate it would then terminally accept. Discovery/specification alone does not preclude independent review of a separately produced candidate. A reviewer who performs a substantive correction of a candidate is a producer of the corrected candidate and may not terminally self-accept it. A different chat/session of the same transport role does not establish independence by itself. If the permitted independent acceptance path is unavailable, preserve or route the gap without self-implementation.
 
-Before creating a narrow maintenance task, check the current ordinary task inventory for existing compatible work. Identify the gap by Requirement ID, affected object and gap class as coordination metadata, not authority. Reuse compatible work and ordinary branch/lease coordination. An inventory check is not an atomic reservation; revalidate before implementation if overlapping tasks were discovered concurrently. On a later slice revalidate the accepted Requirement and source baseline; preserve partial state only within the still-applicable scope and do not reply anything in chat.
+Treat every produced result as a candidate subject to ordinary GUARD-driven review/rework/acceptance and all repository/tool/branch/lease gates. Preserve unfinished maintenance state across slices, but maintenance-origin readiness never self-promotes into ordinary priority. Newly runnable ordinary work wins; resume maintenance only in a newly admitted slice or following explicit assignment/promotion through the ordinary scheduler.
 
-Discovery/task creation is separate from implementation. Before taking a mechanically determined task into implementation without prior SPEC task specification, establish an independent terminal-review/acceptance path under the current role/process contract. A producer of the candidate may not terminally accept it. In the current pilot GUARD may discover/scope and route to BUILDER but may not implement a candidate it would then terminally accept. Discovery/specification alone does not preclude independent review of a separately produced candidate. A reviewer who performs a substantive correction of a candidate is a producer of the corrected candidate and may not terminally self-accept it. A different chat/session of the same transport role does not establish independence by itself. If the permitted independent acceptance path is unavailable, preserve or route the gap without self-implementation and do not reply anything in chat.
+When new ordinary work becomes observable or a deadline is reached, perform no further maintenance before returning control to EXEC_NEXT. If an indivisible operation exceeds its established bound, record any material overrun, preserve truthful result/unfinished state and recheck immediately upon return; do not claim preemption during an uninterruptible operation. At slice end preserve the original WAIT relation and unfinished task state, recheck required external input and all READY state, and return to EXEC_NEXT. Repeated slices must not hide or defer ordinary work.
 
-Treat every produced result as a candidate subject to ordinary GUARD-driven review/rework/acceptance and all repository/tool/branch/lease gates. Preserve unfinished maintenance state across slices, but maintenance-origin readiness never self-promotes into ordinary priority. Newly runnable ordinary work wins; resume maintenance only in a newly admitted slice or following explicit assignment/promotion through the ordinary scheduler and do not reply anything in chat.
-
-When new ordinary work becomes observable or a deadline is reached, perform no further maintenance before returning control to EXEC_NEXT. If an indivisible operation exceeds its established bound, record any material overrun, preserve truthful result/unfinished state and recheck immediately upon return; do not claim preemption during an uninterruptible operation. At slice end preserve the original WAIT relation and unfinished task state, recheck required external input and all READY state, and return to EXEC_NEXT. Repeated slices must not hide or defer ordinary work and do not reply anything in chat.
-
-Bounded WAIT returns and observation errors follow the existing WAIT/STOP rules in \`EXECUTION-LOOP.md\`. For productive-WAIT admission specifically, failed acquisition leaves the required readiness/input observation stale or unknown; it is not a successful empty observation and cannot establish eligibility for maintenance and do not reply anything in chat.
+Bounded WAIT returns and observation errors follow the existing WAIT/STOP rules in \`EXECUTION-LOOP.md\`. For productive-WAIT admission specifically, failed acquisition leaves the required readiness/input observation stale or unknown; it is not a successful empty observation and cannot establish eligibility for maintenance.
 
 This exception waives only prior SPEC task specification for a mechanically determined scope and acceptance criterion; it does not transfer SPEC's ownership of semantics or GUARD's independent acceptance responsibility and grants no execution authority.
-
 
 ## 7. Control protocol v1 — durable journal + ephemeral SIGNAL
 
@@ -694,8 +672,6 @@ A GC candidate is evidence only, never delete authority.
 
 ### 7.6. Communication health
 
-Do not reply anything in chat.
-
 PING/PONG remain durable journal facts and do not create, block, satisfy or close ordinary
 obligations.
 
@@ -718,11 +694,11 @@ observation alone does not, because a future delivery actuator may publish/retry
 During an active collaboration cycle, the observer may use the local 10/5-minute policy:
 
 1. after 10 minutes with no newly observed valid peer journal fact, publish at most one outstanding
-   PING journal fact and optionally one SIGNAL to the peer and do not reply anything in chat.
-2. wait up to 5 minutes for matching PONG or another new valid peer journal fact and do not reply anything in chat.
+   PING journal fact and optionally one SIGNAL to the peer.
+2. wait up to 5 minutes for matching PONG or another new valid peer journal fact.
 3. if neither arrives, report `COMMUNICATION_UNCONFIRMED(role, ping_id)` once to the projectholder
-   lane and do not reply anything in chat.
-4. suppress repetition until peer liveness is restored or PROJECTHOLDER changes the situation and do not reply anything in chat.
+   lane.
+4. suppress repetition until peer liveness is restored or PROJECTHOLDER changes the situation.
 
 Elapsed live-session time is local observer state. Restart/replay never reconstructs elapsed time
 from durable comment timestamps.
@@ -740,50 +716,42 @@ satisfied or explicitly changed by the owning process/authority.
 
 ### 7.6.1. Non-blocking peer wait budget
 
-Do not reply anything in chat.
-
-Keep peer-response waiting separate from communication-health diagnosis and do not reply anything in chat.
+Keep peer-response waiting separate from communication-health diagnosis.
 
 When one role has issued a request whose completion depends on another role, use
 `PEER_WAIT_BUDGET = 2 minutes` of live-session time unless the governing configuration defines
-another value and do not reply anything in chat.
+another value.
 
 When the peer-wait budget expires:
 
-Do not reply anything in chat.
-
-1. Treat the expiry only as return of control from the current bounded peer wait and do not reply anything in chat.
-2. Do not mark the peer dead, `DORMANT`, `STOPPED`, or replaced and do not reply anything in chat.
-3. Do not satisfy, cancel, close, waive, or reassign the awaited journal relation and do not reply anything in chat.
-4. Check for independent authorized `WORK` and do not reply anything in chat.
-5. If independent authorized `WORK` exists, select it and do not reply anything in chat.
-6. If the current unit alone depends on the peer, mark that unit `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit and do not reply anything in chat.
-7. If no independent `WORK` exists and an applicable bounded wait can still observe the unresolved dependency, enter `WAIT` and do not reply anything in chat.
-8. After each bounded `WAIT`, preserve the unresolved relation and do not convert repeated timeout into semantic closure and do not reply anything in chat.
-9. Return to `EXEC_NEXT` and do not reply anything in chat.
+1. Treat the expiry only as return of control from the current bounded peer wait.
+2. Do not mark the peer dead, `DORMANT`, `STOPPED`, or replaced.
+3. Do not satisfy, cancel, close, waive, or reassign the awaited journal relation.
+4. Check for independent authorized `WORK`.
+5. If independent authorized `WORK` exists, select it.
+6. If the current unit alone depends on the peer, mark that unit `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit.
+7. If no independent `WORK` exists and an applicable bounded wait can still observe the unresolved dependency, enter `WAIT`.
+8. After each bounded `WAIT`, preserve the unresolved relation and do not convert repeated timeout into semantic closure.
+9. Return to `EXEC_NEXT`.
 
 After `COMMUNICATION_UNCONFIRMED` or a PROJECTHOLDER-confirmed failed ping:
 
-Do not reply anything in chat.
+1. Stop only the communication-health diagnosis/repetition that the accepted instruction actually stops.
+2. Keep every unresolved peer obligation and independent review/acceptance requirement intact.
+3. Do not emit the peer's result, review, verdict, journal fact, or disposition.
+4. Check for independent authorized `WORK`.
+5. If no independent `WORK` exists and an applicable bounded wait can still observe the required peer/review/input relation, enter `WAIT`.
+6. Return to `EXEC_NEXT`.
 
-1. Stop only the communication-health diagnosis/repetition that the accepted instruction actually stops and do not reply anything in chat.
-2. Keep every unresolved peer obligation and independent review/acceptance requirement intact and do not reply anything in chat.
-3. Do not emit the peer's result, review, verdict, journal fact, or disposition and do not reply anything in chat.
-4. Check for independent authorized `WORK` and do not reply anything in chat.
-5. If no independent `WORK` exists and an applicable bounded wait can still observe the required peer/review/input relation, enter `WAIT` and do not reply anything in chat.
-6. Return to `EXEC_NEXT` and do not reply anything in chat.
-
-Do not let PING/PONG health state block the work scheduler and do not reply anything in chat.
-Do not treat continued independent work after the peer-wait budget as evidence that communication is healthy and do not reply anything in chat.
+Do not let PING/PONG health state block the work scheduler.
+Do not treat continued independent work after the peer-wait budget as evidence that communication is healthy.
 
 When a newly observed valid peer journal fact restores the work relation:
 
-Do not reply anything in chat.
-
-1. Recompute READY/frontier state normally and do not reply anything in chat.
-2. Re-enter the previously waiting unit when the normal scheduler selects it and do not reply anything in chat.
-3. Do not emit a special resume-from-timeout report in chat and do not reply anything in chat.
-4. Return to `EXEC_NEXT` and do not reply anything in chat.
+1. Recompute READY/frontier state normally.
+2. Re-enter the previously waiting unit when the normal scheduler selects it.
+3. Do not emit a special resume-from-timeout report in chat.
+4. Return to `EXEC_NEXT`.
 
 ### 7.7. Relation semantics
 
@@ -975,19 +943,17 @@ the journal fact already exists.
 
 ### 9.3. Separate GC janitor
 
-Do not reply anything in chat.
-
 Destructive SIGNAL deletion is owned by a separate least-privilege janitor, not the read-only
 projector.
 
 The janitor never decides semantic eligibility. It may act only on an exact precomputed GC candidate
 and, when a separately registered current capability authorizes deletion:
 
-1. re-read the exact current signal comment and do not reply anything in chat.
-2. compare room/comment/actor/raw-body digest with the candidate and do not reply anything in chat.
-3. pass a fresh `AGENTS.md PRE_MUTATION_GATE` and do not reply anything in chat.
-4. DELETE that exact signal comment and do not reply anything in chat.
-5. reconcile the result before any retry and do not reply anything in chat.
+1. re-read the exact current signal comment.
+2. compare room/comment/actor/raw-body digest with the candidate.
+3. pass a fresh `AGENTS.md PRE_MUTATION_GATE`.
+4. DELETE that exact signal comment.
+5. reconcile the result before any retry.
 
 Absent after delete is confirmed success. Changed/ambiguous/read failure stops destructive retry.
 
@@ -1030,28 +996,26 @@ A v1 helper must not scan them as part of current v1 semantic journal or SIGNAL 
 
 ### v0 -> v1 M cutover
 
-Do not reply anything in chat.
-
 Cutover from a legacy event-room replay epoch to M requires:
 
 1. a durable task-room checkpoint identifying the predecessor event room, exact final semantic
    state, last disposition/frontier, active role/incarnation identities, current holder frontier,
-   process/helper head and unchanged authority boundary and do not reply anything in chat.
-2. independent cross-review of that checkpoint and do not reply anything in chat.
-3. a published/reviewed v1 process/helper head and do not reply anything in chat.
-4. a new empty **signal-room** Issue and do not reply anything in chat.
+   process/helper head and unchanged authority boundary.
+2. independent cross-review of that checkpoint.
+3. a published/reviewed v1 process/helper head.
+4. a new empty **signal-room** Issue.
 5. explicit v1 config with:
    - signal room;
    - durable task/journal room(s);
    - projectholder room/routing;
    - exact persistent `journal_epoch`;
    - roles/incarnations;
-   - current command registry/cycle key and do not reply anything in chat.
-6. fresh v1 derivative local state rather than migration of a v0 local ledger and do not reply anything in chat.
+   - current command registry/cycle key.
+6. fresh v1 derivative local state rather than migration of a v0 local ledger.
 7. fresh HANDLED receipts for currently visible holder inputs as needed after classification under
-   the current registry and do not reply anything in chat.
-8. no transplant/republication of closed v0 physical events into the v1 journal and do not reply anything in chat.
-9. first new live work created as a fresh v1 journal fact and do not reply anything in chat.
+   the current registry.
+8. no transplant/republication of closed v0 physical events into the v1 journal.
+9. first new live work created as a fresh v1 journal fact.
 
 The command-registry cycle key is fixed inside the current journal epoch. A later execution window
 may reuse that collaboration key; the wall-clock execution interval is not the command cycle.
@@ -1064,8 +1028,6 @@ authority still requires the exact current registry and `AGENTS.md` gate.
 Old event-room comments are not deleted by cutover.
 
 ### v1 signal-room rollover
-
-Do not reply anything in chat.
 
 A signal room may be replaced independently when transport/UI maintenance requires it, because it is
 not semantic state. The cutover must preserve the exact semantic journal configuration/hash and
