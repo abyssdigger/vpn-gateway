@@ -1022,3 +1022,26 @@ EFFECT_UNKNOWN with no send, and durable claims remain recovery-only.
 Checkpoint generation/digest do not enter effect/action/authority/wire or
 receipt identity. Other mutation families remain staged, not aggregate-safe.
 Trusted credential custody, remaining runtime and live/cutover gates apply.
+
+
+
+### Unit 8c-A — coherent prospective initial-OPEN acquisition
+
+acquire_aggregate_v2_for_initial_open validates the exact initial OPEN
+candidate through the accepted parser before any network read. Each of two
+whole passes uses one Reader and one row/byte budget in the following order:
+control comments, registered-task discovery and prospective registry check
+from that control snapshot, registered Issue resources/comments/events,
+projectholder comments, signal comments, prospective candidate Issue
+resource/comments/events. The candidate is returned only in extra_task,
+never inserted into the admitted task map.
+
+InitialOpenAggregateV2 is the closed five-part observation
+(control, tasks, holder_rows, signal_rows, extra_task). Both passes must be
+canonically equal. Already-admitted/alias candidates, inaccessible or invalid
+resources, drift in any normalized partition and exhausted shared bounds
+fail closed; no independently stabilized aggregate/candidate or legacy
+fallback is allowed. This is read-only bounded observation, not atomic remote
+snapshot, replay, proof, authority, checkpoint or actuator admission. 8c-B
+must perform the pure gate over this exact coherent object and retained
+composed frontier; actuator integration remains separate.

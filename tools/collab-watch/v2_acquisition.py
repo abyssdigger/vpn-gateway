@@ -239,3 +239,47 @@ def acquire_aggregate_v2(cfg, token=None, opener=None):
         return second
     except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
         raise Conflict("v2 aggregate acquisition failed: invalid, incomplete, unstable or inaccessible observation") from None
+
+
+
+class InitialOpenAggregateV2(NamedTuple):
+    """One coherent aggregate graph with a separate prospective task Issue."""
+    control: dict
+    tasks: dict
+    holder_rows: list
+    signal_rows: list
+    extra_task: dict
+
+
+def acquire_aggregate_v2_for_initial_open(cfg, actor, body, *, selected_role,
+                                          selected_incarnation, token=None, opener=None):
+    """Observe the entire aggregate plus prospective Issue twice.
+
+    One Reader and one shared budget per pass. No independently stabilized
+    subgraph, projection, state mutation, authority or atomic snapshot claim.
+    """
+    try:
+        validate_v2_config(cfg)
+        candidate = initial_open_candidate(cfg, actor, body, selected_role=selected_role,
+                                           selected_incarnation=selected_incarnation)
+        if opener is None:
+            opener = build_opener(NoRedirect())
+
+        def scan():
+            reader = Reader(cfg, token, opener)
+            control = {str(room): reader.comments(room) for room in cfg["journal_rooms"]}
+            refs = discover_tasks(cfg, control)
+            existing, _, _, _ = _control(cfg, control)
+            extra_ref = prospective_initial_registry(cfg, existing, candidate)
+            tasks = {key: reader.task(cfg, ref) for key, ref in refs.items()}
+            holder = reader.comments(cfg["projectholder"]["room"])
+            signals = reader.comments(cfg["signal_room"])
+            extra = reader.task(cfg, extra_ref)
+            return InitialOpenAggregateV2(control, tasks, holder, signals, extra)
+
+        first = scan()
+        second = scan()
+        require(canonical(first) == canonical(second), "initial OPEN aggregate observation changed")
+        return second
+    except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
+        raise Conflict("v2 initial OPEN aggregate acquisition failed: invalid, incomplete, unstable or already observed") from None
