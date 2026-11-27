@@ -1086,3 +1086,20 @@ covers retained-input validation through durable STARTED, exits before the
 single physical send, and any possible STARTED uncertainty remains
 reconciliation-only. Other mutation families and live/cutover/credential
 custody remain separate.
+
+
+### Unit 8d-A — retained task-state aggregate gate
+
+`gate_task_state_aggregate` accepts only material_comment (task key and
+body) or issue_close (close request) with the exact CompactAggregateV2
+and closed retained composed frontier. Frozen task history equals its
+task partition. Exact aggregate projection and derived task compact feed
+the accepted family preflight; recomputed proof and role/incarnation must
+match. No candidate journal event ID exists for these physical effects.
+
+The closed conditional result binds aggregate/task compact and inventory,
+prior/projected composed state, proof and operation/selection, without
+material/request prose or authority. Holder/signal churn may change
+aggregate identity without changing the task proof; task, opaque and aux
+inventory changes remain bound. No acquisition, persistence, clock,
+actuator, STARTED or send is performed.

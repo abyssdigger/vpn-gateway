@@ -6,9 +6,11 @@ from project_tasks import body_hash
 from split_journal import PROTOCOL as TASK_PROTOCOL
 from v2_aux import PROTOCOL as AUX_PROTOCOL
 from v2_acquisition import InitialOpenAggregateV2
-from v2_compact import (compact_aggregate_v2, derive_task_compact,
+from v2_compact import (CompactAggregateV2, compact_aggregate_v2, derive_task_compact,
                         project_compact_aggregate_v2)
-from v2_preflight import preflight_control_compact, preflight_initial_open_compact
+from v2_preflight import (preflight_control_compact, preflight_initial_open_compact,
+                          preflight_close_compact)
+from v2_material import preflight_material
 from v2_aux_preflight import preflight_aux_compact
 
 PROTOCOL = "vpng-collab-aggregate-candidate-gate/2"
@@ -117,3 +119,46 @@ def gate_initial_open_aggregate(cfg, coherent, actor, body, frozen_task_previous
                 "authority": NO_AUTHORITY}
     except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
         raise Conflict("initial OPEN aggregate candidate gate failed") from None
+
+
+def gate_task_state_aggregate(cfg, aggregate, operation, actor, frozen_task_previous,
+                              composed_previous, expected_proof_sha256, *,
+                              selected_role, selected_incarnation,
+                              task_key=None, body=None, request=None):
+    """Conditional task-state admission for physical material/close effects."""
+    try:
+        require(type(aggregate) is CompactAggregateV2, "exact aggregate compact required")
+        material = operation == "material_comment"
+        require(material or operation == "issue_close", "unsupported task-state operation")
+        require((type(task_key) is str and type(body) is str and request is None)
+                if material else (type(request) is dict and task_key is None and body is None),
+                "invalid task-state operation inputs")
+        _retained_shape(composed_previous)
+        require(canonical(frozen_task_previous) == canonical(composed_previous["task"]),
+                "frozen retained task frontier mismatch")
+        require(body_hash(expected_proof_sha256), "invalid expected proof SHA")
+        _, projected = project_compact_aggregate_v2(cfg, aggregate, composed_previous)
+        derived = derive_task_compact(cfg, aggregate)
+        selection = dict(selected_role=selected_role, selected_incarnation=selected_incarnation)
+        if material:
+            proof = preflight_material(cfg, derived, task_key, actor, body,
+                                       frozen_task_previous, **selection)
+        else:
+            proof = preflight_close_compact(cfg, derived, actor, request,
+                                            frozen_task_previous, **selection)
+        proof_sha = digest(canonical(proof))
+        require(proof_sha == expected_proof_sha256, "frozen task-state proof mismatch")
+        require(proof["operation"] == operation and proof["selected_role"] == selected_role
+                and proof["selected_incarnation"] == selected_incarnation,
+                "task-state selection mismatch")
+        return {"protocol": PROTOCOL, "operation": operation,
+                "aggregate_sha256": aggregate.sha256,
+                "aggregate_inventory_sha256": aggregate.inventory_sha256,
+                "prior_composed_state_sha256": digest(canonical(composed_previous)),
+                "projected_composed_state_sha256": digest(canonical(projected)),
+                "task_compact_sha256": derived.sha256,
+                "task_inventory_sha256": derived.inventory_sha256,
+                "proof_sha256": proof_sha, "selected_role": selected_role,
+                "selected_incarnation": selected_incarnation, "authority": NO_AUTHORITY}
+    except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
+        raise Conflict("task-state aggregate gate failed") from None
