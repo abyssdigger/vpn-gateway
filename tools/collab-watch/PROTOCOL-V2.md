@@ -389,3 +389,34 @@ It survives all later states and claimed-effect lookup. After VERIFIED it
 cannot be written. If a crash occurs before durable hint recording, recovery
 remains genuinely ambiguous; no retry is permitted. The staged schema is
 version 2; no migration of the earlier unaccepted staging schema is provided.
+
+
+## Unit 4b — staged single-attempt actuator
+
+The staged actuator composes the accepted v2 preflight, complete stable
+acquisition, persistent attempt ledger and canonical readback. Exact original
+inputs are detached as canonical bytes and retained through a separately
+provided durable input store; the generic attempt ledger receives only bounded
+identity metadata. The provider contract is not itself a production storage
+implementation. No CLI, live activation, new Issue creation or authority
+policy is added.
+
+A provisional PREPARED row for a strict operation cannot be started by the
+actuator. Fresh identical conditional preflight and deterministic immutable
+server-created chronology witness selection qualify an exact second PREPARED
+descriptor for the same stable effect. The witness binds room, physical row
+identity, created_at and row digest. Material uses the existing non-strict
+creation bound and needs no strict witness. A changed inventory/proof or absent
+witness fails closed before any send; a refresh before STARTED requires a new
+original proof. The witness is eligibility evidence, not a guarantee of the
+timestamp of the next write.
+
+Read and write credentials are separate. The actuator independently verifies
+the write actor through fixed /user GET, checks external exact-action runtime
+authority against a detached descriptor, then durably starts one attempt.
+The bounded fixed-target HTTP write is called only after STARTED. A response
+locator, if established, is persisted as a hint and must be independently
+verified. The canonical Unit-3 verifier is the only success parser. Any
+ambiguous send, failure or restart uses read-only remote reconciliation of
+the claimed effect and its original inputs; missing evidence never re-arms
+the effect. Store uncertainty after STARTED is explicitly not VERIFIED.

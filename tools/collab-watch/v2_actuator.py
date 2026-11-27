@@ -1,0 +1,342 @@
+"""Staged v2 single-attempt transport; no live activation or authority policy."""
+from __future__ import annotations
+
+import re
+from urllib.request import Request, build_opener
+
+from collab_watch import API, MAX_LOCAL_BYTES, MAX_PAGE_BYTES, TIMEOUT, NoRedirect
+from core import canonical, digest, positive, require, strict_json
+from journal import framed
+from project_tasks import body_hash, comment
+from split_journal import MARKER
+from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
+from v2_compact import CompactV2, compact_v2
+from v2_material import preflight_material, verify_material
+from v2_preflight import (preflight_control_compact, preflight_close_compact,
+                          preflight_initial_open_compact)
+from v2_reconcile import verify_control, verify_close, verify_initial_open
+
+OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close"}
+MAX_INPUT_BYTES = MAX_LOCAL_BYTES * 4
+FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
+          "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
+
+
+def freeze_inputs(operation, cfg, baseline, actor, *, selected_role, selected_incarnation,
+                  expected_proof_sha256, body=None, task_key=None, request=None,
+                  extra_task=None, previous=None):
+    """Detach original proof inputs for a separately durable, trusted input provider.
+
+    The returned bytes contain material, not just metadata. Never put these bytes
+    in the attempt ledger, logs, or authority descriptor.
+    """
+    require(isinstance(baseline, CompactV2), "invalid original baseline")
+    return canonical(dict(operation=operation, cfg=cfg, actor=actor, role=selected_role,
+                          incarnation=selected_incarnation, proof_sha256=expected_proof_sha256,
+                          baseline={"text": baseline.text, "sha256": baseline.sha256,
+                                    "inventory_sha256": baseline.inventory_sha256},
+                          body=body, task_key=task_key, request=request,
+                          extra_task=extra_task, previous=previous))
+
+
+def _selection(data):
+    return dict(selected_role=data["role"], selected_incarnation=data["incarnation"])
+
+
+def _proof(data, baseline, extra):
+    cfg, actor, previous = data["cfg"], data["actor"], data["previous"]
+    kind = data["operation"]
+    if kind == "material_comment":
+        return preflight_material(cfg, baseline, data["task_key"], actor, data["body"],
+                                  previous, **_selection(data))
+    if kind == "control_comment":
+        return preflight_control_compact(cfg, baseline, actor, data["body"],
+                                         previous, **_selection(data))
+    if kind == "initial_open":
+        return preflight_initial_open_compact(cfg, baseline, extra, actor, data["body"],
+                                              previous, **_selection(data))
+    return preflight_close_compact(cfg, baseline, actor, data["request"], previous,
+                                   **_selection(data))
+
+
+def _bound(original):
+    require(type(original) is str and len(original.encode("utf-8")) <= MAX_INPUT_BYTES,
+            "invalid retained inputs")
+    data = strict_json(original)
+    require(isinstance(data, dict) and set(data) == FIELDS and canonical(data) == original,
+            "invalid retained input fields")
+    kind = data["operation"]
+    require(kind in OPERATIONS, "unsupported action")
+    require((data["body"] is None) == (kind == "issue_close")
+            and (data["request"] is not None) == (kind == "issue_close")
+            and (data["task_key"] is not None) == (kind == "material_comment")
+            and (data["extra_task"] is not None) == (kind == "initial_open"),
+            "extraneous or missing operation input")
+    baseline = CompactV2(**data["baseline"])
+    proof = _proof(data, baseline, data["extra_task"])
+    require(body_hash(data["proof_sha256"]) and digest(canonical(proof)) == data["proof_sha256"],
+            "original proof mismatch")
+    cfg, actor = data["cfg"], data["actor"]
+    repository = cfg["repository"]
+    if kind in ("control_comment", "initial_open"):
+        candidate = proof["candidate"]
+        event = framed(data["body"], MARKER)
+        room = candidate["room"]
+        task = (proof["task"] if kind == "control_comment" else
+                dict(candidate["task_ref"], task=candidate["task"], revision=candidate["revision"]))
+        identity = {k: event[k] for k in ("event_id", "kind", "revision")}
+        identity.update({k: event[k] for k in ("attempt", "commit_sha") if k in event})
+        effect = {"operation": "control_comment", "repository": repository.lower(),
+                  "journal_epoch": cfg["journal_epoch"], "event_id": candidate["event_id"]}
+    else:
+        task = proof["task"]
+        room = task["issue_number"]
+        effect = {"operation": kind, "repository": repository.lower(), "issue_id": task["issue_id"]}
+        if kind == "material_comment":
+            effect.update(actor_id=actor, body_sha256=proof["body_sha256"])
+            identity = proof["header"]
+        else:
+            identity = {k: data["request"][k] for k in ("revision", "attempt", "commit_sha")}
+    method = "PATCH" if kind == "issue_close" else "POST"
+    target = f"repos/{repository}/issues/{room}" + ("/comments" if method == "POST" else "")
+    request = canonical({"state": "closed"} if method == "PATCH" else {"body": data["body"]})
+    require(len(request.encode("utf-8")) <= MAX_PAGE_BYTES, "mutation body bound")
+    action = {"operation": kind, "repository": repository, "target": target,
+              "room": room, "issue_number": task["issue_number"], "issue_id": task["issue_id"],
+              "task": task["task"], "method": method, "actor_id": actor,
+              "role": data["role"], "incarnation": data["incarnation"],
+              "journal_epoch": cfg["journal_epoch"], "candidate": identity,
+              "proof_sha256": data["proof_sha256"], "inputs_sha256": digest(original),
+              "request_sha256": digest(request)}
+    return data, baseline, proof, effect, action, request.encode("utf-8")
+
+
+def _witness(proof, baseline, extra):
+    """Deterministic eligibility from the already validated complete inventory.
+
+    Immutable physical comments (including opaque comments) and admitted lifecycle
+    events are conservative timestamp witnesses, not predictions of write time.
+    """
+    lower = proof["postcondition"].get("created_at_strictly_after")
+    if lower is None:
+        return {"kind": "not_applicable"}
+    wire = strict_json(baseline.text)
+    candidates = []
+
+    def add_rows(room, rows):
+        for row in rows:
+            _, cid, actor, created, updated, _ = row
+            if created == updated and created > lower:
+                candidates.append({"kind": "comment", "room": int(room), "comment_id": cid,
+                                   "created_at": created, "row_sha256": digest(canonical(row))})
+
+    for room, rows in wire["control"].items():
+        add_rows(room, rows)
+    for room, task in wire["tasks"].items():
+        add_rows(room, task["comments"])
+        for event in task["events"]:
+            if event["created_at"] > lower:
+                candidates.append({"kind": "lifecycle", "room": int(room), "event_id": event["id"],
+                                   "created_at": event["created_at"],
+                                   "row_sha256": digest(canonical(event))})
+    if extra is not None:
+        for raw in extra["comments"]:
+            row = comment(raw)
+            if row["created_at"] == row["updated_at"] and row["created_at"] > lower:
+                candidates.append({"kind": "extra_comment", "room": extra["number"],
+                                   "comment_id": row["id"], "created_at": row["created_at"],
+                                   "row_sha256": digest(canonical(row))})
+    return min(candidates, key=lambda x: (x["created_at"], x["room"], x["kind"],
+                                          x.get("comment_id", x.get("event_id")), x["row_sha256"])) if candidates else None
+
+
+def _fresh(data, read_token, read_opener, *, before):
+    if before and data["operation"] == "initial_open":
+        return acquire_v2_for_initial_open(data["cfg"], data["actor"], data["body"],
+                                            **_selection(data), token=read_token, opener=read_opener)
+    control, tasks = acquire_v2(data["cfg"], token=read_token, opener=read_opener)
+    return control, tasks, None
+
+
+def _write_headers(token):
+    require(type(token) is str and 0 < len(token) <= 4096
+            and re.fullmatch(r"[A-Za-z0-9._~+/-]+=*", token), "invalid write credential")
+    return {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "vpng-collab-actuator/2",
+            "Content-Type": "application/json"}
+
+
+def _http(opener, headers, url, method, request, expected_status):
+    # Exactly one call, no redirect following with the production opener.
+    with opener.open(Request(url, data=request, headers=headers, method=method),
+                     timeout=TIMEOUT) as response:
+        require(response.status == expected_status and response.geturl() == url,
+                "unexpected response status or URL")
+        raw = response.read(MAX_PAGE_BYTES + 1)
+        require(len(raw) <= MAX_PAGE_BYTES, "response byte bound")
+        length = response.headers.get("Content-Length")
+        require(length is None or length.isdecimal() and int(length) == len(raw),
+                "response length mismatch")
+        value = strict_json(raw.decode("utf-8"))
+        require(isinstance(value, dict), "response object required")
+        return value
+
+
+def _send(opener, headers, action, request):
+    """One physical mutation only. Any returned locator is an unverified hint."""
+    root = f"{API}/repos/{action['repository']}/issues/{action['room']}"
+    value = _http(opener, headers, API + "/" + action["target"], action["method"],
+                  request, 200 if action["method"] == "PATCH" else 201)
+    if action["method"] == "PATCH":
+        require(positive(value.get("id")) and value["id"] == action["issue_id"]
+                and positive(value.get("number")) and value["number"] == action["issue_number"]
+                and value.get("state") == "closed" and value.get("url", "").lower() == root.lower(),
+                "invalid close response")
+        # The Issue response has no immutable close-event ID.
+        return None
+    require(positive(value.get("id")) and isinstance(value.get("issue_url"), str)
+            and value["issue_url"].lower() == root.lower(), "invalid comment response locator")
+    # Bind the exact physical ref even if its body/actor subsequently fail readback.
+    return {"room": action["room"], "comment_id": value["id"]}
+
+
+def _receipt(data, baseline, control, tasks, hint):
+    cfg, actor, previous = data["cfg"], data["actor"], data["previous"]
+    kind = data["operation"]
+    common = _selection(data)
+    if kind == "material_comment":
+        receipt = verify_material(cfg, baseline, data["task_key"], actor, data["body"],
+                                  control, tasks, previous, **common,
+                                  expected_preflight_sha256=data["proof_sha256"],
+                                  expected_comment_id=None if hint is None else hint["comment_id"])
+        locator = {"room": receipt["issue"]["number"], "comment_id": receipt["material_ref"]["comment_id"]}
+    elif kind in ("control_comment", "initial_open"):
+        fn = verify_initial_open if kind == "initial_open" else verify_control
+        extra = [data["extra_task"]] if kind == "initial_open" else []
+        receipt = fn(cfg, baseline, *extra, actor, data["body"], control, tasks, previous,
+                     **common, expected_proof_sha256=data["proof_sha256"], expected_ref=hint)
+        locator = {"room": receipt["occurrence"]["room"], "physical_ref": receipt["occurrence"]["physical_ref"]}
+    else:
+        receipt = verify_close(cfg, baseline, actor, data["request"], control, tasks, previous,
+                               **common, expected_proof_sha256=data["proof_sha256"])
+        locator = {"room": receipt["issue"]["number"], "issue_id": receipt["issue"]["id"],
+                   "event_id": receipt["close_event"]["id"]}
+    return digest(canonical(receipt)), locator
+
+
+def _result(state, code, key=None):
+    return {"state": state, "code": code, "action_key": key}
+
+
+def _verified(row):
+    return dict(_result("VERIFIED", "CANONICAL_RECEIPT_RECORDED", row["action_key"]),
+                receipt_sha256=row["receipt_sha256"], locator=row["locator"])
+
+
+def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
+    """Read-only remote recovery. Never calls _send or store.start."""
+    key = row["action_key"]
+    if row["state"] == "VERIFIED":
+        return _verified(row)
+    try:
+        original = retention.load(key)
+        data, baseline, proof, effect, action, _ = _bound(original)
+        witness = _witness(proof, baseline, data["extra_task"])
+        require(witness is not None and dict(action, witness=witness) == row["action_descriptor"]
+                and effect == row["effect_descriptor"], "retained action mismatch")
+        hint = row["response_hint"]
+        if hint is not None:
+            require(set(hint) == {"room", "comment_id"} and hint["room"] == action["room"]
+                    and positive(hint["comment_id"]) and action["method"] == "POST", "hint binding mismatch")
+        control, tasks, _ = _fresh(data, read_token, read_opener, before=False)
+        receipt, locator = _receipt(data, baseline, control, tasks, hint)
+    except Exception:
+        if not persist:
+            return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
+        try:
+            if row["state"] == "STARTED":
+                store.mark_unresolved(key, "READBACK_UNRESOLVED")
+            return _result("UNRESOLVED", "READBACK_UNRESOLVED", key)
+        except Exception:
+            return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
+    if not persist:
+        return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
+    try:
+        return _verified(store.mark_verified(key, receipt, locator))
+    except Exception:
+        return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
+
+
+def actuate(store, original, retention, authorize, *, read_token=None, write_token=None,
+            read_opener=None, write_opener=None, reconcile_only=False):
+    """Compose accepted preflight, acquisition, durable attempt and readback.
+
+    retention.save(key, original) must durably persist immutable exact inputs;
+    retention.load(key) returns those inputs. A test memory provider is not a
+    production durable backend. The caller owns real runtime authority.
+    """
+    key = None
+    try:
+        data, baseline, proof, effect, action, request = _bound(original)
+        claimed = store.claimed(effect)
+        if claimed is not None:
+            return _reconcile(store, claimed, retention, read_token, read_opener)
+        if reconcile_only:
+            return _result("NO_ATTEMPT", "NO_CLAIMED_EFFECT")
+        provisional = {"kind": "not_applicable"} if data["operation"] == "material_comment" else {"kind": "pending"}
+        key = store.prepare(dict(action, witness=provisional), effect)["action_key"]
+    except Exception:
+        return _result("NO_ATTEMPT", "INPUT_OR_STORE_UNAVAILABLE", key)
+    try:
+        control, tasks, extra = _fresh(data, read_token, read_opener, before=True)
+        fresh = compact_v2(data["cfg"], control, tasks, data["previous"])
+        require(digest(canonical(_proof(data, fresh, extra))) == data["proof_sha256"],
+                "fresh preflight mismatch")
+        witness = _witness(proof, fresh, extra)
+        if witness is None:
+            return _result("PREPARED", "CHRONOLOGY_INELIGIBLE", key)
+        # Identical full proof => identical original inventory; the witness
+        # must be independently reconstructible during recovery.
+        require(witness == _witness(proof, baseline, data["extra_task"]), "witness binding mismatch")
+        exact = dict(action, witness=witness)
+        key = store.prepare(exact, effect)["action_key"]
+        retention.save(key, original)
+        require(retention.load(key) == original, "durable input provider mismatch")
+    except Exception:
+        return _result("PREPARED", "FRESH_PROOF_OR_INPUT_RETENTION_FAILED", key)
+    try:
+        headers = _write_headers(write_token)
+        opener = write_opener if write_opener is not None else build_opener(NoRedirect())
+        actor = _http(opener, headers, API + "/user", "GET", None, 200)
+        require(positive(actor.get("id")) and actor["id"] == action["actor_id"], "write actor mismatch")
+    except Exception:
+        return _result("PREPARED", "WRITE_ACTOR_UNVERIFIED", key)
+    try:
+        descriptor = strict_json(canonical(exact))
+        require(authorize(descriptor) is True and canonical(descriptor) == canonical(exact),
+                "exact runtime authority denied or descriptor changed")
+    except Exception:
+        return _result("PREPARED", "AUTHORITY_DENIED", key)
+    try:
+        started = store.start(key)  # Durable before any external write.
+    except Exception:
+        try:
+            claimed = store.claimed(effect)
+            if claimed is not None:
+                return _reconcile(store, claimed, retention, read_token, read_opener)
+        except Exception:
+            pass
+        return _result("EFFECT_UNKNOWN", "START_NOT_CONFIRMED", key)
+    # No path from this point returns to send eligibility.
+    try:
+        hint = _send(opener, headers, action, request)
+    except Exception:
+        hint = None
+    if hint is not None:
+        try:
+            started = store.record_response_hint(key, hint)
+        except Exception:
+            # Read back, but do not claim VERIFIED after a store failure.
+            return _reconcile(store, dict(started, response_hint=hint), retention,
+                              read_token, read_opener, persist=False)
+    return _reconcile(store, started, retention, read_token, read_opener)
