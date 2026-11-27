@@ -106,6 +106,16 @@ A binding change that also changes role/incarnation data declared immutable by t
 collaboration protocol requires the normal reviewed journal-epoch/config migration. Editing the
 root binding file alone cannot rewrite an existing epoch.
 
+Each role-attributed worker response or comment must have exactly one selected transport
+role/incarnation established by the identity gate. Do not sign or label a response with a
+combined role such as `GUARD/SPEC` or `SPEC/GUARD`. Additional process responsibilities may
+be named in the prose without changing the singular transport-role attribution. In the current
+v1 pilot, SPEC work performed by GPT-5.6 Sol remains attributed to the selected GUARD pair.
+Switching to another active transport role requires explicit role selection and a fresh identity
+binding gate before emitting a response under that role. A specification or clarification is
+not a GUARD verdict; role attribution alone establishes neither authority nor independent
+acceptance.
+
 ## 2. Activation and authority
 
 Do not reply anything in chat.
