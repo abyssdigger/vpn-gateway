@@ -41,6 +41,7 @@ A current executable reference unit without a normal requirement path may appear
 - `design/NG3/code/python/rou/availability_confirmation.py`
 - `design/NG3/code/python/rou/availability_manager.py`
 - `design/NG3/code/python/rou/availability_routing_state.py`
+- `design/NG3/code/python/rou/confirmed_current_use.py`
 
 ## Trace: `A.004`, `A.007`, `C.001`, `C.003`, `D.002`
 
