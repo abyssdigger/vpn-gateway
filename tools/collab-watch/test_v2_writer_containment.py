@@ -191,6 +191,75 @@ class GateIntegrationTests(unittest.TestCase):
                     os.close(r)
                     if w>=0: os.close(w)
 
+    def test_parent_placement_gate_and_rejected_release_cleanup(self):
+        # Real fork, seqpacket, pidfd and reap; generation/control writes and
+        # cgroup membership are explicitly simulated. Never a positive cgroup proof.
+        # -S avoids startup hooks that can create threads in the test owner.
+        code = r"""
+import os, socket
+from unittest.mock import patch
+import v2_writer_containment as m
+import v2_containment_gate as gate
+owner=os.getpid()
+for case in ('parent-reject','eof','invalid','timeout'):
+    calls=[]; sends=[]
+    class FakeGeneration:
+        def __init__(self,*args):
+            self.fd=os.open('/dev/null',os.O_RDONLY|os.O_CLOEXEC)
+            self.identity=m.Pin(1,2,3); self.removed=False; self.quarantined=False
+        def open_placement(self): return os.open('/dev/null',os.O_WRONLY|os.O_CLOEXEC)
+        def _verify(self): calls.append('verify')
+        def kill_owned(self): calls.append('exact-kill')
+        def remove_empty(self,reaper):
+            reaper.verify_drained(self.identity)
+            assert len(reaper.reaped)==1
+            calls.append('reap-and-remove'); self.removed=True; os.close(self.fd)
+        def close_handles(self): calls.append('close'); os.close(self.fd)
+        def empty(self): raise AssertionError('unexpected positive probe')
+    def member(gen,pid,pidfd):
+        if case=='parent-reject' and pid!=os.getpid():
+            raise m.Unavailable('independent parent membership rejected')
+    original_send=socket.socket.send
+    def send(self,data,*args,**kwargs):
+        if os.getpid()==owner: sends.append(data)
+        return original_send(self,data,*args,**kwargs)
+    with patch.object(m,'Generation',FakeGeneration),patch.object(m,'exact_membership',member),patch.object(m,'preflight'),patch.object(m,'verify_empty_root'),patch.object(m.os,'geteuid',return_value=0),patch.object(socket.socket,'send',send),patch.object(gate,'drop_probe_privileges',side_effect=AssertionError('unexpected release')):
+        if case=='parent-reject':
+            try: m.run_generation(-1,m.Pin(1,2,3),frozenset({'cpu'}))
+            except m.Unavailable as exc: assert str(exc)=='independent parent membership rejected',str(exc)
+            else: raise AssertionError('invalid release')
+        else:
+            row=m.run_generation(-1,m.Pin(1,2,3),frozenset({'cpu'}),case=case)
+            assert row['case']==case and row['reaped']==1 and row['removed'] is True
+            assert row['probe_report_verified'] is False
+            assert row['reap_statuses']==[[os.CLD_EXITED,43]]
+    assert sends==([b'INVALID'] if case=='invalid' else []),sends
+    assert calls==(['verify'] if case=='parent-reject' else ['verify','verify'])+['exact-kill','reap-and-remove'],calls
+    try: os.waitid(os.P_ALL,0,os.WEXITED|os.WNOHANG|os.WNOWAIT)
+    except ChildProcessError: pass
+    else: raise AssertionError('leaked child')
+"""
+        result=subprocess.run([sys.executable,'-S','-c',code],capture_output=True,text=True,timeout=15)
+        self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_multithreaded_owner_rejects_before_generation(self):
+        import threading
+        from v2_writer_containment import run_generation
+        ready, done = threading.Event(), threading.Event()
+        def worker():
+            ready.set(); done.wait(3)
+        thread=threading.Thread(target=worker)
+        thread.start()
+        try:
+            self.assertTrue(ready.wait(1))
+            with patch('v2_writer_containment.os.geteuid',return_value=0),patch('v2_writer_containment.Generation') as create:
+                with self.assertRaisesRegex(Unavailable,'invalid trusted test owner'):
+                    run_generation(-1,Pin(1,2,3),REQUIRED)
+                create.assert_not_called()
+        finally:
+            done.set(); thread.join(2)
+        self.assertFalse(thread.is_alive())
+
     def test_generation_run_actual_readonly_rejects_before_fork(self):
         from v2_writer_containment import run_generation
         if os.geteuid()!=0: self.skipTest('requires root to reach preflight')
