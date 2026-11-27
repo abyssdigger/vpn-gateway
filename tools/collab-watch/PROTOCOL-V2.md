@@ -564,3 +564,42 @@ The marker is cooperative immutable-by-contract, not proof of unobserved
 GitHub edit history. No distributed atomicity, hostile rollback protection,
 external racing creator guarantee, live activation, CLI, epoch cutover or
 main publication is established.
+
+
+## Unit 5a — pure auxiliary projection
+
+The auxiliary family uses the exact marker `<!-- vpng-collab-aux/2 -->`
+and protocol `vpng-collab-aux/2`, followed by the existing strict JSON frame.
+Only HANDLED, PING and PONG are admitted. Common fields are protocol, epoch
+(journal_epoch), event_id, kind, room, from, to and incarnation. HANDLED adds
+only handled (1–100 unique physical receipt targets); PING adds only ping_id
+(equal to event_id); PONG adds only ping_id, ping_ref and ping_sha256.
+No payload, task lifecycle, authority or client-clock fields are admitted.
+Sender actor/incarnation, exact configured physical room, recipient and
+reserved namespaces are checked. Logical IDs are disjoint from task and
+holder IDs. Identical logical duplicates retain distinct physical facts.
+
+`project_aux` invokes the accepted `project_v2` with the same complete
+control observation, without filtering or modifying the task result/state.
+It admits exact configured holder rows, classifies via the closed registry,
+and exposes independent role mailboxes. A holder command is only classified
+and routed, never executed or evaluated for authority. The auxiliary ledger
+binds full normalized physical holder/aux rows (including timestamps, actor
+and body); aux rows must be unedited. Retained replay rejects changed/missing
+rows and config changes. The semantic config identity excludes signal room;
+task and aux retained state are separate typed components.
+
+HANDLED is self-addressed and resolves exact logical ID, physical ref, raw
+body digest and recipient across holder, task and aux facts; HANDLED is
+never a receipt target. Only holder mailbox readiness is cleared. PONG
+reverses the exact referenced physical PING in the same room, with matching
+digest and logical ID. The health projection is per physical PING occurrence,
+not an elapsed timer, inferred liveness, or scheduling policy.
+
+Existing signal/1 wire resolves only task and aux facts other than HANDLED.
+Signal observation, quarantine and GC-candidate evidence remain noncanonical;
+only exact recipient receipts authorize eligibility evidence, never deletion.
+Signal disappearance or rotation does not alter the canonical ledger.
+Task projection/roles, holder mailbox, delivery, health, signal diagnostics
+and GC are separately visible. No acquisition, actuator, CLI, command execution,
+live activation, epoch migration, or main publication is introduced.
