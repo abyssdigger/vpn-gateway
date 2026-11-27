@@ -1066,3 +1066,23 @@ Exact observation type prevents accidental split-API composition but does
 not authenticate provenance or establish remote atomicity. The trusted
 caller must supply the real coherent observation. No acquisition, storage,
 timer, actuator, STARTED, send, or live activation is performed.
+
+
+### Unit 8c-C — initial-OPEN aggregate-safe new send
+
+New initial OPEN effects use the same owner -> attempt -> checkpoint
+lock order as canonical control sends. The retained frontier is task-scoped;
+the original CompactV2 + extra_task input, canonical control effect namespace
+and stable action/request/receipt identities are unchanged. Claimed effects
+remain reconciliation-only before any checkpoint or fresh eligibility checks.
+
+The frozen chronology witness and durable original precede actor/authority.
+A single final coherent prospective acquisition supplies the accepted 8c-B
+gate. Local compaction/derivation from that same graph verifies aggregate/task
+digests and reconstructs the exact final witness with its extra_task. There is
+no task-only or separately stabilized candidate pre-send scan. Checkpoint
+generation/digest are runtime freshness, never action identity. The fence
+covers retained-input validation through durable STARTED, exits before the
+single physical send, and any possible STARTED uncertainty remains
+reconciliation-only. Other mutation families and live/cutover/credential
+custody remain separate.

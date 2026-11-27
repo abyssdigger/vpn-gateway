@@ -12,12 +12,13 @@ from core import canonical, digest, positive, require, strict_json
 from journal import framed
 from project_tasks import body_hash, comment
 from split_journal import MARKER
-from v2_acquisition import acquire_v2, acquire_v2_for_initial_open, acquire_aggregate_v2
+from v2_acquisition import (acquire_v2, acquire_v2_for_initial_open, acquire_aggregate_v2,
+                            acquire_aggregate_v2_for_initial_open)
 from v2_attempts import AttemptStore
 from v2_inputs import InputStore, MAX_INPUT_BYTES
 from v2_compact import (CompactV2, compact_v2, CompactAggregateV2, compact_aggregate_v2,
                         derive_task_compact)
-from v2_aggregate_gate import gate_aggregate_candidate
+from v2_aggregate_gate import gate_aggregate_candidate, gate_initial_open_aggregate
 from v2_runtime_state import RuntimeStateStore
 from v2_aux_preflight import preflight_aux_compact, preflight_signal_compact
 from v2_aux_reconcile import verify_aux, verify_signal
@@ -28,7 +29,7 @@ from v2_preflight import (preflight_control_compact, preflight_close_compact,
 from v2_reconcile import verify_control, verify_close, verify_initial_open
 
 AUX_OPERATIONS = {"aux_comment", "signal_comment"}
-AGGREGATE_CONTROL_OPERATIONS = {"control_comment", "aux_comment"}
+AGGREGATE_CONTROL_OPERATIONS = {"control_comment", "aux_comment", "initial_open"}
 OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close", "issue_create"} | AUX_OPERATIONS
 FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
           "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
@@ -423,7 +424,7 @@ def _checkpoint_for_control(data, runtime_state):
     checkpoint = runtime_state.load()
     require(checkpoint is not None, "retained checkpoint required")
     state = checkpoint["state"]
-    prior = state["task"] if data["operation"] == "control_comment" else state
+    prior = state["task"] if data["operation"] in ("control_comment", "initial_open") else state
     require(canonical(prior) == canonical(data["previous"]), "frozen checkpoint frontier mismatch")
     require(digest(canonical(state)) == checkpoint["state_sha256"], "checkpoint digest mismatch")
     return checkpoint
@@ -432,18 +433,38 @@ def _checkpoint_for_control(data, runtime_state):
 def _admit_control(data, proof, witness, checkpoint, read_token, read_opener):
     cfg = data["cfg"]
     previous = checkpoint["state"]
-    graph = acquire_aggregate_v2(cfg, token=read_token, opener=read_opener)
-    aggregate = compact_aggregate_v2(cfg, *graph, previous)
-    gate = gate_aggregate_candidate(cfg, aggregate, data["operation"], data["actor"],
-                                    data["body"], data["previous"], previous,
-                                    data["proof_sha256"], **_selection(data))
+    kind = data["operation"]
+    extra = None
+    if kind == "initial_open":
+        coherent = acquire_aggregate_v2_for_initial_open(
+            cfg, data["actor"], data["body"], **_selection(data),
+            token=read_token, opener=read_opener)
+        gate = gate_initial_open_aggregate(
+            cfg, coherent, data["actor"], data["body"], data["previous"], previous,
+            data["proof_sha256"], **_selection(data))
+        # Reconstruct the witness locally from exactly the same observation.
+        # No separate task/candidate scan or second network acquisition.
+        aggregate = compact_aggregate_v2(cfg, coherent.control, coherent.tasks,
+                                         coherent.holder_rows, coherent.signal_rows, previous)
+        extra = coherent.extra_task
+        require(gate["extra_observation_sha256"] == proof["extra_observation_sha256"],
+                "extra observation binding mismatch")
+    else:
+        graph = acquire_aggregate_v2(cfg, token=read_token, opener=read_opener)
+        aggregate = compact_aggregate_v2(cfg, *graph, previous)
+        gate = gate_aggregate_candidate(cfg, aggregate, kind, data["actor"],
+                                        data["body"], data["previous"], previous,
+                                        data["proof_sha256"], **_selection(data))
     require(gate["prior_composed_state_sha256"] == checkpoint["state_sha256"]
-            and gate["proof_sha256"] == data["proof_sha256"], "aggregate gate binding mismatch")
-    if data["operation"] == "control_comment":
+            and gate["proof_sha256"] == data["proof_sha256"]
+            and gate["aggregate_sha256"] == aggregate.sha256
+            and gate["aggregate_inventory_sha256"] == aggregate.inventory_sha256,
+            "aggregate gate binding mismatch")
+    if kind in ("control_comment", "initial_open"):
         task = derive_task_compact(cfg, aggregate)
         require(task.sha256 == gate["task_compact_sha256"]
                 and task.inventory_sha256 == gate["task_inventory_sha256"]
-                and _witness(proof, task, None) == witness, "aggregate witness mismatch")
+                and _witness(proof, task, extra) == witness, "aggregate witness mismatch")
 
 
 def actuate(store, original, retention, authorize, *, read_token=None, write_token=None,

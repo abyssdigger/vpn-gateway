@@ -110,6 +110,24 @@ def task_control_fixture(test, rows, task, candidate):
     return original, remote
 
 
+def initial_open_fixture(test, rows, task, extra, out):
+    tasks = {"42": task}
+    previous = project_aux(CFG, {"34": rows}, tasks, [], [])[1]
+    baseline = compact_v2(CFG, {"34": rows}, tasks, previous["task"])
+    proof = preflight_initial_open_compact(CFG, baseline, extra, 13, out["body"],
+                                            previous["task"], **SPEC)
+    original = freeze_inputs("initial_open", CFG, baseline, 13, **SPEC,
+                             expected_proof_sha256=digest(canonical(proof)),
+                             body=out["body"], extra_task=extra, previous=previous["task"])
+    before, after = snapshots(rows, [task, extra]), snapshots(rows+[out], [task, extra])
+    for graph in (before, after):
+        graph["/issues/35/comments"] = []
+        graph["/issues/37/comments"] = []
+    remote = Remote(before, after, 13, dict(out, issue_url=ROOT+"/issues/34"))
+    attach_checkpoint(test, remote, previous)
+    return original, remote
+
+
 class ActuatorTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -159,13 +177,7 @@ class ActuatorTests(unittest.TestCase):
         rows, task = fixture()
         extra = issue(43, 4003)
         out = opening(extra, task="O2", mid="o2", cid=200, second=20)
-        baseline = compact_v2(CFG, {"34": rows}, {"42": task})
-        proof = preflight_initial_open_compact(CFG, baseline, extra, 13, out["body"], **SPEC)
-        original = freeze_inputs("initial_open", CFG, baseline, 13, **SPEC,
-                                 expected_proof_sha256=digest(canonical(proof)), body=out["body"], extra_task=extra)
-        remote = Remote(snapshots(rows, [task, extra]), snapshots(rows+[out], [task, extra]), 13,
-                        dict(out, issue_url=ROOT+"/issues/34"))
-        return original, remote
+        return initial_open_fixture(self, rows, task, extra, out)
 
     def creation_case(self, request=REQ):
         rows, task = fixture()
@@ -362,13 +374,7 @@ class ActuatorTests(unittest.TestCase):
         extra = issue(created["number"],created["id"],created["body"])
         extra["created_at"] = created["created_at"]
         out = opening(extra,task="O2",mid="o2",cid=200,second=20)
-        baseline = compact_v2(CFG,{"34":rows},{"42":task})
-        proof = preflight_initial_open_compact(CFG,baseline,extra,13,out["body"],**SPEC)
-        original_open = freeze_inputs("initial_open",CFG,baseline,13,**SPEC,
-                                      expected_proof_sha256=digest(canonical(proof)),
-                                      body=out["body"],extra_task=extra)
-        op = Remote(snapshots(rows,[task,extra]),snapshots(rows+[out],[task,extra]),13,
-                    dict(out,issue_url=ROOT+"/issues/34"))
+        original_open, op = initial_open_fixture(self, rows, task, extra, out)
         registered = self.run_case(original_open,op)
         self.assertEqual(registered["state"],"VERIFIED",registered)
         self.assertNotEqual(registered["action_key"],result["action_key"])
