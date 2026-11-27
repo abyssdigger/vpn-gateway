@@ -242,6 +242,45 @@ for case in ('parent-reject','eof','invalid','timeout'):
         result=subprocess.run([sys.executable,'-S','-c',code],capture_output=True,text=True,timeout=15)
         self.assertEqual(result.returncode,0,result.stderr)
 
+    def test_reap_known_child_when_generation_cleanup_rejected(self):
+        # Actual direct child/reap; no cgroup writes, no privileged exec.
+        code = r"""
+import os
+from unittest.mock import patch
+import v2_writer_containment as m
+import v2_containment_gate as gate
+children=[]; calls=[]; gens=[]
+class FakeGeneration:
+    def __init__(self,*args):
+        self.fd=os.open('/dev/null',os.O_RDONLY|os.O_CLOEXEC)
+        self.identity=m.Pin(1,2,3); self.removed=False; self.quarantined=False
+        gens.append(self)
+    def open_placement(self): return os.open('/dev/null',os.O_WRONLY|os.O_CLOEXEC)
+    def _verify(self): pass
+    def kill_owned(self): calls.append('kill-rejected'); raise m.Unavailable('custody lost')
+    def remove_empty(self,reaper): raise AssertionError('unsafe removal')
+    def close_handles(self): calls.append('close'); os.close(self.fd)
+def member(gen,pid,pidfd):
+    if pid!=os.getpid():
+        children.append(pid); raise m.Unavailable('parent rejected')
+with patch.object(m,'Generation',FakeGeneration),patch.object(m,'exact_membership',member),patch.object(m.os,'geteuid',return_value=0),patch.object(gate,'drop_probe_privileges',side_effect=AssertionError('unexpected release')):
+    try: m.run_generation(-1,m.Pin(1,2,3),frozenset({'cpu'}))
+    except m.Unavailable as exc: assert str(exc)=='custody lost',str(exc)
+    else: raise AssertionError('cleanup unexpectedly succeeded')
+assert len(gens)==1 and gens[0].quarantined and not gens[0].removed
+assert calls==['kill-rejected','close'],calls
+try: os.waitid(os.P_ALL,0,os.WEXITED|os.WNOHANG|os.WNOWAIT)
+except ChildProcessError: pass
+else:
+    # Test teardown only: known direct child, no numeric PID signal.
+    for pid in children:
+        try: os.waitpid(pid,0)
+        except ChildProcessError: pass
+    raise AssertionError('known child was not reaped after rejected cleanup')
+"""
+        result=subprocess.run([sys.executable,'-S','-c',code],capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_multithreaded_owner_rejects_before_generation(self):
         import threading
         from v2_writer_containment import run_generation

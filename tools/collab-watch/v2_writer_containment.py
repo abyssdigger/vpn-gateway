@@ -522,16 +522,21 @@ def run_generation(root_fd, expected, required, *, case="release"):
         for fd in (placement,report_w,nullfd,descendant_fd):
             if fd is not None and fd>=0: os.close(fd)
         try:
-            if launched and reaper.pidfd is None:
-                raise Unavailable('child identity not established; quarantine')
-            if launched and not placed:
-                # May still be outside the generation, but only its pidfd is
-                # eligible for signalling. No numerical PID fallback.
-                try: signal.pidfd_send_signal(reaper.pidfd,signal.SIGKILL)
-                except ProcessLookupError: pass
-            gen.kill_owned()
-            if launched:
-                reaper.drain(time.monotonic()+3)
+            try:
+                if launched and reaper.pidfd is None:
+                    raise Unavailable('child identity not established; quarantine')
+                if launched and not placed:
+                    # May still be outside the generation, but only its pidfd is
+                    # eligible for signalling. No numerical PID fallback.
+                    try: signal.pidfd_send_signal(reaper.pidfd,signal.SIGKILL)
+                    except ProcessLookupError: pass
+                gen.kill_owned()
+            finally:
+                # Reap independently of cgroup cleanup success. If either
+                # operation fails, the outer quarantine path still runs;
+                # no removal or broader kill is enabled by this attempt.
+                if launched and reaper.pidfd is not None:
+                    reaper.drain(time.monotonic()+3)
             if not launched or not reaper.drained:
                 raise Unavailable('cleanup not proven; quarantine')
             if outcome=='released':
