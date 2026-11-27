@@ -34,6 +34,25 @@ def project_scheduler(cfg, observation, previous, bindings, runtime_model, *, se
         if role == event["from"]:
             outgoing.append(entry)
 
+    # The accepted projection already identifies semantic senders and physical
+    # occurrences. Do not parse rows or use actor identity as a role proxy.
+    peer_inventory = {peer: [] for peer in sorted(cfg["roles"]) if peer != role}
+    for facts in (projection["task"]["facts"], aux):
+        for fact in facts.values():
+            event = fact["event"]
+            peer = event["from"]
+            if peer != role:
+                peer_inventory[peer].append({
+                    "physical_ref": fact["physical_ref"],
+                    "event_id": event["event_id"],
+                    "kind": event["kind"],
+                    "sender": peer,
+                    "to": list(event["to"]),
+                    "body_sha256": fact["body_sha256"],
+                })
+    for entries in peer_inventory.values():
+        entries.sort(key=lambda entry: entry["physical_ref"])
+
     signal_status = projection["signal_status"]
     valid = signal_status["valid"]
     addressed = [item for item in valid if item["recipient"] == role]
@@ -46,6 +65,7 @@ def project_scheduler(cfg, observation, previous, bindings, runtime_model, *, se
             "holder_inputs": {ref: projection["holder_inputs"][ref] for ref in mailbox},
         },
         "health": {"incoming": incoming, "outgoing": outgoing},
+        "peer_journal_inventory": peer_inventory,
         "signal_diagnostics": {
             "incoming": addressed,
             "unconsumed": [ref for ref in signal_status["unconsumed"] if ref in relevant_refs],

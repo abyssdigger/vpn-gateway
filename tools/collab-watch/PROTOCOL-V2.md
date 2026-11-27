@@ -867,3 +867,24 @@ Retained mode does not prove historical continuity beyond externally
 pinned checkpoint trust. Results exclude raw checkpoint bytes/credentials.
 Holder commands remain data. No remote writes, actuator, owner change,
 command execution, model invocation, timer, CLI, daemon or activation.
+
+
+## Unit 7c-A — admitted peer journal inventory
+
+The selected-role view includes `peer_journal_inventory`, keyed by every
+configured transport role except the selected role (including empty buckets).
+Each bucket contains admitted physical task and auxiliary journal occurrences
+from the single composed projection, sorted lexically by physical_ref. Each row
+has exactly physical_ref, event_id, kind, sender, to (the admitted recipient
+list), and body_sha256. Distinct physical occurrences of the same logical event
+remain distinct. The role is the admitted event sender, not its GitHub actor.
+
+The inventory includes every admitted kind, including HANDLED/PING/PONG, but
+never SIGNAL, holder inputs, task material/prose, raw body, actor ID, or remote
+timestamps. It is observation evidence only and changes neither work/health
+semantics nor canonical retained state. Physical duplicate evidence can change
+the integrity ledger without adding a semantic obligation.
+
+No delta baseline, elapsed clock, timer, pending-PING adoption, health intent,
+authority evaluation, network access, persistence or mutation is introduced.
+Those runtime policies remain separate from this pure view extension.

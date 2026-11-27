@@ -3,8 +3,8 @@ import copy
 import unittest
 from unittest.mock import patch
 
-from core import Conflict
-from test_project_tasks import row
+from core import Conflict, digest
+from test_project_tasks import row, ts
 from test_split_journal import CFG, fixture
 from test_v2_aux import aux, handled, pong, signal, target
 from v2_aux import project_aux
@@ -117,6 +117,7 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(new_state, state)
         self.assertEqual(rotated["work"], builder["work"])
         self.assertEqual(rotated["health"], builder["health"])
+        self.assertEqual(rotated["peer_journal_inventory"], builder["peer_journal_inventory"])
         self.assertFalse(rotated["gc_evidence"])
         self.assertFalse(rotated["signal_diagnostics"]["incoming"])
         self.assertEqual(obs, self.obs(extra, [self.s]))  # no deletion
@@ -161,7 +162,76 @@ class SchedulerTests(unittest.TestCase):
     def test_empty_work_not_stop_and_no_invented_fields(self):
         view, _ = self.run_view("SPEC", self.obs(holders=[]))
         self.assertEqual(set(view), {"identity", "work", "health", "signal_diagnostics",
-                                     "gc_evidence", "authority", "global_transport_diagnostics"})
+                                     "gc_evidence", "authority", "global_transport_diagnostics",
+                                     "peer_journal_inventory"})
         self.assertEqual(set(view["work"]), {"task", "holder_mailbox", "holder_inputs"})
         self.assertFalse(view["work"]["holder_mailbox"])
         self.assertEqual(view["work"]["task"]["state"], "WAITING")
+
+    def test_peer_inventory_exact_task_and_aux_occurrences(self):
+        receipt = handled("h", 310, "BUILDER", target("o", self.rows[0]))
+        extra = [self.p, self.q, receipt]
+        expected = {
+            "SPEC": [(self.rows[0], "o", "OPEN", ["BUILDER"])],
+            "BUILDER": [(self.rows[1], "r1", "RESULT", ["GUARD"]),
+                        (self.q, "q", "PONG", ["GUARD"]),
+                        (receipt, "h", "HANDLED", ["BUILDER"])],
+            "GUARD": [(self.rows[2], "v1", "REVIEW", ["BUILDER"]),
+                      (self.p, "p", "PING", ["BUILDER"])],
+        }
+        obs = self.obs(extra, [self.s])
+        for role in expected:
+            view, state = self.run_view(role, obs)
+            want = {peer: [
+                {"physical_ref": "issue:34#issuecomment-" + str(raw["id"]),
+                 "event_id": mid, "kind": kind, "sender": peer,
+                 "to": recipients, "body_sha256": digest(raw["body"])}
+                for raw, mid, kind, recipients in items]
+                for peer, items in expected.items() if peer != role}
+            self.assertEqual(view["peer_journal_inventory"], want)
+            self.assertEqual(state, project_aux(self.cfg, *obs)[1])
+            no_signal = self.run_view(role, self.obs(extra))[0]
+            no_holder = self.run_view(role, self.obs(extra, holders=[]))[0]
+            self.assertEqual(no_signal["peer_journal_inventory"], want)
+            self.assertEqual(no_holder["peer_journal_inventory"], want)
+            reverse = ({"34": list(reversed(self.rows + extra))}, self.tasks,
+                       list(reversed(self.holders)), [self.s])
+            self.assertEqual(self.run_view(role, reverse)[0]["peer_journal_inventory"], want)
+
+    def test_peer_inventory_physical_retry_is_not_work(self):
+        duplicate = dict(self.rows[2], id=109, created_at=ts(10), updated_at=ts(10))
+        base, _ = self.run_view("BUILDER")
+        obs = self.obs([duplicate])
+        view, state = self.run_view("BUILDER", obs)
+        self.assertEqual(base["work"], view["work"])
+        self.assertEqual(base["health"], view["health"])
+        self.assertEqual(state, project_aux(self.cfg, *obs)[1])
+        old = base["peer_journal_inventory"]["GUARD"][0]
+        self.assertEqual(view["peer_journal_inventory"]["GUARD"],
+                         [old, dict(old, physical_ref="issue:34#issuecomment-109")])
+
+    def test_peer_inventory_shared_actor_does_not_merge_roles(self):
+        cfg = copy.deepcopy(self.cfg)
+        for role in cfg["roles"]:
+            cfg["roles"][role]["actor_id"] = 10
+        tasks = copy.deepcopy(self.tasks)
+        tasks["42"]["author_id"] = 10
+        for material in tasks["42"]["comments"]:
+            material["user"] = {"id": 10}
+        receipt = handled("h", 310, "BUILDER", target("o", self.rows[0]))
+        control = [dict(raw, user={"id": 10})
+                   for raw in self.rows + [self.p, self.q, receipt]]
+        obs = ({"34": control}, tasks, [], [])
+        for role in cfg["roles"]:
+            view, state = self.run_view(role, obs, cfg=cfg)
+            inventory = view["peer_journal_inventory"]
+            expected = {"SPEC": ["o"], "BUILDER": ["r1", "q", "h"],
+                        "GUARD": ["v1", "p"]}
+            self.assertEqual({peer: [item["event_id"] for item in items]
+                              for peer, items in inventory.items()},
+                             {peer: ids for peer, ids in expected.items() if peer != role})
+            self.assertEqual(state, project_aux(cfg, *obs)[1])
+
+    def test_peer_inventory_empty_buckets(self):
+        view, _ = self.run_view("BUILDER", ({"34": []}, {}, [], []))
+        self.assertEqual(view["peer_journal_inventory"], {"GUARD": [], "SPEC": []})
