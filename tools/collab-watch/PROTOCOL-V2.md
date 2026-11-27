@@ -420,3 +420,38 @@ verified. The canonical Unit-3 verifier is the only success parser. Any
 ambiguous send, failure or restart uses read-only remote reconciliation of
 the claimed effect and its original inputs; missing evidence never re-arms
 the effect. Store uncertainty after STARTED is explicitly not VERIFIED.
+
+
+### Unit 4b correction — closed transport, request equivalence, single owner
+
+The public actuator accepts no write opener. It constructs its own no-redirect
+HTTP transport for both actor verification and the one post-STARTED mutation.
+Test-only injection patches private implementation seams; the mutation redirect
+test exercises the actual urllib redirect handler without network traffic.
+
+An existing effect claim prevents a second send but is not evidence that the
+newly requested action is equivalent. Before returning a claimed receipt or
+reconciling it on behalf of a new invocation, compare every closed action
+identity field except refreshable proof/input/witness digests. Repository and
+target path casing is normalized for GitHub identity. Include the normalized
+full config identity and the full logical close request digest (including the
+nominated ACCEPT), not merely PATCH bytes. A mismatch returns
+EFFECT_CLAIM_CONFLICT with the old action key and zero mutation; compatible
+refresh returns the original attempt's key/receipt, not a receipt for the new
+proof.
+
+The staged Linux actuator mechanically serializes **all** public invocations
+against the existing authoritative SQLite ledger inode using nonblocking
+exclusive flock. This covers new attempts, STARTED send, response hint
+persistence, readback and reconcile-only recovery. A busy contender returns
+ACTUATOR_BUSY before reading or changing attempt state or making HTTP calls.
+The lock is held on an existing regular nonsymlink file; no sidecar is created,
+and the operating system releases it on descriptor close/process exit.
+SQLite's own record locks are independent. Production deployment must use a
+single stable local authoritative ledger inode and route all state-mutating
+transport operations through this interface; no concurrent direct ledger
+mutation, file replacement, fork while held, or independent ledger replica.
+These are explicit deployment boundaries, not claims of distributed locking.
+The Unit 4a schema and irreversible STARTED semantics are unchanged. A crash
+after STARTED still leaves an ambiguous effect for read-only reconciliation,
+never another send.

@@ -1,11 +1,18 @@
 import copy
+from email.message import Message
+from io import BytesIO
+import json
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
-from threading import Barrier
+from threading import Event, local
 import unittest
 from unittest.mock import patch
 from urllib.error import URLError
+from urllib.request import HTTPSHandler
+from urllib.response import addinfourl
 
 from core import canonical, digest, strict_json
 from test_split_journal import CFG, SHA, fixture, issue, opening, material, ref, row, close, ts
@@ -14,7 +21,7 @@ from v2_attempts import initialize, open_store
 from v2_compact import compact_v2
 from v2_material import preflight_material
 from v2_preflight import preflight_control_compact, preflight_close_compact, preflight_initial_open_compact
-from v2_actuator import actuate, freeze_inputs, _bound
+from v2_actuator import actuate, freeze_inputs, _bound, _write_transport
 
 BUILDER = dict(selected_role="BUILDER", selected_incarnation="b")
 GUARD = dict(selected_role="GUARD", selected_incarnation="g")
@@ -87,6 +94,13 @@ class ActuatorTests(unittest.TestCase):
         self.path = Path(self.tmp.name)/"attempts.db"
         self.store = initialize(self.path, "actuator-test")
         self.retention = Retention()
+        self.write_context = local()
+        transport = patch('v2_actuator._write_transport', side_effect=self.transport_factory)
+        transport.start()
+        self.addCleanup(transport.stop)
+
+    def transport_factory(self):
+        return _write_transport() if self.write_context.real else self.write_context.remote
 
     def material_case(self, extra_row=False, cfg=CFG):
         task = issue()
@@ -146,9 +160,11 @@ class ActuatorTests(unittest.TestCase):
                         {"id":4002, "number":42, "state":"closed", "url":ROOT+"/issues/42"})
         return original, remote
 
-    def run_case(self, original, remote, authorize=lambda _: True, **kwargs):
+    def run_case(self, original, remote, authorize=lambda _: True, *, real_transport=False, **kwargs):
+        self.write_context.remote = remote
+        self.write_context.real = real_transport
         args = dict(read_token="read-token", write_token="write-token",
-                    read_opener=ReadOpener(remote), write_opener=remote)
+                    read_opener=ReadOpener(remote))
         args.update(kwargs)
         return actuate(self.store, original, self.retention, authorize, **args)
 
@@ -325,16 +341,101 @@ class ActuatorTests(unittest.TestCase):
         original_b, b = self.material_case(True)
         self.assertNotEqual(_bound(original_a)[4], _bound(original_b)[4])
         self.assertEqual(_bound(original_a)[3], _bound(original_b)[3])
-        barrier = Barrier(2, timeout=5)
-        def authority(_):
-            barrier.wait()
-            return True
+        entered, release = Event(), Event()
+        def check():
+            entered.set()
+            self.assertTrue(release.wait(5))
+        a.store_check = check
         with ThreadPoolExecutor(max_workers=2) as pool:
-            f1 = pool.submit(self.run_case, original_a, a, authority)
-            f2 = pool.submit(self.run_case, original_b, b, authority)
-            f1.result()
-            f2.result()
+            first = pool.submit(self.run_case, original_a, a)
+            try:
+                self.assertTrue(entered.wait(5))
+                b.applied = True
+                before_reads = len(b.read_calls)
+                other = pool.submit(self.run_case, original_b, b, reconcile_only=True).result(5)
+                self.assertEqual(other["code"], "ACTUATOR_BUSY")
+                self.assertEqual(len(b.read_calls), before_reads)
+                claimed = self.store.claimed(_bound(original_a)[3])
+                self.assertEqual(claimed["state"], "STARTED")
+                self.assertIsNone(claimed["response_hint"])
+            finally:
+                release.set()
+            result = first.result(5)
+        self.assertEqual(result["state"], "VERIFIED")
+        self.assertEqual(self.run_case(original_b, b)["action_key"], result["action_key"])
         self.assertEqual(len(a.sent)+len(b.sent), 1)
+
+    def test_conflicting_control_body_same_effect(self):
+        for claimed_state in ("VERIFIED", "STARTED", "UNRESOLVED"):
+            with self.subTest(claimed_state=claimed_state):
+                with tempfile.TemporaryDirectory() as directory:
+                    self.store = initialize(Path(directory)/"attempts.db", "conflict-test")
+                    self.retention = Retention()
+                    original, remote = self.control_case()
+                    data, baseline, _, effect, _, _ = _bound(original)
+                    body = data["body"].replace('{"', '{ "', 1)
+                    proof = preflight_control_compact(CFG, baseline, 11, body, **BUILDER)
+                    alternative = freeze_inputs("control_comment", CFG, baseline, 11, **BUILDER,
+                                                expected_proof_sha256=digest(canonical(proof)), body=body)
+                    self.assertEqual(effect, _bound(alternative)[3])
+                    self.assertNotEqual(_bound(original)[4]["request_sha256"],
+                                        _bound(alternative)[4]["request_sha256"])
+                    if claimed_state == "STARTED":
+                        remote.crash = True
+                        with self.assertRaises(Crash):
+                            self.run_case(original, remote)
+                    else:
+                        if claimed_state == "UNRESOLVED":
+                            remote.error = True
+                            remote.after = remote.before
+                        self.assertEqual(self.run_case(original, remote)["state"], claimed_state)
+                    old = self.store.claimed(effect)
+                    result = self.run_case(alternative, remote)
+                    self.assertEqual(result, {"state":"CONFLICT", "code":"EFFECT_CLAIM_CONFLICT",
+                                              "action_key":old["action_key"]})
+                    self.assertEqual(self.store.claimed(effect), old)
+                    self.assertEqual(len(remote.sent), 1)
+
+    def test_lock_held_by_independent_process_then_exit(self):
+        original, remote = self.material_case()
+        script = ("import fcntl, os, sys, time; "
+                  "fd=os.open(sys.argv[1], os.O_RDONLY); "
+                  "fcntl.flock(fd, fcntl.LOCK_EX); print('locked', flush=True); time.sleep(30)")
+        proc = subprocess.Popen([sys.executable, "-c", script, str(self.path)],
+                                stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(proc.stdout.readline().strip(), "locked")
+            self.assertEqual(self.run_case(original, remote)["code"], "ACTUATOR_BUSY")
+            self.assertFalse(remote.sent)
+        finally:
+            proc.kill()
+            proc.wait(timeout=5)
+            proc.stdout.close()
+        self.assertEqual(self.run_case(original, remote)["state"], "VERIFIED")
+
+    def test_mutation_redirect_real_no_redirect_handler(self):
+        original, remote = self.material_case()
+        calls = []
+        def https_open(handler, req):
+            calls.append((req.get_method(), req.full_url))
+            headers = Message()
+            if req.get_method() == "GET":
+                status, payload = 200, {"id":11}
+            else:
+                self.assertEqual(self.store.claimed(_bound(original)[3])["state"], "STARTED")
+                status, payload = 307, {}
+                headers["Location"] = "https://evil.invalid/redirected"
+            raw = json.dumps(payload).encode()
+            headers["Content-Length"] = str(len(raw))
+            response = addinfourl(BytesIO(raw), headers, req.full_url, status)
+            response.msg = "synthetic"
+            return response
+        with patch.object(HTTPSHandler, "https_open", https_open):
+            result = self.run_case(original, remote, real_transport=True)
+        self.assertEqual(result["state"], "UNRESOLVED")
+        self.assertEqual(calls, [("GET", "https://api.github.com/user"),
+                                 ("POST", ROOT+"/issues/42/comments")])
+        self.assertEqual(self.store.claimed(_bound(original)[3])["state"], "UNRESOLVED")
 
     def test_repository_casing_stable_effect(self):
         original, _ = self.material_case()

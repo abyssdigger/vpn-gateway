@@ -1,7 +1,10 @@
 """Staged v2 single-attempt transport; no live activation or authority policy."""
 from __future__ import annotations
 
+import fcntl
+import os
 import re
+import stat
 from urllib.request import Request, build_opener
 
 from collab_watch import API, MAX_LOCAL_BYTES, MAX_PAGE_BYTES, TIMEOUT, NoRedirect
@@ -10,6 +13,7 @@ from journal import framed
 from project_tasks import body_hash, comment
 from split_journal import MARKER
 from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
+from v2_attempts import AttemptStore
 from v2_compact import CompactV2, compact_v2
 from v2_material import preflight_material, verify_material
 from v2_preflight import (preflight_control_compact, preflight_close_compact,
@@ -107,7 +111,9 @@ def _bound(original):
               "role": data["role"], "incarnation": data["incarnation"],
               "journal_epoch": cfg["journal_epoch"], "candidate": identity,
               "proof_sha256": data["proof_sha256"], "inputs_sha256": digest(original),
-              "request_sha256": digest(request)}
+              "request_sha256": digest(request),
+              "intent_sha256": digest(canonical(data["request"])) if kind == "issue_close" else digest(request),
+              "config_identity_sha256": digest(canonical(dict(cfg, repository=repository.lower())))}
     return data, baseline, proof, effect, action, request.encode("utf-8")
 
 
@@ -164,6 +170,11 @@ def _write_headers(token):
     return {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "vpng-collab-actuator/2",
             "Content-Type": "application/json"}
+
+
+def _write_transport():
+    """Closed production transport; tests patch a private seam, not caller inputs."""
+    return build_opener(NoRedirect())
 
 
 def _http(opener, headers, url, method, request, expected_status):
@@ -267,8 +278,67 @@ def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
         return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
 
 
+def _stable_intent(action):
+    # Every identity field is significant unless explicitly refreshable.
+    stable = {k: v for k, v in action.items()
+              if k not in {"proof_sha256", "inputs_sha256", "witness"}}
+    stable["repository"] = stable["repository"].lower()
+    stable["target"] = stable["target"].lower()
+    return stable
+
+
+def _claimed_result(store, claimed, action, retention, read_token, read_opener):
+    if _stable_intent(claimed["action_descriptor"]) != _stable_intent(action):
+        return _result("CONFLICT", "EFFECT_CLAIM_CONFLICT", claimed["action_key"])
+    return _reconcile(store, claimed, retention, read_token, read_opener)
+
+
+def _ownership_fd(store):
+    """Lock the existing authoritative ledger inode; never create a lock file.
+
+    SQLite POSIX record locks and Linux flock are independent. Every actuator
+    invocation, including reconcile-only, uses this same exclusive flock.
+    The deployment must preserve the authoritative local inode while in use.
+    """
+    require(type(store) is AttemptStore, "authoritative attempt store required")
+    fd = os.open(store.path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        held = os.fstat(fd)
+        require(stat.S_ISREG(held.st_mode), "regular attempt store required")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        actual = os.stat(store.path, follow_symlinks=False)
+        require((held.st_dev, held.st_ino) == (actual.st_dev, actual.st_ino),
+                "attempt store inode changed")
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 def actuate(store, original, retention, authorize, *, read_token=None, write_token=None,
-            read_opener=None, write_opener=None, reconcile_only=False):
+            read_opener=None, reconcile_only=False):
+    """Single local owner across sender, response hint and recovery.
+
+    A concurrent caller never observes/finalizes an in-flight STARTED attempt.
+    The OS releases ownership on close/process exit. No fork while active;
+    all users of the ledger must use this interface, not direct state mutation.
+    """
+    try:
+        fd = _ownership_fd(store)
+    except BlockingIOError:
+        return _result("BUSY", "ACTUATOR_BUSY")
+    except Exception:
+        return _result("NO_ATTEMPT", "OWNERSHIP_UNAVAILABLE")
+    try:
+        return _actuate(store, original, retention, authorize, read_token=read_token,
+                        write_token=write_token, read_opener=read_opener,
+                        reconcile_only=reconcile_only)
+    finally:
+        os.close(fd)
+
+
+def _actuate(store, original, retention, authorize, *, read_token=None, write_token=None,
+             read_opener=None, reconcile_only=False):
     """Compose accepted preflight, acquisition, durable attempt and readback.
 
     retention.save(key, original) must durably persist immutable exact inputs;
@@ -280,7 +350,7 @@ def actuate(store, original, retention, authorize, *, read_token=None, write_tok
         data, baseline, proof, effect, action, request = _bound(original)
         claimed = store.claimed(effect)
         if claimed is not None:
-            return _reconcile(store, claimed, retention, read_token, read_opener)
+            return _claimed_result(store, claimed, action, retention, read_token, read_opener)
         if reconcile_only:
             return _result("NO_ATTEMPT", "NO_CLAIMED_EFFECT")
         provisional = {"kind": "not_applicable"} if data["operation"] == "material_comment" else {"kind": "pending"}
@@ -306,7 +376,7 @@ def actuate(store, original, retention, authorize, *, read_token=None, write_tok
         return _result("PREPARED", "FRESH_PROOF_OR_INPUT_RETENTION_FAILED", key)
     try:
         headers = _write_headers(write_token)
-        opener = write_opener if write_opener is not None else build_opener(NoRedirect())
+        opener = _write_transport()
         actor = _http(opener, headers, API + "/user", "GET", None, 200)
         require(positive(actor.get("id")) and actor["id"] == action["actor_id"], "write actor mismatch")
     except Exception:
@@ -323,7 +393,7 @@ def actuate(store, original, retention, authorize, *, read_token=None, write_tok
         try:
             claimed = store.claimed(effect)
             if claimed is not None:
-                return _reconcile(store, claimed, retention, read_token, read_opener)
+                return _claimed_result(store, claimed, action, retention, read_token, read_opener)
         except Exception:
             pass
         return _result("EFFECT_UNKNOWN", "START_NOT_CONFIRMED", key)
