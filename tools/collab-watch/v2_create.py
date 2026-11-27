@@ -1,12 +1,13 @@
 """Staged single-attempt project Issue creation proof and bounded inventory."""
 from __future__ import annotations
 
+from typing import NamedTuple
 from urllib.request import Request, build_opener
 
 from collab_watch import API, MAX_PAGE_BYTES, MAX_LOCAL_BYTES, MAX_PAGES, MAX_OBSERVED_COMMENTS, TIMEOUT, NoRedirect
 from core import Conflict, canonical, digest, ident, positive, require, strict_json
 from project_tasks import body_hash, shape, stamp
-from split_journal import project_v2, validate_v2_config
+from split_journal import discover_tasks, project_v2, validate_v2_config
 from v2_acquisition import Reader, _next
 from v2_preflight import _baseline, _selected, MAX_CANDIDATE_BYTES
 from v2_compact import project_compact_v2
@@ -101,7 +102,7 @@ def marker(repo, row):
 
 
 class CreationReader(Reader):
-    """Separate fixed-endpoint inventory; inherited header construction only."""
+    """Fixed-endpoint inventory sharing inherited Reader row/byte counters."""
     def _read(self, number=None, page=None):
         require((positive(number) and page is None) or (number is None and positive(page)),
                 "invalid inventory endpoint")
@@ -142,6 +143,44 @@ class CreationReader(Reader):
             if not more and len(items) < PAGE:
                 return [ids[k] for k in sorted(ids)]
         raise Conflict("inventory page bound")
+
+
+class CreationAggregateV2(NamedTuple):
+    """Complete normalized graph and inventory, twice observed together."""
+    control: dict
+    tasks: dict
+    holder_rows: list
+    signal_rows: list
+    inventory: list
+
+
+def acquire_aggregate_v2_for_creation(cfg, token=None, opener=None):
+    """Two equal complete passes; one shared Reader budget in each pass.
+
+    Read-only observation, not atomic GitHub snapshot or candidate admission.
+    Valid markers (including PR markers) remain visible in the inventory.
+    """
+    try:
+        validate_v2_config(cfg)
+        if opener is None:
+            opener = build_opener(NoRedirect())
+
+        def scan():
+            reader = CreationReader(cfg, token, opener)
+            control = {str(room): reader.comments(room) for room in cfg["journal_rooms"]}
+            refs = discover_tasks(cfg, control)
+            tasks = {key: reader.task(cfg, ref) for key, ref in refs.items()}
+            holder = reader.comments(cfg["projectholder"]["room"])
+            signals = reader.comments(cfg["signal_room"])
+            inventory = reader.scan()
+            return CreationAggregateV2(control, tasks, holder, signals, inventory)
+
+        first = scan()
+        second = scan()
+        require(canonical(first) == canonical(second), "creation aggregate observation changed")
+        return second
+    except Exception:
+        raise Conflict("creation aggregate incomplete, conflicting or unavailable") from None
 
 
 def acquire_creation(cfg, effect, token=None, opener=None, *, expect_absent=False):

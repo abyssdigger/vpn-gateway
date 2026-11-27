@@ -1121,3 +1121,20 @@ deterministic chronology. No task-only pre-send acquisition or invented
 global journal event ID. Checkpoint fence holds through durable STARTED
 and releases before one POST/PATCH. Possible STARTED uncertainty sends
 nothing and remains reconciliation-only. Existing readback is unchanged.
+
+
+### Unit 8e-A — coherent creation aggregate acquisition
+
+`acquire_aggregate_v2_for_creation` observes the exact normalized
+`CreationAggregateV2(control, tasks, holder_rows, signal_rows, inventory)`
+twice. Each complete pass uses one CreationReader and shared row/byte
+counters: all journal partitions, discovered registered resources/comments/
+events, holder and signal comments, then the full repository Issue inventory
+via the existing fixed endpoint and marker validation. The complete
+observations must match canonically; no separately stabilized subviews,
+candidate fixed-resource read, or inventory filtering is allowed.
+Valid creation markers including PR markers are retained, not admitted or
+rejected on candidate-effect identity. Invalid identities/markers, unstable
+observations or exhausted bounds fail closed. This is bounded read-only
+observation, not atomic remote snapshot, proof, policy, authority, store,
+actuator or mutation. The later pure gate owns candidate absence.
