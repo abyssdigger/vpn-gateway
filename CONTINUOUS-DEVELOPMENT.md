@@ -9,7 +9,7 @@ development additions to the common handoff.
 It does not own generic loop transitions/finalization, repository authorization, requirement
 semantics, component semantics or artifact conventions.
 
-## 1. Entering development
+## 1. Starting and resuming development
 
 Explicit projectholder `CD` / `CDC` start/resume/continue wording activates the generic loop
 and this development overlay under `AGENTS.md`.
@@ -20,13 +20,37 @@ project does not assign a separate mode, lifecycle or authority meaning to the e
 
 A generic loop, ID/IDC or research-loop instruction does not activate development.
 
-Before development work:
+### New CDC: one-time pre-loop startup summary
 
-1. establish the generic loop state and clock from `EXECUTION-LOOP.md`;
+For a **new** CD/CDC cycle, use the generic pre-loop activation setup from
+`EXECUTION-LOOP.md` to establish `CYCLE_START_TIME` and `CYCLE_INTERVAL`. Before the loop
+becomes active, emit one concise startup summary containing:
+
+- UTC `CYCLE_START_TIME`;
+- `CYCLE_INTERVAL`;
+- the session-safety reserve boundary;
+- the cycle end boundary.
+
+This summary is a **pre-loop startup message**, not loop progress, a heartbeat, a checkpoint or a
+handoff. Immediately after it, activate the loop and continue through `EXEC_NEXT`; the summary
+does not return lifecycle control to the projectholder.
+
+The startup summary is emitted only for initial activation of a new CDC. It is **not** repeated on
+RESUME, recovery, peer-wait return, work-unit completion, branch movement or any other transition
+inside the same cycle.
+
+### Development setup and resume
+
+Before development work proceeds:
+
+1. establish or preserve the generic loop state and clock from `EXECUTION-LOOP.md`;
 2. read this document if not already read unchanged in the active context;
 3. apply the `AGENTS.md` reading gate to the actual development scope;
 4. create/select the dedicated CD working branch when mutation is authorized by the active CD;
-5. identify the current review unit/development frontier.
+5. identify or reconstruct the current review unit/development frontier.
+
+On RESUME/recovery of an existing CDC, preserve the original `CYCLE_START_TIME` and return
+directly to the active frontier/`EXEC_NEXT` without an additional startup/status report.
 
 All repository/GitHub mutations still pass `PRE_MUTATION_GATE` from `AGENTS.md`.
 
