@@ -202,6 +202,12 @@ Every material finding receives an explicit disposition under `PROJECT-CONVENTIO
 If review materially changes design/implementation, re-run invalidated evidence and review the
 changed scope again.
 
+### Documentation impact
+
+For every review unit, determine whether the proposed change materially affects the user/operator documentation required by `VPNG-M001-R6*`, including externally observable behavior, configuration/defaults, interfaces, supported environments, safety/trust boundaries or operator procedures. At the affected review boundary require either the applicable documentation delta (both EN and RU, including affected diagrams and examples), or an explicit reviewable reason why no documentation change is necessary.
+
+A missing pre-existing documentation page is not by itself a no-impact reason. Identify and track pre-existing gaps separately where they are neither introduced nor materially worsened by the proposed change. They do not automatically prevent acceptance of unrelated work. This gate does not establish a historical-backfill release gate, waive existing documentation obligations, or close a permanent Requirement. Documentation layout and artifact conventions remain owned by `PROJECT-CONVENTIONS.md`.
+
 ## 7. Blocking, deferral and human decisions
 
 An unresolved development problem blocks only the scope depending on it.

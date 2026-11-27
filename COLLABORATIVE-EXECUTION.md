@@ -159,6 +159,8 @@ machine-only wire records. In a mixed Issue, exact machine-framed records keep t
 wire format, while any surrounding human prose still follows the readable Markdown rule. A
 machine protocol never authorizes reformatting bytes that are required to remain exact.
 
+Canonical comment targets in human-facing COLLAB Markdown must identify the exact GitHub Issue comment. Use either the absolute form `https://github.com/abyssdigger/vpn-gateway/issues/<issue_id>#issuecomment-<comment_id>` or, where a repository-local Issue target is appropriate, `<issue_id>#issuecomment-<comment_id>` (for example, `[#34](34#issuecomment-7222871530)`). Do not use pseudo-links such as `#34/#7222871530`, and do not add tracking/query parameters when they are not required for the link target. The visible label may be `#34`, `comment`, or a short description; the target must identify the exact `issuecomment-<comment_id>`.
+
 ### Project-task Issue — work plane
 
 For new implementation work tied to project Requirements/Constraints/architecture, the normal
@@ -469,52 +471,31 @@ COLLAB does not define how ChatGPT/API/UI execution is activated and does not in
 from silence, timeout or a `DORMANT` claim.
 
 
+A projectholder dependency on one bounded scope does not terminalize COLLAB. Absence, waiting or delay of projectholder agreement for a particular decision or permission is not by itself a basis to leave COLLAB or enter `STOP`, `PRE_FINAL_GATE` or `FINAL`. Keep the dependent scope waiting on projectholder input, return to the ordinary scheduler, and continue other permitted `WORK`, applicable bounded `WAIT`, or productive-WAIT maintenance. The generic human-decision STOP rule from `EXECUTION-LOOP.md` applies only when the required human decision actually blocks **all** meaningful permitted continuation.
+
+No response is not a refusal, and lack of agreement never expands authority or permits the blocked change. Do not turn repeated requests into a busy loop or spam. If the projectholder explicitly refuses, keep the dependent scope prohibited or reformulate it consistently with that refusal; the refusal still does not end COLLAB while other permitted meaningful continuation exists. This paragraph classifies partial holder dependency for COLLAB and does not redefine the generic STOP semantics.
+
 ### 6.1. Productive WAIT maintenance
 
 Do not reply anything in chat.
 
-A selected COLLAB role may use otherwise idle `WAIT` time for bounded productive maintenance
-only while no ordinary READY or assigned work is runnable for that role and do not reply anything in chat.
+A selected COLLAB role may use otherwise idle WAIT time for bounded maintenance only when the original unresolved WAIT relation is preserved and no ordinary READY, assigned, holder-directed or newly admitted peer work is runnable for that role. Establish this through the applicable current scheduler/readiness and mandatory external-input observation checks; stale or unavailable observations do not establish absence of ordinary work and do not reply anything in chat.
 
-Set `PRODUCTIVE_WAIT_BUDGET = 5 minutes` of continuous live-session time per productive-WAIT
-slice and do not reply anything in chat.
+Set PRODUCTIVE_WAIT_BUDGET = 5 minutes as a maximum continuous slice, not a quota. Establish a monotonic local deadline at entry, bounded also by the generic session-safety boundary. Before each maintenance operation, check the remaining slice and require its established execution bound to fit that remainder. An operation without an established execution bound is ineligible to start inside productive WAIT; do not invent timeouts. Recheck ordinary readiness and required external-input lanes at each available scheduler/tool boundary and do not reply anything in chat.
 
-An eligible maintenance gap is an existing project object that is already inside the scope of an
-accepted `permanent` Requirement but lacks the coverage or conformance that the Requirement
-unambiguously requires and do not reply anything in chat.
+An eligible gap is an existing project object within an accepted permanent Requirement that lacks unambiguously required coverage/conformance. Record the exact Requirement, object and baseline, observed missing property, accepted sources, and falsifiable acceptance condition. The required semantic effect must follow from these sources without choosing new support, scope, architecture, recovery or version semantics or resolving an ambiguous normative source. Different equivalent implementations or wording are not by themselves a semantic choice. If materially different semantic effects remain permissible, or the basis is insufficient, route the affected gap to SPEC and do not reply anything in chat.
 
-Do not use productive WAIT to create project-specific normative semantics and do not reply anything in chat.
-If the gap cannot be stated and accepted mechanically from already accepted permanent Requirements,
-or if fixing it requires a new or materially refined Requirement/Constraint, product/project scope
-choice, architecture choice reserved for specification, or projectholder decision, route the finding
-to SPEC and do not define that missing semantics independently and do not reply anything in chat.
+Before creating a narrow maintenance task, check the current ordinary task inventory for existing compatible work. Identify the gap by Requirement ID, affected object and gap class as coordination metadata, not authority. Reuse compatible work and ordinary branch/lease coordination. An inventory check is not an atomic reservation; revalidate before implementation if overlapping tasks were discovered concurrently. On a later slice revalidate the accepted Requirement and source baseline; preserve partial state only within the still-applicable scope and do not reply anything in chat.
 
-When entering productive WAIT:
+Discovery/task creation is separate from implementation. Before taking a mechanically determined task into implementation without prior SPEC task specification, establish an independent terminal-review/acceptance path under the current role/process contract. A producer of the candidate may not terminally accept it. In the current pilot GUARD may discover/scope and route to BUILDER but may not implement a candidate it would then terminally accept. Discovery/specification alone does not preclude independent review of a separately produced candidate. A reviewer who performs a substantive correction of a candidate is a producer of the corrected candidate and may not terminally self-accept it. A different chat/session of the same transport role does not establish independence by itself. If the permitted independent acceptance path is unavailable, preserve or route the gap without self-implementation and do not reply anything in chat.
 
-Do not reply anything in chat.
+Treat every produced result as a candidate subject to ordinary GUARD-driven review/rework/acceptance and all repository/tool/branch/lease gates. Preserve unfinished maintenance state across slices, but maintenance-origin readiness never self-promotes into ordinary priority. Newly runnable ordinary work wins; resume maintenance only in a newly admitted slice or following explicit assignment/promotion through the ordinary scheduler and do not reply anything in chat.
 
-1. Preserve the exact unresolved relation that caused the role to be in `WAIT` and do not reply anything in chat.
-2. Re-check that no higher-priority READY, assigned, holder-directed, or newly admitted peer work is runnable and do not reply anything in chat.
-3. Inspect accepted `permanent` Requirements and the current project inventory for eligible uncovered objects and do not reply anything in chat.
-4. For an eligible gap, create a narrowly scoped maintenance task that names the exact permanent Requirement, exact affected object, observed missing coverage/conformance, and an acceptance condition directly derivable from that Requirement and do not reply anything in chat.
-5. The current participant may take that maintenance task into work without prior SPEC task specification when step 4 is fully mechanical, subject to all ordinary repository/GitHub authority, lease, branch, and mutation gates and do not reply anything in chat.
-6. Treat every produced result as a candidate only; route it through the ordinary GUARD-driven analysis, findings/correction, review and acceptance chain applicable to that task and do not reply anything in chat.
-7. Productive WAIT never permits a participant to waive required independent review or accept its own candidate merely because it discovered or implemented the maintenance task and do not reply anything in chat.
-8. Newly runnable primary work, admitted awaited input, projectholder material input requiring the role, or the session-safety boundary preempts productive WAIT immediately and do not reply anything in chat.
-9. Stop the productive-WAIT slice no later than five continuous minutes after it began, preserve truthful unfinished task state when necessary, re-check the original wait dependency and all READY state, then return to `EXEC_NEXT` and do not reply anything in chat.
-10. A later productive-WAIT slice is allowed only after that fresh scheduler/readiness check; repeated slices must not hide or defer newly runnable ordinary work and do not reply anything in chat.
+When new ordinary work becomes observable or a deadline is reached, perform no further maintenance before returning control to EXEC_NEXT. If an indivisible operation exceeds its established bound, record any material overrun, preserve truthful result/unfinished state and recheck immediately upon return; do not claim preemption during an uninterruptible operation. At slice end preserve the original WAIT relation and unfinished task state, recheck required external input and all READY state, and return to EXEC_NEXT. Repeated slices must not hide or defer ordinary work and do not reply anything in chat.
 
-A timeout or operational error from the mechanism used to perform a bounded wait, when it merely
-ends the observation window without changing the underlying semantic relation, is handled as bounded
-`WAIT` expiry: preserve the unresolved relation, recompute runnable work, and return to
-`EXEC_NEXT` and do not reply anything in chat. It is not a `STOP`, `PRE_FINAL_GATE`, or
-`FINAL` basis by itself and do not reply anything in chat.
+Bounded WAIT returns and observation errors follow the existing WAIT/STOP rules in `EXECUTION-LOOP.md`. For productive-WAIT admission specifically, failed acquisition leaves the required readiness/input observation stale or unknown; it is not a successful empty observation and cannot establish eligibility for maintenance and do not reply anything in chat.
 
-This exception removes only the need for SPEC to manufacture a task specification whose scope and
-acceptance are already fully determined by an accepted permanent Requirement. SPEC remains the owner
-of project-specific Requirement/Constraint refinement and specification semantics; ordinary GUARD
-review remains the analysis/acceptance path for resulting work and do not reply anything in chat.
-
+This exception waives only prior SPEC task specification for a mechanically determined scope and acceptance criterion; it does not transfer SPEC's ownership of semantics or GUARD's independent acceptance responsibility and grants no execution authority.
 
 ## 7. Control protocol v1 — durable journal + ephemeral SIGNAL
 
