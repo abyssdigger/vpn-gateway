@@ -1616,3 +1616,88 @@ boundaries, missing route/policy, stale selection and physical pin rejection,
 deterministic cross-role priority, no duplicate send, and actual supervisor
 death while its surviving writer holds the pair lock. Recovery result truth
 comes from the durable spool, not process completion.
+
+
+### 9c-A — pure parametric deployment contract (candidate)
+
+The deployment model covers the worker/model session, external tools, local
+process tree and transitive deputies. Worker-relative complete mediation means
+every worker-induced mutation in the declared repository/operation scope crosses
+the reviewed trusted writer, exact-action authority and durable claim/receipt
+boundary. It does not prohibit unrelated authorized administrator/projectholder
+activity. Kernel, trusted deployment administrator, service manager and provider
+authorization are explicit trust premises. Role identity, ownership, readiness
+and authority remain distinct.
+
+The pure design-time module v2_deployment_manifest.py defines a bounded
+canonical UTF-8 JSON representation (vpng-deployment-manifest/1). The manifest
+has closed typed trust, identity, environment, installation, isolation, stores,
+credentials, authority, targets, transport, alternate_paths, resources,
+continuity, recovery and evidence sections. Concrete deployment values are
+not supplied. Null denotes an unresolved binding in design mode only (except
+the repository-level issue_create target has no room). Deployment mode rejects
+unresolved bindings; it does not activate deployment. Identity binds exact
+canonical v2 config/bindings, configured actor/incarnation and six allowed
+new-send families. Store identities are distinct logical/path/device-inode
+pins with trusted ownership. Digests bind the selected installation, policies
+and evidence registry; they do not prove their contents/enforcement.
+
+C1: the trusted deployment authority supplies the expected canonical manifest
+digest, revision, path, root identity and predicate-specific evidence-source
+registry independently of worker input. The worker cannot choose these values.
+Each source is bound to observer, adapter digest and trust-anchor digest.
+Replacing the manifest and its claimed digest together cannot match the
+independently supplied expected identity. Evidence references are not evidence:
+a supplied observation must bind the exact manifest hash, predicate, reference,
+source identities, observation identity, method and externally supplied time
+window/status. Changed or expired observations fail the consistency check.
+The pure checker does not authenticate, collect or independently verify those
+observations; the later trusted deployment must do so and maintain the
+predicates through invocation. A complete supplied claim set is not a live
+admission result. The API returns only unresolved bindings and lane-specific
+contract blockers; even empty blockers grant no effect or recovery authority.
+
+The closed alternate-path inventory includes model/session connector/tools,
+network clients, ambient Git credentials/agents/helpers, workflow triggers
+and tokens, nominal read credential, local/remote brokers, alternate writer
+or store path, mutable bootstrap and descendant escape. Excluded, mediated
+or not-applicable claims require independently established evidence; present
+or unknown paths block the new-effect contract. A present/unknown read-credential
+or mutable-bootstrap path also contradicts common recovery trust premises.
+Effective provider read-only
+scope is separately required, not inferred from separate credential names.
+A cooperating flock is not global mediation; UID/RLIMIT/scheduler slot is
+not aggregate containment; local Linux isolation does not remove external
+model tool permissions.
+
+C2: exact-action authority must define a bounded irrevocable decision
+lifetime or a maintained fence/lease through durable STARTED and physical
+send. A point-in-time revocable boolean without maintained lifetime/fence
+cannot satisfy the new-effect contract. Actual decision enforcement is
+deferred; no cross-system atomic revocation is claimed. Any uncertainty after
+possible STARTED/send remains reconciliation-only.
+
+New-effect contract checks add all alternate-path, write-custody, lifetime,
+exact-authority, checkpoint, pair mediation, physical headroom, aggregate and
+ordinary-resource and write-transport evidence to the common requirements.
+Recovery-only retains common trusted installation/identity, store continuity,
+read-only provider/transport, isolation, reserve and recovery fence evidence.
+It does not require fresh new-send authority, write availability or current
+checkpoint for already-claimed reconciliation; the accepted trusted selector,
+durable original/version and current owner fence remain runtime prerequisites.
+The model binds expected deployment identities even if an external dependency
+is temporarily unavailable. No worker-selected recovery, new send, automatic
+READY resume, NC re-arm, RN retry, reset or refund is introduced. If trusted
+recovery is unavailable, preserve uncertainty and escalate. A synthetic
+transport is never a production contract. The pure check does not inspect
+current action, actual credential availability, runtime checkpoint, store or
+process state and cannot substitute for any accepted runtime fence.
+
+9c-B owns actual distinct UID/FD and aggregate cgroup/descendant/kill-reap
+evidence in dummy isolated composition. 9c-C owns installation/adoption,
+physical headroom, protected recovery reserve and rollback trust/continuity.
+9c-D owns actual external entitlement/credential exclusion, real authority
+and narrowly authorized live evidence/cutover. Concrete manager, paths,
+resource policies and quota mechanisms remain engineering bindings; actual
+external permission/credential changes and cutover require their owning
+explicit projectholder/setup authority. No VPN-GATE operator behavior changes.
