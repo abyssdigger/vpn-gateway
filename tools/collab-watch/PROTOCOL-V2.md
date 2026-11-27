@@ -815,3 +815,32 @@ No clock, timer, failure verdict, persistence, network, model invocation,
 mutation, authority evaluation, legacy projector, CLI, live activation,
 root binding installation or epoch cutover occurs here. The external
 runtime must acquire the aggregate and persist the exact canonical state.
+
+
+## Unit 7b-A — durable composed-state checkpoint
+
+An explicitly provisioned local SQLite store binds state-store ID, normalized
+repository and exact journal epoch. It holds one optional checkpoint:
+generation, canonical UTF-8 composed retained state bytes and SHA-256.
+The closed storage shape is exactly task/aux, each with accepted protocol,
+semantic config hash and digest ledger; the two config identities match.
+The store checks shape/encoding, not semantic provenance or completeness.
+A caller must obtain the state from the accepted projector.
+
+The first save requires generation zero; later saves are atomic CAS against
+the exact current generation, incrementing even for byte-identical state.
+Stale/overflow saves fail closed. Load validates schema, metadata, byte
+bounds, digest, strict canonical decoding and closed shape; returned state
+is detached. Byte limit 32 MiB. O_EXCL/0600/single-link/nonsymlink provision,
+directory fsync, FULL/DELETE SQLite, bounded busy timeout, existing-only
+open and live O_PATH inode pin follow accepted store conventions. A fresh
+open cannot prove historical continuity after hostile replacement or
+rollback; external no-reuse/no-rollback remains mandatory.
+
+The store adds no projection, work view, holder prose, signal history, role,
+clock/timer, authority, owner capability or credential fields. A checkpoint
+save is local evidence, not work acknowledgement or semantic progression.
+Missing store/checkpoint permits only explicit fresh-current reconstruction
+with no historical continuity claim. No acquisition/scheduler orchestration,
+actuator, model invocation, CLI, remote mutation, activation or epoch change.
+7b-B must bind checkpoint load/save to accepted aggregate replay.
