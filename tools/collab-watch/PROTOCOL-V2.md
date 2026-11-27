@@ -943,3 +943,16 @@ a role action, waive independent review or establish STOP. No health state,
 journal/projection, clock, sleep, I/O, persistence, checkpoint or actuator
 participates. The outer runtime owns actual waiting, exact semantic relation
 satisfaction, scheduling and lifecycle transitions.
+
+
+### Unit 7c-B.1 — prior ephemeral health-state invariant
+
+Non-None previous health state is validated as the exact closed in-memory
+shape before use. Role/incarnation and peer set bind the current view;
+physical refs/digests and outgoing (ping_id, digest) tuples are checked.
+Local times must be ordered nonnegative integers, episode fields must
+match the mode and bind retained PING evidence, and ambiguous refs must
+be sorted unique tuples. Overdue unlatched or prematurely unconfirmed
+episodes fail closed. This structural validation neither authenticates
+arbitrary caller state nor changes accepted 10m/5m transitions; the
+runtime must retain its own state. No persistence or new semantic reducer.

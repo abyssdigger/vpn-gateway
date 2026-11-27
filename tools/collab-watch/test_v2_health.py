@@ -232,3 +232,97 @@ class HealthTests(unittest.TestCase):
         _, intents = advance_health(empty, s, IDLE_MS)
         self.assertEqual(intents, [{"kind": "PING_DUE", "peer": "BUILDER"},
                                    {"kind": "PING_DUE", "peer": "SPEC"}])
+
+    def test_prior_state_closed_shape_and_time(self):
+        v = self.view([self.p])
+        s, _ = self.advance(v, None, 100)
+        cases = [[], {}, dict(s, extra=True)]
+        for field in s:
+            bad = copy.deepcopy(s)
+            del bad[field]
+            cases.append(bad)
+        for field in ("role", "incarnation"):
+            for value in (None, [], "", "invalid id"):
+                cases.append(dict(s, **{field: value}))
+        for value in (True, -1, 100.0, None, "100"):
+            cases.append(dict(s, last_now_ms=value))
+        for value in ([], {}, {"GUARD": {}}, {"BUILDER": {}, "SPEC": {}, "extra": {}}):
+            cases.append(dict(s, peers=value))
+        for field in ("peer_refs", "outgoing_refs", "episode"):
+            bad = copy.deepcopy(s)
+            del bad["peers"]["BUILDER"][field]
+            cases.append(bad)
+        for field in s["peers"]["BUILDER"]["episode"]:
+            bad = copy.deepcopy(s)
+            del bad["peers"]["BUILDER"]["episode"][field]
+            cases.append(bad)
+        for value in (True, -1, 100.0, 101, None):
+            bad = copy.deepcopy(s)
+            bad["peers"]["BUILDER"]["episode"]["baseline_ms"] = value
+            cases.append(bad)
+        for level in ("peer", "episode"):
+            bad = copy.deepcopy(s)
+            obj = bad["peers"]["BUILDER"]
+            (obj if level == "peer" else obj["episode"])["extra"] = 1
+            cases.append(bad)
+        for bad in cases:
+            with self.subTest(bad=bad), self.assertRaises(Conflict):
+                self.advance(v, bad, 101)
+
+    def test_prior_evidence_and_mode_invariants(self):
+        v = self.view([self.p, self.p2])
+        s, _ = self.advance(v, None, 100)
+        peer = s["peers"]["BUILDER"]
+        a, b = peer["episode"]["ambiguous_refs"]
+        sha = peer["outgoing_refs"][a][1]
+        cases = []
+        for field, values in (
+            ("peer_refs", ([], {"bad": sha}, {a: "invalid"})),
+            ("outgoing_refs", ([], {"bad": ("p", sha)}, {a: ["p", sha]},
+                               {a: ("p",)}, {a: ("bad id", sha)}, {a: ("p", "bad")})),
+        ):
+            for value in values:
+                bad = copy.deepcopy(s)
+                bad["peers"]["BUILDER"][field] = value
+                cases.append(bad)
+        for updates in (
+            {"mode": []}, {"mode": "unknown"}, {"ambiguous_refs": (b, a)},
+            {"ambiguous_refs": (a, a)}, {"ambiguous_refs": (a, "issue:34#issuecomment-999")},
+            {"ambiguous_refs": (a,)}, {"ambiguous_refs": [a, b]},
+            {"ping_ref": a}, {"ping_id": "p"},
+            {"mode": "IDLE"}, {"mode": "PING_INTENT_EMITTED"},
+            {"mode": "WAITING_RESPONSE", "ambiguous_refs": (), "ping_ref": a, "ping_id": "wrong"},
+            {"mode": "WAITING_RESPONSE", "ambiguous_refs": (), "ping_ref": "issue:34#issuecomment-999", "ping_id": "p"},
+            {"mode": "UNCONFIRMED", "ambiguous_refs": (), "ping_ref": a, "ping_id": "p"},
+        ):
+            bad = copy.deepcopy(s)
+            bad["peers"]["BUILDER"]["episode"].update(updates)
+            cases.append(bad)
+        for bad in cases:
+            with self.subTest(bad=bad), self.assertRaises(Conflict):
+                self.advance(v, bad, 101)
+
+    def test_prior_overdue_unlatched_and_mutated_state(self):
+        for v, threshold in ((self.view(), IDLE_MS), (self.view([self.p]), RESPONSE_MS)):
+            s, _ = self.advance(v, None, 0)
+            bad = copy.deepcopy(s)
+            bad["last_now_ms"] = threshold
+            with self.assertRaises(Conflict):
+                self.advance(v, bad, threshold)
+            s["peers"]["BUILDER"]["episode"]["mode"] = "fabricated"
+            with self.assertRaises(Conflict):
+                self.advance(v, s, 1)
+
+    def test_all_valid_prior_modes_are_stable(self):
+        for extra, elapsed, mode in (
+            ([], 0, "IDLE"), ([], IDLE_MS, "PING_INTENT_EMITTED"),
+            ([self.p], 0, "WAITING_RESPONSE"),
+            ([self.p], RESPONSE_MS, "UNCONFIRMED"),
+            ([self.p, self.p2], 0, "AMBIGUOUS"),
+        ):
+            v = self.view(extra)
+            s, _ = self.advance(v, None, 0)
+            s, _ = self.advance(v, s, elapsed)
+            self.assertEqual(self.mode(s), mode)
+            again, intents = self.advance(v, s, elapsed)
+            self.assertEqual((again, intents), (s, []))

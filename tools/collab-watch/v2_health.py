@@ -1,7 +1,8 @@
 """Pure, ephemeral communication-health policy over an accepted scheduler view."""
 from __future__ import annotations
 
-from core import require
+from core import COMMENT_REF, ident, require
+from project_tasks import body_hash
 
 IDLE_MS = 600_000
 RESPONSE_MS = 300_000
@@ -13,11 +14,12 @@ def _observed(view):
     inventory = view["peer_journal_inventory"]
     evidence = {}
     for peer in sorted(inventory):
-        require(peer != role, "selected role cannot be its own peer")
+        require(ident(peer) and peer != role, "invalid peer role")
         refs = {}
         for row in inventory[peer]:
             ref = row["physical_ref"]
-            require(row["sender"] == peer and ref not in refs,
+            require(row["sender"] == peer and _physical_ref(ref)
+                    and body_hash(row["body_sha256"]) and ref not in refs,
                     "invalid peer inventory occurrence")
             refs[ref] = row["body_sha256"]
         evidence[peer] = (dict(sorted(refs.items())), {}, {})
@@ -26,12 +28,73 @@ def _observed(view):
         require(row["sender"] == role and peer in evidence,
                 "invalid outgoing health role")
         _, outgoing, pending = evidence[peer]
-        require(ref not in outgoing and row["state"] in ("pending", "matched"),
+        require(_physical_ref(ref) and ident(row["ping_id"]) and body_hash(row["body_sha256"])
+                and ref not in outgoing and row["state"] in ("pending", "matched"),
                 "invalid outgoing health occurrence")
         outgoing[ref] = (row["ping_id"], row["body_sha256"])
         if row["state"] == "pending":
             pending[ref] = row["ping_id"]
     return role, identity["incarnation"], evidence
+
+
+
+def _physical_ref(value):
+    return isinstance(value, str) and COMMENT_REF.fullmatch(value) is not None
+
+
+def _closed(value, keys):
+    require(type(value) is dict and set(value) == keys, "invalid health state shape")
+
+
+def _time(value):
+    return type(value) is int and value >= 0
+
+
+def _validate_previous(previous, role, incarnation, evidence):
+    _closed(previous, {"role", "incarnation", "last_now_ms", "peers"})
+    require(ident(previous["role"]) and ident(previous["incarnation"])
+            and previous["role"] == role and previous["incarnation"] == incarnation,
+            "health identity drift")
+    last = previous["last_now_ms"]
+    require(_time(last), "invalid retained health time")
+    peers = previous["peers"]
+    require(type(peers) is dict and all(ident(p) and p != role for p in peers)
+            and set(peers) == set(evidence), "health peer set drift")
+    for old in peers.values():
+        _closed(old, {"peer_refs", "outgoing_refs", "episode"})
+        refs, outgoing = old["peer_refs"], old["outgoing_refs"]
+        require(type(refs) is dict and all(_physical_ref(ref) and body_hash(sha)
+                for ref, sha in refs.items()), "invalid retained peer evidence")
+        require(type(outgoing) is dict and all(_physical_ref(ref)
+                and type(pair) is tuple and len(pair) == 2
+                and ident(pair[0]) and body_hash(pair[1])
+                for ref, pair in outgoing.items()), "invalid retained outgoing evidence")
+        ep = old["episode"]
+        _closed(ep, {"mode", "baseline_ms", "ping_ref", "ping_id", "ambiguous_refs"})
+        mode, baseline = ep["mode"], ep["baseline_ms"]
+        ref, mid, ambiguous = ep["ping_ref"], ep["ping_id"], ep["ambiguous_refs"]
+        require(mode in ("IDLE", "PING_INTENT_EMITTED", "WAITING_RESPONSE",
+                         "UNCONFIRMED", "AMBIGUOUS")
+                and _time(baseline) and baseline <= last, "invalid retained health episode")
+        require(type(ambiguous) is tuple and all(_physical_ref(x) for x in ambiguous)
+                and ambiguous == tuple(sorted(set(ambiguous))),
+                "invalid retained ambiguous refs")
+        if mode in ("IDLE", "PING_INTENT_EMITTED"):
+            require(ref is None and mid is None and not ambiguous,
+                    "unexpected retained PING identity")
+        elif mode in ("WAITING_RESPONSE", "UNCONFIRMED"):
+            require(_physical_ref(ref) and ident(mid) and not ambiguous
+                    and ref in outgoing and outgoing[ref][0] == mid,
+                    "unbound retained PING identity")
+        else:
+            require(ref is None and mid is None and len(ambiguous) >= 2
+                    and all(x in outgoing for x in ambiguous), "unbound ambiguous episode")
+        elapsed = last - baseline
+        require(not (mode == "IDLE" and elapsed >= IDLE_MS)
+                and not (mode == "WAITING_RESPONSE" and elapsed >= RESPONSE_MS),
+                "overdue unlatched health episode")
+        require(mode != "UNCONFIRMED" or elapsed >= RESPONSE_MS,
+                "premature unconfirmed health episode")
 
 
 def _retained(old, current):
@@ -60,8 +123,7 @@ def advance_health(view, previous, now_ms):
     require(type(now_ms) is int and now_ms >= 0, "invalid monotonic time")
     role, incarnation, evidence = _observed(view)
     if previous is not None:
-        require(previous["role"] == role and previous["incarnation"] == incarnation
-                and set(previous["peers"]) == set(evidence), "health identity drift")
+        _validate_previous(previous, role, incarnation, evidence)
         require(now_ms >= previous["last_now_ms"], "backwards monotonic time")
 
     peers, intents = {}, []
