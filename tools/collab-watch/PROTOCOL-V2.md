@@ -956,3 +956,32 @@ be sorted unique tuples. Overdue unlatched or prematurely unconfirmed
 episodes fail closed. This structural validation neither authenticates
 arbitrary caller state nor changes accepted 10m/5m transitions; the
 runtime must retain its own state. No persistence or new semantic reducer.
+
+
+## Unit 8a — pure aggregate-safe canonical candidate gate
+
+derive_task_compact validates the exact aggregate compact type, text, digest,
+inventory and admitted semantic replay before transforming its canonical wire.
+Task envelopes and existing opaque rows are preserved; aux raw control rows
+become exactly the task-opaque digest rows for the same physical metadata,
+using the accepted task retention classifier. Holder/signal partitions are
+omitted. The derived task compact is admitted by the existing decoder.
+It is byte/inventory-equivalent to task compaction of the same raw graph.
+
+gate_aggregate_candidate is retained-only: the exact closed composed previous
+state is mandatory. For control_comment the frozen previous must equal its
+task partition; for aux_comment it must equal the whole prior. Complete
+aggregate replay, exact derived task compact where applicable, accepted
+family-specific preflight with exact expected proof SHA and global task+aux
+logical ID absence all must succeed. Selected role/incarnation must match
+the admitted proof. No fresh-history fallback or new event grammar.
+
+The closed detached result binds aggregate text/inventory digests, separate
+prior and projected composed-state digests, task compact digests where
+applicable, exact proof digest, candidate event ID and selected role/incarnation.
+It is conditional evidence only, not authority. It contains no raw candidate,
+owner/credential/timer or mutation decision. Task and aux canonical comments
+are the only admitted operations; SIGNAL/material/close/create/initial OPEN
+remain separate. No acquisition, store or actuator behavior. 8b must integrate
+the exact gate under owner/attempt fencing with checkpoint revalidation
+before STARTED; 8a alone protects no live send.

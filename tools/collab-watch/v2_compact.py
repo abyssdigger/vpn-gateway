@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from collab_watch import MAX_LOCAL_BYTES, MAX_OBSERVED_COMMENTS
-from core import canonical, digest, positive, require, strict_json
+from core import Conflict, canonical, digest, positive, require, strict_json
 from project_tasks import body_hash, comment, stamp
 from split_journal import PREFIX, project_v2, validate_v2_config
 from v2_aux import PREFIX as AUX_PREFIX, project_aux
@@ -263,3 +263,25 @@ def aggregate_semantic_view(cfg, observation):
 def project_compact_aggregate_v2(cfg, observation, previous=None):
     *partitions, _ = aggregate_semantic_view(cfg, observation)
     return project_aux(cfg, *partitions, previous)
+
+
+def derive_task_compact(cfg, aggregate):
+    """Derive task compact from one admitted aggregate wire, preserving inventory."""
+    try:
+        require(type(aggregate) is CompactAggregateV2, "exact aggregate compact required")
+        admitted = decode_compact_aggregate_v2(cfg, aggregate.text, aggregate.sha256)
+        require(admitted == aggregate, "aggregate inventory mismatch")
+        value = strict_json(admitted.text)
+        control = {}
+        for room, rows in value["control"].items():
+            control[room] = [
+                ["opaque", *row[1:5], digest(row[5])]
+                if row[0] == "raw" and not _control_raw(cfg, row[2], row[5])
+                else row
+                for row in rows
+            ]
+        wire = canonical({"protocol": WIRE, "config_sha256": value["config_sha256"],
+                          "control": control, "tasks": value["tasks"]})
+        return decode_compact_v2(cfg, wire, digest(wire))
+    except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
+        raise Conflict("task compact derivation failed") from None
