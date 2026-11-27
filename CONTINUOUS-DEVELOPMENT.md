@@ -20,24 +20,23 @@ project does not assign a separate mode, lifecycle or authority meaning to the e
 
 A generic loop, ID/IDC or research-loop instruction does not activate development.
 
-### New CDC: one-time pre-loop startup summary
+### New CDC: pre-loop clock observation
 
 For a **new** CD/CDC cycle, use the generic pre-loop activation setup from
-`EXECUTION-LOOP.md` to establish `CYCLE_START_TIME` and `CYCLE_INTERVAL`. Before the loop
-becomes active, emit one concise startup summary containing:
+`EXECUTION-LOOP.md` to obtain/observe the fresh current time and establish
+`CYCLE_START_TIME` and `CYCLE_INTERVAL`.
 
-- UTC `CYCLE_START_TIME`;
-- `CYCLE_INTERVAL`;
-- the session-safety reserve boundary;
-- the cycle end boundary.
+Do **not** emit a conversational startup report or restate the start time, interval, safety
+reserve or cycle end in chat. The safety reserve/end remain internal control state derived from
+the observed clock. If the execution surface visibly renders the current-time utility/tool result,
+that rendering is only an execution artifact; do not convert it into assistant prose.
 
-This summary is a **pre-loop startup message**, not loop progress, a heartbeat, a checkpoint or a
-handoff. Immediately after it, activate the loop and continue through `EXEC_NEXT`; the summary
-does not return lifecycle control to the projectholder.
+After the clock observation and required pre-loop setup, activate the loop and continue directly
+through `EXEC_NEXT`.
 
-The startup summary is emitted only for initial activation of a new CDC. It is **not** repeated on
-RESUME, recovery, peer-wait return, work-unit completion, branch movement or any other transition
-inside the same cycle.
+This clock observation is performed only for initial activation of a new CDC. It is **not**
+repeated as a startup/status report on RESUME, recovery, peer-wait return, work-unit completion,
+branch movement or any other transition inside the same cycle.
 
 ### Development setup and resume
 
@@ -257,9 +256,10 @@ starting a new cycle.
 
 A development cycle does not end merely because the originally mentioned subsystem finished.
 
-A development-boundary status is not a handoff and does not authorize turn completion. If useful
-authorized work remains, continue `WORK`; if progress genuinely depends on an admitted external
-event, use bounded `WAIT`; only the generic `PRE_FINAL_GATE` may lead to a terminal response.
+Do not emit a development-boundary status/report merely because a block or unit completed. If
+useful authorized work remains, continue `WORK`; if progress genuinely depends on an admitted
+external event, use bounded `WAIT`; only the generic `PRE_FINAL_GATE` may lead to a terminal
+response.
 
 Do not manufacture work merely to fill the clock.
 
