@@ -322,7 +322,8 @@ class CoordinatorTests(unittest.TestCase):
         w = self.writer(original, remote)
         spool = self.view(w)
         p = pins_for(spool, w)
-        wrong_inode = (p.attempt.inode[0], p.attempt.inode[1]+1)
+        # Guaranteed different from every real pinned file even on adjacent inode allocation.
+        wrong_inode = (max(pin.inode[0] for pin in p.values())+1, p.attempt.inode[1])
         for changes in (
             dict(pins=replace(p, attempt=replace(p.attempt, inode=wrong_inode))),
             dict(pins=replace(p, attempt=replace(p.attempt, store_id="wrong-attempt"))),

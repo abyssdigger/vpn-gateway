@@ -236,7 +236,7 @@ def coordinated_writer(uid, gid, isolated, args, recovery):
 
     with socket.socket(fileno=control_fd) as control:
         bootstrap = Bootstrap.from_wire(receive(control, deadline, MAX_BOOTSTRAP, parse))
-        require(bootstrap.recovery is recovery)
+        require(bootstrap.recovery is recovery and bootstrap.deadline == deadline)
         route = bootstrap.route
         expected, wall = route.policy.lane(recovery)
         require(tuple(asdict(expected).values()) == limits and remaining(deadline) <= wall)

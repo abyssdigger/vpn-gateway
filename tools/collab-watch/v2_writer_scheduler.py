@@ -64,6 +64,28 @@ class ExecutionPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class SelectedPolicy:
+    """Private child projection; unselected lane parameters never cross exec."""
+    resource: ResourcePolicy
+    limits: Limits
+    wall: float
+    recovery: bool
+
+    def __post_init__(self):
+        require(type(self.resource) is ResourcePolicy and type(self.limits) is Limits
+                and _wall(self.wall) and type(self.recovery) is bool,
+                "invalid selected resource policy")
+
+    def identity(self):
+        return self.resource
+
+    def lane(self, recovery):
+        require(type(recovery) is bool and recovery is self.recovery,
+                "unselected resource lane")
+        return self.limits, self.wall
+
+
+@dataclass(frozen=True, slots=True)
 class SyntheticFixture:
     """Fixed local synthetic adapter only; pinned immutable fixture and counter."""
     data: FilePin
@@ -90,7 +112,7 @@ class Route:
     capability: Capability = field(repr=False)
     pins: StorePins
     quotas: Quotas
-    policy: ExecutionPolicy
+    policy: ExecutionPolicy | SelectedPolicy
     fixture: SyntheticFixture
 
     def __post_init__(self):
@@ -100,7 +122,8 @@ class Route:
         require(type(self.runtime_model) is str and type(self.session) is SessionBinding
                 and type(self.capability) is Capability and type(self.pins) is StorePins
                 and self.pins.checkpoint is not None and type(self.quotas) is Quotas
-                and type(self.policy) is ExecutionPolicy and type(self.fixture) is SyntheticFixture,
+                and type(self.policy) in (ExecutionPolicy, SelectedPolicy)
+                and type(self.fixture) is SyntheticFixture,
                 "invalid trusted route")
         selected = select_identity(bindings, self.runtime_model, cfg["roles"],
                                    selected_role=self.session.role)
@@ -131,7 +154,10 @@ class Route:
                                          p.attempt.store_id, p.input.store_id),
                           limits, wall)
 
-    def _wire(self):
+    def _wire(self, recovery):
+        require(type(self.policy) is ExecutionPolicy, "full parent policy required")
+        limits, wall = self.policy.lane(recovery)
+        selected = SelectedPolicy(self.policy.identity(), limits, wall, recovery)
         def pin(p):
             return dict(store_id=p.store_id, path=str(p.path), inode=list(p.inode))
         return dict(config_json=self.config_json, bindings_json=self.bindings_json,
@@ -139,7 +165,7 @@ class Route:
                     capability=asdict(self.capability),
                     pins={k: pin(getattr(self.pins, k)) for k in
                           ("spool", "attempt", "input", "owner", "checkpoint")},
-                    quotas=asdict(self.quotas), policy=asdict(self.policy),
+                    quotas=asdict(self.quotas), policy=asdict(selected),
                     fixture=dict(data=pin(self.fixture.data), data_sha256=self.fixture.data_sha256,
                                  counter=pin(self.fixture.counter), fault=self.fixture.fault))
 
@@ -154,15 +180,13 @@ class Route:
                     "invalid wire pin")
             return FilePin(r["store_id"], Path(r["path"]), tuple(r["inode"]))
         p = _shape(v["pins"], ("spool", "attempt", "input", "owner", "checkpoint"))
-        q = _shape(v["policy"], ("policy_id", "ordinary_limits", "ordinary_wall",
-                                 "recovery_limits", "recovery_wall"))
+        q = _shape(v["policy"], ("resource", "limits", "wall", "recovery"))
         f = _shape(v["fixture"], ("data", "data_sha256", "counter", "fault"))
         return cls(v["config_json"], v["bindings_json"], v["runtime_model"],
                    SessionBinding(**v["session"]), Capability(**v["capability"]),
                    StorePins(**{k: pin(x) for k, x in p.items()}), Quotas(**v["quotas"]),
-                   ExecutionPolicy(q["policy_id"], Limits(**q["ordinary_limits"]),
-                                   q["ordinary_wall"], Limits(**q["recovery_limits"]),
-                                   q["recovery_wall"]),
+                   SelectedPolicy(ResourcePolicy(**q["resource"]), Limits(**q["limits"]),
+                                  q["wall"], q["recovery"]),
                    SyntheticFixture(pin(f["data"]), f["data_sha256"], pin(f["counter"]), f["fault"]))
 
 
@@ -170,6 +194,7 @@ class Route:
 class Bootstrap:
     route: Route = field(repr=False)
     selection: tuple | None = None
+    deadline: float | None = None  # child-only absolute monotonic deadline
 
     def __post_init__(self):
         require(type(self.route) is Route, "invalid trusted route")
@@ -178,22 +203,31 @@ class Bootstrap:
                     and type(self.selection[0]) is str and body_hash(self.selection[0])
                     and type(self.selection[1]) is int and 0 < self.selection[1] <= MAX_VERSION,
                     "invalid trusted recovery selector")
+        if type(self.route.policy) is SelectedPolicy:
+            require(self.route.policy.recovery is self.recovery
+                    and type(self.deadline) in (int, float) and math.isfinite(self.deadline)
+                    and self.deadline > 0, "selected lane/deadline mismatch")
+        else:
+            require(self.deadline is None, "parent bootstrap cannot override deadline")
 
     @property
     def recovery(self):
         return self.selection is not None
 
-    def wire(self):
-        raw = canonical(dict(route=self.route._wire(), selection=self.selection)).encode("utf-8")
+    def wire(self, deadline):
+        require(type(self.route.policy) is ExecutionPolicy and type(deadline) in (int, float)
+                and math.isfinite(deadline) and deadline > 0, "invalid parent projection")
+        raw = canonical(dict(route=self.route._wire(self.recovery), selection=self.selection,
+                             deadline=deadline)).encode("utf-8")
         require(0 < len(raw) <= MAX_BOOTSTRAP, "trusted bootstrap too large")
         return raw
 
     @classmethod
     def from_wire(cls, value):
-        v = _shape(value, ("route", "selection"))
+        v = _shape(value, ("route", "selection", "deadline"))
         s = v["selection"]
         require(s is None or type(s) is list, "invalid trusted selector")
-        return cls(Route._from_wire(v["route"]), None if s is None else tuple(s))
+        return cls(Route._from_wire(v["route"]), None if s is None else tuple(s), v["deadline"])
 
 
 class SchedulingBlocked(Conflict):
@@ -215,7 +249,8 @@ class Scheduler:
     def __init__(self, inventory, routes):
         try:
             require(type(inventory) is Spool and type(routes) is tuple
-                    and 0 < len(routes) <= 3 and all(type(r) is Route for r in routes),
+                    and 0 < len(routes) <= 3 and all(type(r) is Route and
+                    type(r.policy) is ExecutionPolicy for r in routes),
                     "invalid scheduler bootstrap")
             self._inventory = inventory
             self._routes = {r.key(): r for r in routes}

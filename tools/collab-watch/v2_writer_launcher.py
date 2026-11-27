@@ -285,7 +285,7 @@ class Supervisor:
                                       probe=spec.probe, dummy=asdict(spec.dummy) if spec.dummy else None)).encode()
                     _require(len(bootstrap) <= MAX_CONTROL)
                 else:
-                    bootstrap = coordinated.wire()
+                    bootstrap = coordinated.wire(deadline)
                 parent.settimeout(_remaining(deadline))
                 parent.sendall(bootstrap)
                 parent.shutdown(socket.SHUT_WR)

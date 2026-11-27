@@ -88,8 +88,32 @@ class SchedulerTests(unittest.TestCase):
         scheduler = Scheduler(spool, (route,))
         self.assertNotEqual(route.policy.identity(),
                             replace(route.policy, recovery_wall=17).identity())
-        self.assertEqual(Bootstrap.from_wire(strict_json(Bootstrap(route).wire().decode())).route,
-                         route)
+        for recovery in (False, True):
+            selection = ("a"*64, 2) if recovery else None
+            deadline = time.monotonic()+route.policy.lane(recovery)[1]
+            wire = strict_json(Bootstrap(route, selection).wire(deadline).decode())
+            self.assertEqual(wire["deadline"], deadline)
+            policy = wire["route"]["policy"]
+            self.assertEqual(set(policy), {"resource", "limits", "wall", "recovery"})
+            limits, wall = route.policy.lane(recovery)
+            self.assertEqual(policy["limits"], dict(address_bytes=limits.address_bytes,
+                                                  cpu_seconds=limits.cpu_seconds,
+                                                  files=limits.files, processes=limits.processes))
+            self.assertEqual(policy["wall"], wall)
+            self.assertEqual(policy["recovery"], recovery)
+            self.assertEqual(policy["resource"]["sha256"], route.policy.identity().sha256)
+            unselected, other_wall = route.policy.lane(not recovery)
+            self.assertNotIn(str(unselected.address_bytes), canonical(wire))
+            self.assertNotEqual(policy["wall"], other_wall)
+            child = Bootstrap.from_wire(wire)
+            self.assertEqual(child.route.policy.identity(), route.policy.identity())
+            self.assertEqual(child.route.policy.lane(recovery), (limits, wall))
+            with self.assertRaises(Conflict):
+                child.route.policy.lane(not recovery)
+            with self.assertRaises(Conflict):
+                child.wire(deadline)
+            with self.assertRaises(SchedulingBlocked):
+                Scheduler(spool, (child.route,))
         with self.assertRaises(launch.LaunchError):
             launch.Supervisor(route.launch_spec(True)).start_coordinated(Bootstrap(route))
         out, done = self.ordinary(scheduler, route, original, True)

@@ -1564,8 +1564,11 @@ pinned spool, attempt, input and owner installation and configuration/quota
 identity. Each route binds a current session/capability and checkpoint pin.
 The immutable execution policy includes both numeric resource-limit sets
 (address space, CPU, open descriptors, processes) and wall deadlines; its
-canonical SHA-256 and ID are the durable ResourcePolicy identity. Neither
-policy nor route is derived from a worker frame.
+canonical SHA-256 and ID are the durable ResourcePolicy identity. Only the opaque policy identity, selected lane's limits and wall
+budget, and exact monotonic deadline cross into the private child bootstrap;
+the full policy and unselected lane stay in the trusted parent. The child
+checks the projected limits/deadline against the actual installed limits and
+launcher deadline. Neither policy nor route is derived from a worker frame.
 
 A single Scheduler instance has one pair-wide launch slot, across roles and
 lanes. It does not recycle that slot until the previous Supervisor has reaped
