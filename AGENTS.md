@@ -56,23 +56,60 @@ User shorthand/slang is normalized only through the root `COMMAND-ALIASES.json` 
 governing active ref. The registry is an input-language layer; it does not own CDC/COLLAB/process
 semantics and it grants no authority by itself.
 
+A registered alias may appear only in one of these closed utterance envelopes:
+
+```text
+<alias>
+<prelude>. <alias>
+<alias>: <conditions>
+<prelude>. <alias>: <conditions>
+```
+
+The `<alias>` segment itself must match one registered alias pattern completely after the
+registry-declared whitespace/case/type normalization. `full_input_only` therefore applies to the
+**alias segment**, not necessarily to the whole user utterance.
+
+`<prelude>` is ordinary user instruction text that must be handled before alias activation. The
+separator is the period immediately preceding the final alias segment; the prelude may itself
+contain earlier punctuation. Do not activate the alias until the applicable preceding instructions
+have been completed or otherwise truthfully resolved under their normal rules.
+
+A colon immediately after the completely matched alias segment starts `<conditions>`. Everything
+after that colon is additional user-supplied execution conditions for the canonical alias intent.
+Those conditions are not ignored text: preserve and apply them under the normal owning
+process/authority rules while executing the alias. They may sequence or restrict the canonical
+intent and may add authority only when their own explicit wording independently satisfies the
+ordinary authorization gates; the alias itself grants nothing beyond its registered canonical
+intent.
+
+The prelude and condition forms may be combined. Do not recognize an alias merely because
+alias-like text occurs elsewhere in a sentence, inside the prelude, or inside conditions.
+
 Before evaluating whether a user utterance activates a loop/overlay or grants repository/tool
 authority:
 
-1. if the complete user utterance can match a registered alias shape, read and validate the exact
-   root `COMMAND-ALIASES.json`;
-2. apply only its declared full-input matching rules and typed parameter grammar; do not invent
-   unregistered synonyms, fuzzy matches, omitted words or free-form regular-expression behavior;
-3. normalize every successful match to its closed `canonical_intent`;
-4. if there are no successful matches, continue ordinary interpretation of the original utterance;
-5. if one or more patterns match and all produce the **same** canonical intent, evaluate that intent
-   exactly as the semantically equivalent explicit user request identified by the registry; and
-6. if matches produce more than one distinct canonical intent, fail closed: activate nothing,
+1. read and validate the exact root `COMMAND-ALIASES.json` when either the whole utterance or a
+   permitted final alias envelope can contain a registered alias segment;
+2. split only according to the registry-declared closed envelope rules above; do not invent other
+   delimiters, fuzzy placement, omitted punctuation or arbitrary substring matching;
+3. apply the declared full-segment matching rules and typed parameter grammar to `<alias>`; do not
+   invent unregistered synonyms, fuzzy matches, omitted words or free-form regular-expression
+   behavior;
+4. if a prelude exists, execute/resolve it first under its ordinary rules before activating the
+   alias;
+5. normalize every successful alias-segment match to its closed `canonical_intent` and attach any
+   parsed `<conditions>` as additional execution conditions for that intent;
+6. if there is no successful alias-segment match, continue ordinary interpretation of the original
+   utterance;
+7. if one or more patterns match and all produce the **same** canonical intent, evaluate that intent
+   exactly as the semantically equivalent explicit user request identified by the registry, subject
+   to any attached conditions; and
+8. if matches produce more than one distinct canonical intent, fail closed: activate nothing,
    widen no authority, and tell the user that the phrase is ambiguous, naming the competing
    interpretations and asking for an explicit choice.
 
-A syntactically alias-like phrase with an invalid typed parameter is not partially accepted. Report
-the invalid shorthand when that is useful, and do not derive activation/authority from it.
+A syntactically alias-like segment with an invalid typed parameter is not partially accepted.
+Report the invalid shorthand when that is useful, and do not derive activation/authority from it.
 
 Typed duration values are parsed only by the reusable `duration` type in
 `COMMAND-ALIASES.json`. A missing duration unit uses the registry's default (currently minutes);
@@ -85,6 +122,14 @@ canonical intent is treated as if the projectholder had issued its registered eq
 request directly. It grants **exactly** those semantics and no additional capability. All ordinary
 CDC/COLLAB identity, mutation, `main`, safety-reserve and other governing gates still apply after
 normalization.
+
+Examples:
+
+```text
+Перечитай актуальные правила. Коллаб 35
+Коллаб 35: сначала обсудите замечания D1-D7
+Перечитай актуальные правила. Коллаб 35: сначала обсудите D1-D7 и productive WAIT
+```
 
 ### COLLAB identity binding gate
 
