@@ -1830,8 +1830,8 @@ policy.
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
-- `VPNG-U001-R1.R3.R7.R4.R1` — [`none`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
@@ -1879,7 +1879,7 @@ Architectural decisions
    *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией.*
 
 10. `Подтвержденное текущее использование для reclaim`
-   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. Новый R7.R4.R1/R2 contribution не материализован: текущие desired-building поля не являются этим подтвержденным контрактом.*
+   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. R7.R4.R1/R2 contribution материализован частично: pure `project_confirmed_current_use` в `rou/confirmed_current_use.py` принимает от вызывающего один уже подтвержденный effective-policy generation, проверяет его cross-links и выпускает per-Profile `CONFIRMED`, `NONE` или `UNKNOWN` с exact ordinary path/realization context при `CONFIRMED`. Для выбранного managed WireGuard проверяется D.001 и полный current Device-wide набор D.002 group owners, в том числе для выбранного reserve path до вывода `NONE`. Проектор сам не доказывает свежесть принятого generation, не наблюдает Linux и не выполняет policy/lifecycle mutation; tentative desired-building поля по-прежнему не являются подтвержденным контрактом. Runtime admission, invalidation и передача этой проекции A.012 пока не материализованы.*
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
@@ -1887,6 +1887,14 @@ Architectural decisions
 текущий Manager умеет сохранять structural membership и участвовать в dependency release,
 но новая конфигурационная проекция требуемого присутствия Devices ему не принадлежит и пока
 не материализована отдельной границей.
+
+По `VPNG-U001-R1.R3.R7.R4.R1` вклад A.004 теперь [`partial`]: материализован только
+pure confirmed-current-use projector; по `VPNG-U001-R1.R3.R7.R4.R2` вклад [`partial`]
+только в части current-use/tie evidence input. Exact step-1 source `eeb8e4dc44aa2577a098c5d9d5d6c485011720c1`
+прошел NG3 Python run `46076998937` (984 unit tests, 25 jobs PASS) и независимую приемку
+pure projection/trace registration. Это не подтверждает runtime admission или передачу
+current-use в lifecycle, A.012 protection/tie/survivor selection, strict reclaim, dependency
+release или retirement по новой policy. R7.R4/R1/R2 остаются незакрытыми.
 
 **Evidence:** `EV-00280`.
 
