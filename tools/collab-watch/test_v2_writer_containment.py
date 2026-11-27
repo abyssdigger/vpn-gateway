@@ -544,11 +544,16 @@ class SystemdVehicleTests(unittest.TestCase):
                           ('vpng-b1-0-1.service', 'a'*40),
                           ('vpng-b1-1-1.service', 'main')]:
             with self.subTest(unit=unit, sha=sha), \
+                    patch('run_v2_containment_evidence.os.getresuid', return_value=(0,)*3), \
+                    patch('run_v2_containment_evidence.os.getresgid', return_value=(0,)*3), \
+                    patch('run_v2_containment_evidence.os.listdir', return_value=['1']), \
+                    patch('run_v2_containment_evidence.Path.read_text') as read, \
                     patch('run_v2_containment_evidence._systemctl') as systemctl, \
                     patch('run_v2_containment_evidence.os.mkdir') as mkdir, \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(provision_systemd(unit, sha), 2)
                 self.assertEqual(json.loads(output.getvalue())['phase'], 'service-identity')
+                read.assert_not_called()
                 systemctl.assert_not_called()
                 mkdir.assert_not_called()
 

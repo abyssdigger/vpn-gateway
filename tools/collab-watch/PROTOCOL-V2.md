@@ -1707,7 +1707,7 @@ resource policies and quota mechanisms remain engineering bindings; actual
 external permission/credential changes and cutover require their owning
 explicit projectholder/setup authority. No VPN-GATE operator behavior changes.
 
-### 9c-B1 — staged containment lifecycle (WIP checkpoint, not accepted)
+### 9c-B1 — staged containment lifecycle (candidate, not accepted)
 
 B1 is a fixed synthetic evidence harness, not a production launcher, generic
 cgroup administrator or admission mechanism. The external trusted provisioner
@@ -1750,7 +1750,27 @@ commit field is a trusted provisioner's declaration; observed file hashes do
 not independently authenticate that commit or interpreter. A nonzero result
 on a read-only mount is unavailable positive evidence, not PASS. Ordinary
 unit tests and mocked filesystem negatives do not establish actual kernel
-cgroup containment. Actual dedicated runner provisioning/CI remains pending
-review. No aggregate reserve, hostile external deputy exclusion, deployment,
+cgroup containment. The dedicated branch-conditioned Ubuntu 24.04 evidence job uses only
+contents: read and a clean exact event-SHA checkout, with checkout credentials
+not persisted. The fixed, bounded, root transient systemd service uses
+Delegate=cpu memory pids and DelegateSubgroup=manager (systemd >=254). The
+main process independently verifies the service manager, exact unit/group,
+owner PID, host namespace, writable unified mount, root-owned directories
+and controller inventory before creating a fresh empty test sibling. Only
+the pinned test directory FD is retained for the strict runner; the manager
+and any systemd control subgroup are outside its owned generation scope.
+The fixed system interpreter starts with isolated startup and a scrubbed
+environment; actual single-threaded ownership is checked. The service
+runtime and stop are bounded, and the job separately checks that the outer
+transient unit/cgroup is absent. This outer cleanup never converts a failed
+B1 case into success.
+
+The first exact-source hosted vehicle run was positive on
+fb808bfc1084a1848c66428e9b3fa13de6455b3a (COLLAB Watch 46076142937,
+B1 job 140764202262): all four strict cases, no skips, and separately
+confirmed outer cleanup. This is historical evidence for that source only;
+a final candidate must carry its own exact-SHA evidence and independent
+GUARD review. The source/hosted-runner/systemd trust assumptions remain.
+No aggregate reserve, hostile external deputy exclusion, deployment,
 credentials, GitHub effects, production admission or VPN-GATE operator behavior
 is established by B1.
