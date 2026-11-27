@@ -61,15 +61,18 @@ Initial activation has a **pre-loop setup** phase. It is not yet active loop exe
 For a new continuous-execution cycle, before the loop becomes active:
 
 1. choose `CYCLE_INTERVAL`: the user-specified interval, otherwise **30 minutes**;
-2. obtain fresh real current time in UTC and record it as `CYCLE_START_TIME` with an explicit
-   UTC offset (`Z` or `+00:00`);
+2. obtain/observe fresh real current time in UTC using the available current-time utility/source
+   and record it as `CYCLE_START_TIME` with an explicit UTC offset (`Z` or `+00:00`);
 3. read this document if it has not already been read unchanged in the active context;
 4. apply the `AGENTS.md` reading gate and read the active overlay documents;
 5. establish the initial work frontier and any external-input processed frontier;
 6. preserve the authorization boundary exactly as established by `AGENTS.md`;
-7. perform any overlay-defined **one-time pre-loop startup summary**; the generic loop itself
-   defines no user-visible startup/progress report;
-8. activate the loop and enter `EXEC_NEXT`.
+7. activate the loop and enter `EXEC_NEXT`.
+
+The pre-loop setup itself emits **no conversational assistant report**. In particular, do not
+translate the clock observation into a startup/status message. If the execution surface visibly
+renders the time-utility/tool result, that is merely an execution artifact and does not return
+lifecycle control to the projectholder.
 
 If fresh real UTC time cannot be obtained, do not activate autonomous continuous execution.
 
@@ -83,8 +86,9 @@ projectholder explicitly changed them. Reconstruct the current work/frontier sta
 UTC only when needed as an ordinary clock/safety checkpoint, and return directly to
 `EXEC_NEXT`.
 
-The generic loop emits no user-visible entry, resume, heartbeat, waiting or liveness reports.
-Such output is not part of loop state and is never required to prove that execution is alive.
+The generic loop emits no user-visible entry, resume, progress, status, heartbeat, waiting or
+liveness reports. Such output is not part of loop state and is never required to prove that
+execution is alive.
 
 Maintain a compact control marker in active execution context:
 
