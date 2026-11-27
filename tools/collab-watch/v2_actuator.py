@@ -281,7 +281,7 @@ def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
 def _stable_intent(action):
     # Every identity field is significant unless explicitly refreshable.
     stable = {k: v for k, v in action.items()
-              if k not in {"proof_sha256", "inputs_sha256", "witness"}}
+              if k not in {"proof_sha256", "inputs_sha256", "witness", "config_identity_sha256"}}
     stable["repository"] = stable["repository"].lower()
     stable["target"] = stable["target"].lower()
     return stable

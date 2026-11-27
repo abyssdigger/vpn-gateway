@@ -423,7 +423,7 @@ class ActuatorTests(unittest.TestCase):
                 status, payload = 200, {"id":11}
             else:
                 self.assertEqual(self.store.claimed(_bound(original)[3])["state"], "STARTED")
-                status, payload = 307, {}
+                status, payload = 302, {}
                 headers["Location"] = "https://evil.invalid/redirected"
             raw = json.dumps(payload).encode()
             headers["Content-Length"] = str(len(raw))
@@ -436,6 +436,25 @@ class ActuatorTests(unittest.TestCase):
         self.assertEqual(calls, [("GET", "https://api.github.com/user"),
                                  ("POST", ROOT+"/issues/42/comments")])
         self.assertEqual(self.store.claimed(_bound(original)[3])["state"], "UNRESOLVED")
+
+    def test_public_write_opener_cannot_fabricate_actor(self):
+        original, remote = self.material_case()
+        remote.actor = 11
+        with self.assertRaises(TypeError):
+            self.run_case(original, remote, write_opener=remote)
+        self.assertFalse(remote.user_reads)
+        self.assertFalse(remote.sent)
+        self.assertIsNone(self.store.claimed(_bound(original)[3]))
+
+    def test_signal_room_rotation_equivalent_claim(self):
+        original, remote = self.material_case()
+        changed, other = self.material_case(cfg=dict(CFG, signal_room=38))
+        self.assertEqual(_bound(original)[3], _bound(changed)[3])
+        self.assertNotEqual(_bound(original)[4], _bound(changed)[4])
+        result = self.run_case(original, remote)
+        self.assertEqual(result["state"], "VERIFIED")
+        self.assertEqual(self.run_case(changed, other), result)
+        self.assertFalse(other.sent)
 
     def test_repository_casing_stable_effect(self):
         original, _ = self.material_case()

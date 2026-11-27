@@ -432,10 +432,12 @@ test exercises the actual urllib redirect handler without network traffic.
 An existing effect claim prevents a second send but is not evidence that the
 newly requested action is equivalent. Before returning a claimed receipt or
 reconciling it on behalf of a new invocation, compare every closed action
-identity field except refreshable proof/input/witness digests. Repository and
-target path casing is normalized for GitHub identity. Include the normalized
-full config identity and the full logical close request digest (including the
-nominated ACCEPT), not merely PATCH bytes. A mismatch returns
+identity field except refreshable proof/input/witness/config digests. Repository
+and target path casing is normalized for GitHub identity. Include the full
+logical close request digest (including the nominated ACCEPT), not merely
+PATCH bytes. Full config identity remains exact-action evidence, not stable
+request identity; signal-room rotation alone does not change the requested
+mutation. A mismatch returns
 EFFECT_CLAIM_CONFLICT with the old action key and zero mutation; compatible
 refresh returns the original attempt's key/receipt, not a receipt for the new
 proof.
