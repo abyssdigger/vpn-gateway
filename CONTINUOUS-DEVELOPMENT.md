@@ -20,43 +20,39 @@ A generic loop, ID/IDC or research-loop instruction does not activate developmen
 
 For a new CD/CDC cycle:
 
-1. Run the generic `START` procedure from `EXECUTION-LOOP.md`.
-2. Use the observed UTC time to establish `CYCLE_START_TIME` and `CYCLE_INTERVAL`.
-3. Keep the safety reserve and cycle end as internal control state.
-4. Do not convert the clock observation or any startup state into assistant prose.
-5. Do not reply anything in chat.
-6. Continue through the generic `EXEC_NEXT` procedure.
+1. Run the generic `START` procedure from `EXECUTION-LOOP.md` and do not reply anything in chat.
+2. Use the observed UTC time to establish `CYCLE_START_TIME` and `CYCLE_INTERVAL` and do not reply anything in chat.
+3. Keep the safety reserve and cycle end as internal control state and do not reply anything in chat.
+4. Do not convert the clock observation or any startup state into assistant prose and do not reply anything in chat.
+5. Continue through the generic `EXEC_NEXT` procedure and do not reply anything in chat.
 
-Perform this clock observation only for initial activation of a new CDC. Do not repeat it as a
-startup/status report on RESUME, recovery, peer-wait return, work-unit completion, branch movement,
-or any other transition inside the same cycle.
+Perform this clock observation only for initial activation of a new CDC and do not reply anything in chat.
+Do not repeat it as a startup/status report on RESUME, recovery, peer-wait return, work-unit completion,
+branch movement, or any other transition inside the same cycle and do not reply anything in chat.
 
 ### Development setup and resume
 
 Before performing development work:
 
-1. Establish or preserve the generic loop state and clock from `EXECUTION-LOOP.md`.
-2. Read this document when it has not already been read unchanged in the current context.
-3. Apply the `AGENTS.md` reading gate to the actual development scope.
-4. Create or select the dedicated CD working branch when mutation is authorized by the active CD.
-5. Identify or reconstruct the current review unit and development frontier.
-6. Do not reply anything in chat.
-7. Return to `EXEC_NEXT`.
+1. Establish or preserve the generic loop state and clock from `EXECUTION-LOOP.md` and do not reply anything in chat.
+2. Read this document when it has not already been read unchanged in the current context and do not reply anything in chat.
+3. Apply the `AGENTS.md` reading gate to the actual development scope and do not reply anything in chat.
+4. Create or select the dedicated CD working branch when mutation is authorized by the active CD and do not reply anything in chat.
+5. Identify or reconstruct the current review unit and development frontier and do not reply anything in chat.
+6. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 On RESUME/recovery of an existing CDC:
 
-1. Preserve the original `CYCLE_START_TIME`.
-2. Preserve the current development frontier and authority boundary.
-3. Do not emit a startup, resume, progress, status, waiting, branch-state, or recovery report in
-   chat.
-4. Do not reply anything in chat.
-5. Return to `EXEC_NEXT`.
+1. Preserve the original `CYCLE_START_TIME` and do not reply anything in chat.
+2. Preserve the current development frontier and authority boundary and do not reply anything in chat.
+3. Do not emit a startup, resume, progress, status, waiting, branch-state, or recovery report in chat and do not reply anything in chat.
+4. Return to `EXEC_NEXT` and do not reply anything in chat.
 
-Pass every repository/GitHub mutation through `PRE_MUTATION_GATE` from `AGENTS.md`.
+Pass every repository/GitHub mutation through `PRE_MUTATION_GATE` from `AGENTS.md` and do not reply anything in chat.
 
 Do not treat completion of a review unit, publication of an intermediate result, arrival at a known
-frontier, or entry into `WAIT` as permission to reply in chat. Use the generic
-`PRE_FINAL_GATE -> FINAL` path as the only chat-output path for the cycle.
+frontier, or entry into `WAIT` as permission to reply in chat and do not reply anything in chat.
+Use the generic `PRE_FINAL_GATE -> FINAL` path as the only chat-output path for the cycle and do not reply anything in chat.
 
 ## 2. Review units and development blocks
 
@@ -101,10 +97,9 @@ instead of inventing semantics locally.
 
 After every bounded development operation:
 
-1. Preserve the actual development state and required evidence/review state.
-2. Do not emit a completion, progress, status, branch-state, finding, or next-step report in chat.
-3. Do not reply anything in chat.
-4. Return to the generic `EXEC_NEXT` gate.
+1. Preserve the actual development state and required evidence/review state and do not reply anything in chat.
+2. Do not emit a completion, progress, status, branch-state, finding, or next-step report in chat and do not reply anything in chat.
+3. Return to the generic `EXEC_NEXT` gate and do not reply anything in chat.
 
 ### Requirement work
 
@@ -247,27 +242,24 @@ snapshot is published.
 
 When a development block completes:
 
-1. Perform the required review and evidence work.
-2. Publish the completed state according to the applicable `AGENTS.md` snapshot rules.
-3. Perform the development clock checkpoint.
-4. Do not emit a development-boundary report in chat.
-5. Do not reply anything in chat.
-6. Return to generic `EXEC_NEXT`.
+1. Perform the required review and evidence work and do not reply anything in chat.
+2. Publish the completed state according to the applicable `AGENTS.md` snapshot rules and do not reply anything in chat.
+3. Perform the development clock checkpoint and do not reply anything in chat.
+4. Do not emit a development-boundary report in chat and do not reply anything in chat.
+5. Return to generic `EXEC_NEXT` and do not reply anything in chat.
 
 When the session-safety reserve has been reached, use the generic `STOP -> PRE_FINAL_GATE -> FINAL`
-path.
+path and do not reply anything in chat.
 
 When the session-safety reserve has not been reached:
 
-1. Select the next highest-priority sufficiently defined and unblocked development block from the
-   current project frontier.
-2. Prefer logically adjacent work when priority is otherwise equal.
-3. Enter another applicable work-mode overlay, such as research, when the selected work requires it.
-4. Do not manufacture work merely to fill the clock.
-5. Do not reply anything in chat.
-6. Return to generic `EXEC_NEXT`.
+1. Select the next highest-priority sufficiently defined and unblocked development block from the current project frontier and do not reply anything in chat.
+2. Prefer logically adjacent work when priority is otherwise equal and do not reply anything in chat.
+3. Enter another applicable work-mode overlay, such as research, when the selected work requires it and do not reply anything in chat.
+4. Do not manufacture work merely to fill the clock and do not reply anything in chat.
+5. Return to generic `EXEC_NEXT` and do not reply anything in chat.
 
-Do not end a development cycle merely because the originally mentioned subsystem finished.
+Do not end a development cycle merely because the originally mentioned subsystem finished and do not reply anything in chat.
 
 ## 11. Development handoff additions
 
