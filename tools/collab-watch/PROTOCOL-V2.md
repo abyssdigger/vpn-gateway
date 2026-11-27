@@ -1272,3 +1272,75 @@ observed on return is uncertain. Actual launch/session provenance,
 process/UID/CPU/heap/deadline supervision, durable admission and recovery
 spool, and alternate-path/live deployment proofs remain 9b-B, 9b-C and 9c.
 Tests use synthetic local handler and Linux socketpairs only.
+
+
+### 9b-B — staged trusted launcher and one-shot writer-child limits
+
+This is a **staged Linux process-boundary proof**, not a live writer
+deployment. The reviewed supervisor owns one active invocation slot per
+instance and has no queue. Its trusted caller must establish a single
+supervisor for a pinned store set; multiple independent supervisor
+instances are not coordinated by this lock. The closed launch specification
+pins session metadata, four distinct opaque store identities (owner,
+runtime, attempt, input), positive finite hard limits and wall duration.
+Store identities are diagnostic pins only in this unit: no store is opened,
+created, reset, repaired or replaced, no actual capability or credential
+is loaded, and no GitHub transport runs. Explicit trusted replacement of a
+session changes its pin; restarting the same spec does not.
+
+The only executable path is the trusted interpreter and fixed reviewed
+child entrypoint from the trusted installation. The supervisor supplies
+a fixed absolute cwd, isolated Python (-I -S -B), explicit environment,
+DEVNULL stdio, close_fds and exact pass_fds; there is no shell, preexec_fn,
+worker-configurable executable or unreviewed callable. Trusted installation,
+supervisor, root and kernel integrity are prerequisites, not claims against
+their compromise. A worker frame cannot choose the session, limits, paths
+or probe. The child installs and verifies hard AS, CPU, NOFILE and NPROC
+limits before reading bootstrap or parsing a request; the writer sets
+NO_NEW_PRIVS and non-dumpable before reading dummy protected material.
+In privileged probe mode, fixed setpriv clears groups and all capability
+sets, sets distinct non-root UID/GID and NNP, then the child checks actual
+identity, capabilities, descriptors and environment. The worker receives
+only its client endpoint. The writer receives its server endpoint and
+a separate private bootstrap/diagnostic socket. Same-identity mode is
+explicitly a test mode and proves no UID separation. Only dummy material is
+used in the privileged test, never an owner token or write credential.
+
+Each transferred parent-side descriptor is closed immediately after the
+respective spawn. Partial launch failure closes untransferred endpoints,
+terminates and reaps every started immediate child, and reclaims the slot
+only after confirmed reaping and closure of supervisor-owned endpoints.
+The returned client endpoint in the direct test API is transferred to its
+trusted caller, not retained. No additional listening endpoint exists.
+An abrupt process exit must not be masked by a retained supervisor copy.
+A duplicated client endpoint delegates the same pinned session, not a
+new identity or admission.
+
+One absolute monotonic deadline covers spawn, trusted bootstrap, IPC
+request, handler, response and exit. The supervisor independently waits
+until that deadline, then kills/reaps the reviewed immediate children
+and closes its control socket before releasing capacity. A launch/setup
+failure is conservatively surfaced as a launch error without action
+result; the slot remains unavailable if reaping cannot be established.
+This is conditional on a running trusted supervisor and functioning
+kernel; it does not assert that an uninterruptible kernel operation or
+supervisor death permits instantaneous physical reap at the deadline.
+A child exit, missing response or deadline expiry after possible 9b-A
+handoff never authorizes a retry or proves no-attempt. A separate bounded
+diagnostic report records closed test observations and the synthetic
+handler-entry marker; it is not an action result, and absence of that
+marker proves nothing about handler entry.
+
+The reviewed writer child has no fork/exec/subprocess path in this staged
+implementation. NPROC is supplementary, not a general tree bound or
+concurrency admission proof. No whole hostile worker-tree containment is
+claimed: worker descendants, aggregate cgroup enforcement, trusted
+credential provisioning, actual store reopen/admission, crash recovery and
+alternate write-path exclusion remain separately reviewed work. There is
+no production numeric memory/CPU limit derived from the wire maximum.
+Directed tests generate real frozen auxiliary actions using the accepted
+projection/compact/proof primitives, exercise the pure _bound proof path
+inside the limited child and measure exact input bytes, RSS high-water
+mark and CPU. This demonstrates those tested sizes and semantic binding,
+not execution of a real effect, every valid input up to the wire bound, or
+maximum admissible resource consumption.
