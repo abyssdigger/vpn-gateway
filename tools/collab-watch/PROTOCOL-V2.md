@@ -457,3 +457,44 @@ These are explicit deployment boundaries, not claims of distributed locking.
 The Unit 4a schema and irreversible STARTED semantics are unchanged. A crash
 after STARTED still leaves an ambiguous effect for read-only reconciliation,
 never another send.
+
+
+## Unit 4c — durable original-input provider and pairing
+
+A separate explicitly initialized SQLite provider binds its external provider
+identity to the authoritative attempt store identity. Runtime open requires
+both externally pinned IDs and exact existing schema/version. Initialization
+is exclusive and owner-only (0600), commits the schema and syncs the parent
+directory entry. Every operation requires an existing regular nonsymlink
+owner-only file, DELETE journal, synchronous FULL and bounded busy timeout.
+No auto-create, migration, reset, recovery, deletion or GC.
+
+The provider stores immutable exact canonical UTF-8 original input as BLOB,
+keyed by the exact actuator action key, with independently computed SHA-256.
+Save is insert-or-identical in one committed transaction; a different value
+under the same key conflicts. Load revalidates schema, pair, bounds, key,
+stored digest and canonical encoding. Per-row limit matches the actuator
+original-input bound (128 MiB); total 512 MiB and at most 10,000 rows. A
+capacity failure stops new sends, never deletes prior evidence. The provider
+does not replay or interpret task semantics; the actuator still recomputes
+the exact action/effect/proof binding. Originals contain potentially
+confidential material and remain outside the metadata-only attempt ledger;
+diagnostics never include original bytes or arbitrary exception strings.
+
+The public actuator now requires the concrete InputStore type, not an
+arbitrary save/load callback. Under existing Unit-4b ownership it validates
+the provider pair before any new preparation or claimed reconciliation,
+commits and reloads exact input before STARTED, and revalidates pair and
+input immediately before the irreversible transition. Recovery reopens
+the exact claimed input and recomputes its proof and descriptor, including
+before returning an existing VERIFIED receipt. Missing or corrupted original
+or unavailable pair for a claimed effect yields EFFECT_UNKNOWN and no resend.
+Failure before STARTED creates no effect claim. A committed input before
+STARTED may remain as an immutable orphan; it is not authorization or a
+transport attempt and an identical later eligible preparation may reuse it.
+
+Trusted deployment must pin both identities outside the two files, use one
+stable local pair and an owner-controlled directory, prevent identity reuse,
+replacement and rollback, and treat backups as sensitive. Two SQLite files
+are not distributed atomicity or hostile-storage protection. No live/CLI
+activation or new write authority is introduced.

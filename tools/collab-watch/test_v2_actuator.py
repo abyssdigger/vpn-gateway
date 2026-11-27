@@ -3,6 +3,7 @@ from email.message import Message
 from io import BytesIO
 import json
 import subprocess
+import sqlite3
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -18,6 +19,7 @@ from core import canonical, digest, strict_json
 from test_split_journal import CFG, SHA, fixture, issue, opening, material, ref, row, close, ts
 from test_v2_acquisition import Response, Opener, snapshots, ROOT
 from v2_attempts import initialize, open_store
+from v2_inputs import initialize_inputs, open_inputs
 from v2_compact import compact_v2
 from v2_material import preflight_material
 from v2_preflight import preflight_control_compact, preflight_close_compact, preflight_initial_open_compact
@@ -30,16 +32,6 @@ SPEC = dict(selected_role="SPEC", selected_incarnation="s")
 
 class Crash(BaseException):
     pass
-
-
-class Retention:
-    """Synthetic test seam only; not durable storage."""
-    def __init__(self):
-        self.inputs = {}
-    def save(self, key, original):
-        self.inputs[key] = original
-    def load(self, key):
-        return self.inputs[key]
 
 
 class Remote:
@@ -93,7 +85,8 @@ class ActuatorTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name)/"attempts.db"
         self.store = initialize(self.path, "actuator-test")
-        self.retention = Retention()
+        self.input_path = Path(self.tmp.name)/"inputs.db"
+        self.retention = initialize_inputs(self.input_path, "input-test", "actuator-test")
         self.write_context = local()
         transport = patch('v2_actuator._write_transport', side_effect=self.transport_factory)
         transport.start()
@@ -303,9 +296,12 @@ class ActuatorTests(unittest.TestCase):
         remote.after = remote.before
         remote.error = True
         self.assertEqual(self.run_case(original, remote)["state"], "UNRESOLVED")
-        self.retention.inputs.clear()
+        self.input_path.unlink()
         remote.after = post
-        self.assertEqual(self.run_case(original, remote)["state"], "UNRESOLVED")
+        result = self.run_case(original, remote)
+        self.assertEqual(result["state"], "EFFECT_UNKNOWN")
+        self.assertEqual(result["code"], "INPUT_PROVIDER_UNAVAILABLE")
+        self.assertFalse(self.input_path.exists())
         self.assertEqual(len(remote.sent), 1)
 
     def test_crash_before_hint_then_reopen(self):
@@ -314,6 +310,7 @@ class ActuatorTests(unittest.TestCase):
         with self.assertRaises(Crash):
             self.run_case(original, remote)
         self.store = open_store(self.path, "actuator-test")
+        self.retention = open_inputs(self.input_path, "input-test", "actuator-test")
         result = self.run_case(original, remote, reconcile_only=True)
         self.assertEqual(result["state"], "VERIFIED")
         self.assertIsNone(self.store.status(result["action_key"])["response_hint"])
@@ -325,6 +322,7 @@ class ActuatorTests(unittest.TestCase):
             with self.assertRaises(Crash):
                 self.run_case(original, remote)
         self.store = open_store(self.path, "actuator-test")
+        self.retention = open_inputs(self.input_path, "input-test", "actuator-test")
         result = self.run_case(original, remote, reconcile_only=True)
         self.assertEqual(result["state"], "VERIFIED")
         self.assertEqual(self.store.status(result["action_key"])["response_hint"]["comment_id"], 1001)
@@ -374,7 +372,7 @@ class ActuatorTests(unittest.TestCase):
             with self.subTest(claimed_state=claimed_state):
                 with tempfile.TemporaryDirectory() as directory:
                     self.store = initialize(Path(directory)/"attempts.db", "conflict-test")
-                    self.retention = Retention()
+                    self.retention = initialize_inputs(Path(directory)/"inputs.db", "conflict-input", "conflict-test")
                     original, remote = self.control_case()
                     data, baseline, _, effect, _, _ = _bound(original)
                     body = data["body"].replace('{"', '{ "', 1)
@@ -476,6 +474,70 @@ class ActuatorTests(unittest.TestCase):
         self.assertEqual(self.store.claimed(effect), old)
         self.assertEqual(len(remote.sent), 1)
         self.assertFalse(other.sent)
+
+    def test_provider_pair_mismatch_and_fake_provider_before_start(self):
+        original, remote = self.material_case()
+        self.retention = initialize_inputs(Path(self.tmp.name)/"wrong.db", "wrong-input", "wrong-attempt")
+        self.assertEqual(self.run_case(original, remote)["code"], "INPUT_PROVIDER_UNAVAILABLE")
+        class Fake:
+            def save(self, *_):
+                raise AssertionError("must not call")
+            def load(self, *_):
+                raise AssertionError("must not call")
+        self.retention = Fake()
+        self.assertEqual(self.run_case(original, remote)["code"], "INPUT_PROVIDER_UNAVAILABLE")
+        self.assertFalse(remote.sent)
+        self.assertFalse(remote.user_reads)
+        self.assertIsNone(self.store.claimed(_bound(original)[3]))
+
+    def test_provider_disappears_at_authority_gate_no_start(self):
+        original, remote = self.material_case()
+        def authority(_):
+            self.input_path.unlink()
+            return True
+        result = self.run_case(original, remote, authority)
+        self.assertEqual(result["state"], "PREPARED")
+        self.assertEqual(result["code"], "INPUT_PROVIDER_UNAVAILABLE")
+        self.assertFalse(remote.sent)
+        self.assertIsNone(self.store.claimed(_bound(original)[3]))
+        self.assertFalse(self.input_path.exists())
+
+    def test_crash_after_provider_commit_before_started(self):
+        original, remote = self.material_case()
+        seen = []
+        def authority(action):
+            seen.append(digest(canonical(action)))
+            return True
+        with patch.object(self.store, "start", side_effect=Crash):
+            with self.assertRaises(Crash):
+                self.run_case(original, remote, authority)
+        self.assertFalse(remote.sent)
+        self.assertIsNone(self.store.claimed(_bound(original)[3]))
+        self.assertEqual(self.store.status(seen[0])["state"], "PREPARED")
+        self.retention = open_inputs(self.input_path, "input-test", "actuator-test")
+        self.store = open_store(self.path, "actuator-test")
+        self.assertEqual(self.retention.load(seen[0]), original)
+        result = self.run_case(original, remote)
+        self.assertEqual(result["state"], "VERIFIED")
+        self.assertEqual(result["action_key"], seen[0])
+        self.assertEqual(len(remote.sent), 1)
+
+    def test_started_provider_corruption_is_unknown_no_resend(self):
+        original, remote = self.material_case()
+        remote.crash = True
+        with self.assertRaises(Crash):
+            self.run_case(original, remote)
+        claimed = self.store.claimed(_bound(original)[3])
+        with sqlite3.connect(self.input_path) as conn:
+            conn.execute("UPDATE originals SET original_sha256=? WHERE action_key=?",
+                         ("0"*64, claimed["action_key"]))
+        result = self.run_case(original, remote, reconcile_only=True)
+        self.assertEqual(result["state"], "EFFECT_UNKNOWN")
+        self.assertEqual(result["code"], "RETAINED_INPUT_UNAVAILABLE")
+        self.assertEqual(self.store.claimed(_bound(original)[3]), claimed)
+        self.assertEqual(len(remote.sent), 1)
+        self.assertNotIn("write-token", str(result))
+        self.assertNotIn("Candidate SHA:", str(result))
 
     def test_repository_casing_stable_effect(self):
         original, _ = self.material_case()

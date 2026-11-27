@@ -7,13 +7,14 @@ import re
 import stat
 from urllib.request import Request, build_opener
 
-from collab_watch import API, MAX_LOCAL_BYTES, MAX_PAGE_BYTES, TIMEOUT, NoRedirect
+from collab_watch import API, MAX_PAGE_BYTES, TIMEOUT, NoRedirect
 from core import canonical, digest, positive, require, strict_json
 from journal import framed
 from project_tasks import body_hash, comment
 from split_journal import MARKER
 from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
 from v2_attempts import AttemptStore
+from v2_inputs import InputStore, MAX_INPUT_BYTES
 from v2_compact import CompactV2, compact_v2
 from v2_material import preflight_material, verify_material
 from v2_preflight import (preflight_control_compact, preflight_close_compact,
@@ -21,7 +22,6 @@ from v2_preflight import (preflight_control_compact, preflight_close_compact,
 from v2_reconcile import verify_control, verify_close, verify_initial_open
 
 OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close"}
-MAX_INPUT_BYTES = MAX_LOCAL_BYTES * 4
 FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
           "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
 
@@ -247,14 +247,18 @@ def _verified(row):
 def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
     """Read-only remote recovery. Never calls _send or store.start."""
     key = row["action_key"]
-    if row["state"] == "VERIFIED":
-        return _verified(row)
     try:
+        _provider_pair(store, retention)
         original = retention.load(key)
         data, baseline, proof, effect, action, _ = _bound(original)
         witness = _witness(proof, baseline, data["extra_task"])
         require(witness is not None and dict(action, witness=witness) == row["action_descriptor"]
                 and effect == row["effect_descriptor"], "retained action mismatch")
+    except Exception:
+        return _result("EFFECT_UNKNOWN", "RETAINED_INPUT_UNAVAILABLE", key)
+    if row["state"] == "VERIFIED":
+        return _verified(row)
+    try:
         hint = row["response_hint"]
         if hint is not None:
             require(set(hint) == {"room", "comment_id"} and hint["room"] == action["room"]
@@ -276,6 +280,11 @@ def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
         return _verified(store.mark_verified(key, receipt, locator))
     except Exception:
         return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
+
+
+def _provider_pair(store, retention):
+    require(type(retention) is InputStore, "concrete durable input provider required")
+    retention.validate_pair(store.store_id)
 
 
 def _stable_intent(action):
@@ -341,14 +350,18 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
              read_opener=None, reconcile_only=False):
     """Compose accepted preflight, acquisition, durable attempt and readback.
 
-    retention.save(key, original) must durably persist immutable exact inputs;
-    retention.load(key) returns those inputs. A test memory provider is not a
-    production durable backend. The caller owns real runtime authority.
+    Only the concrete, externally pinned durable InputStore is accepted.
+    The caller owns real runtime authority.
     """
     key = None
     try:
         data, baseline, proof, effect, action, request = _bound(original)
         claimed = store.claimed(effect)
+        try:
+            _provider_pair(store, retention)
+        except Exception:
+            return _result("EFFECT_UNKNOWN" if claimed else "NO_ATTEMPT",
+                           "INPUT_PROVIDER_UNAVAILABLE", claimed["action_key"] if claimed else None)
         if claimed is not None:
             return _claimed_result(store, claimed, action, retention, read_token, read_opener)
         if reconcile_only:
@@ -387,6 +400,11 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
                 "exact runtime authority denied or descriptor changed")
     except Exception:
         return _result("PREPARED", "AUTHORITY_DENIED", key)
+    try:
+        _provider_pair(store, retention)
+        require(retention.load(key) == original, "durable input provider mismatch")
+    except Exception:
+        return _result("PREPARED", "INPUT_PROVIDER_UNAVAILABLE", key)
     try:
         started = store.start(key)  # Durable before any external write.
     except Exception:
