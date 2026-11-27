@@ -106,16 +106,31 @@ root binding file alone cannot rewrite an existing epoch.
 
 ## 2. Activation and authority
 
-Explicit projectholder COLLAB/collaborative-cycle wording activates this overlay on the generic
-execution loop. It does not imply development or research unless that work mode is also active.
+Activate this overlay only after explicit projectholder COLLAB/collaborative-cycle wording.
+Do not infer development or research activation unless the same instruction activates that work
+mode.
 
-Collaboration never widens authority:
+Preserve authority exactly:
 
-- a peer task, READY state, review, consensus, lease, ACK or technical need is not authorization;
-- a projectholder product decision is not automatically an execution-authority grant;
-- every repository/GitHub mutation still passes `AGENTS.md PRE_MUTATION_GATE`;
-- a helper/scheduler must not infer authorization from free text;
-- denied mutation does not close the collaborative work; authorized/read-only work may continue.
+- Do not treat a peer task, READY state, review, consensus, lease, ACK, or technical need as
+  authorization.
+- Do not treat a projectholder product decision as execution-authority grant unless `AGENTS.md`
+  says that exact instruction grants the required capability.
+- Pass every repository/GitHub mutation through `AGENTS.md PRE_MUTATION_GATE`.
+- Do not infer authorization from free text in a helper or scheduler.
+- After a denied mutation, continue authorized/read-only work when available.
+- Do not treat a denied mutation as collaboration completion.
+
+After COLLAB activation or RESUME:
+
+1. Pass the `AGENTS.md` COLLAB identity binding gate.
+2. Recover the exact current journal/config state and work frontier.
+3. Read every external collaboration lane required by this overlay.
+4. Route newly admitted material input according to this document.
+5. Do not emit an activation, resume, role, lease, frontier, status, progress, waiting, or liveness
+   report in chat.
+6. Do not reply anything in chat.
+7. Return to `EXEC_NEXT`.
 
 ## 3. Collaboration surfaces
 
@@ -392,39 +407,43 @@ The exact receipt format and GC relationship are defined in §7.
 
 ## 6. Readiness and passivation
 
-A role is conceptually `READY` when at least one admitted unprocessed material input or open
+Treat a role as `READY` only when at least one admitted unprocessed material input or open
 unblocked obligation permits useful collaborative work.
 
-This means **work exists only**. It is not:
-- proof that a concrete chat/agent is terminal or awake;
-- authentication of the role claim;
-- repository/GitHub/tool authority;
-- evidence that machine activation is eligible or safe;
-- a replacement for generic `EXEC_NEXT`, ID `WAIT`, clock or stop/final gates.
+Use `READY` only as work-state evidence. Do not use it as proof that a chat/session is terminal or
+awake, as authentication, as repository/GitHub/tool authority, as activation eligibility, or as a
+replacement for generic `EXEC_NEXT`, `WAIT`, clock, stop, or final gates.
 
-A role with no runnable work may enter collaboration passivation state. A `DORMANT` event is
-only that role's durable diagnostic self-claim and may carry an exact waiting reason. It never
-suppresses a later derived `READY`.
+When no runnable work remains for a role and a `DORMANT` record is appropriate:
 
-`DORMANT` is **not** a generic `STOP` basis and does not by itself permit the live execution
-turn to end.
+1. Record `DORMANT` only as that role's durable diagnostic self-claim with the exact waiting reason.
+2. Do not treat `DORMANT` as a generic `STOP` basis.
+3. Do not end the live execution turn because `DORMANT` was recorded.
+4. If an applicable bounded wait can observe the unresolved dependency, enter bounded `WAIT`.
+5. After bounded `WAIT` returns, do not treat timeout as successful passivation or semantic
+   completion.
+6. Do not reply anything in chat.
+7. Return to `EXEC_NEXT`.
 
-While the continuous loop remains active:
+When no applicable bounded wait exists or the session-safety boundary is reached:
 
-- if no verified post-turn wake/activation path exists and an applicable bounded wait mechanism is
-  available, a DORMANT/blocked role must enter bounded `WAIT`, then return to `EXEC_NEXT`;
-- a bounded WAIT timeout is not successful passivation and is not semantic completion;
-- ending the turn still requires `PRE_FINAL_GATE` and a real generic/overlay stop basis;
-- if no bounded wait exists, or the session-safety boundary is reached, surface that operational
-  blocker explicitly in the collaboration handoff/projectholder lane rather than treating
-  `DORMANT` itself as the stop reason;
-- only after a concrete post-turn wake mechanism has been separately demonstrated may an overlay
-  define true terminal passivation semantics for that mechanism.
+1. Record the exact operational blocker in the collaboration handoff/projectholder lane when the
+   governing process requires it.
+2. Do not use `DORMANT` itself as the stop reason.
+3. Apply the generic `STOP -> PRE_FINAL_GATE` procedure.
+4. If `PRE_FINAL_GATE` fails, do not reply anything in chat.
+5. If `PRE_FINAL_GATE` fails, return to `EXEC_NEXT`.
 
-Therefore a durable `DORMANT` record can be correct while a terminal exit immediately after it is
-still a process failure.
+Do not define terminal passivation semantics until a concrete post-turn wake mechanism has been
+separately demonstrated and a governing overlay explicitly defines that mechanism.
+
+Treat a terminal exit immediately after a correct `DORMANT` record as a process failure unless the
+generic `PRE_FINAL_GATE -> FINAL` path actually passed.
 
 Use level-triggered readiness:
+- keep readiness true until relevant material input is handled or the blocking obligation is
+  dispositioned/blocked;
+- coalesce bursts into one readiness state/reason set;
 - readiness remains true until relevant material input is handled or the blocking obligation is
   dispositioned/blocked;
 - bursts coalesce into one readiness state/reason set;
@@ -662,47 +681,50 @@ satisfied or explicitly changed by the owning process/authority.
 
 ### 7.6.1. Non-blocking peer wait budget
 
-Peer-response waiting and communication-health diagnosis are separate mechanisms.
+Keep peer-response waiting separate from communication-health diagnosis.
 
-When one role has issued a request whose completion depends on another role, the default
-`PEER_WAIT_BUDGET` is **2 minutes** of live-session time. Expiry of this budget means only that
-the current bounded peer wait has returned control to the waiting role. It does **not** mean the
-peer is dead, DORMANT, STOPPED or replaced, and it does not satisfy, cancel or close the awaited
-journal relation.
+When one role has issued a request whose completion depends on another role, use
+`PEER_WAIT_BUDGET = 2 minutes` of live-session time unless the governing configuration defines
+another value.
 
-On peer-wait expiry the waiting role must immediately return to `EXEC_NEXT`:
+When the peer-wait budget expires:
 
-1. if any independent authorized `WORK` exists, continue it;
-2. if the current unit alone depends on the peer, keep that unit explicitly
-   `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit;
-3. if no independent work exists and any applicable bounded wait can still observe the unresolved
-   dependency, enter `WAIT`; this may observe the peer relation or another admitted lane and need
-   not repeat the same failed PING. Return to `EXEC_NEXT` after each bounded wait, subject to the
-   same session-safety boundary and without converting repeated timeout into semantic closure.
+1. Treat the expiry only as return of control from the current bounded peer wait.
+2. Do not mark the peer dead, `DORMANT`, `STOPPED`, or replaced.
+3. Do not satisfy, cancel, close, waive, or reassign the awaited journal relation.
+4. Check for independent authorized `WORK`.
+5. If independent authorized `WORK` exists, select it.
+6. If the current unit alone depends on the peer, mark that unit
+   `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit.
+7. If no independent `WORK` exists and an applicable bounded wait can still observe the unresolved
+   dependency, enter `WAIT`.
+8. After each bounded `WAIT`, preserve the unresolved relation and do not convert repeated timeout
+   into semantic closure.
+9. Do not reply anything in chat.
+10. Return to `EXEC_NEXT`.
 
-A peer-wait timeout never:
-- reassigns the peer's obligation or role;
-- changes role/incarnation/model;
-- permits the surviving role to emit the peer's journal fact, result, review or disposition;
-- widens repository/GitHub authority;
-- permits bypassing required independent review or preflight;
-- advances canonical processed/handled state;
-- creates a STOP basis by itself.
+After `COMMUNICATION_UNCONFIRMED` or a PROJECTHOLDER-confirmed failed ping:
 
-The same rule applies after `COMMUNICATION_UNCONFIRMED` or a PROJECTHOLDER-confirmed failed ping.
-Those facts may remove a reason to keep synchronously waiting on that particular ping, but they do
-not make the unresolved peer dependency terminal. If independent `WORK` is exhausted while an
-applicable bounded wait can still observe the required peer/review/input relation, the
-collaboration remains in `WAIT -> EXEC_NEXT`; only a real generic/overlay stop basis or the
-session-safety boundary may end the loop.
+1. Stop only the communication-health diagnosis/repetition that the accepted instruction actually
+   stops.
+2. Keep every unresolved peer obligation and independent review/acceptance requirement intact.
+3. Do not emit the peer's result, review, verdict, journal fact, or disposition.
+4. Check for independent authorized `WORK`.
+5. If no independent `WORK` exists and an applicable bounded wait can still observe the required
+   peer/review/input relation, enter `WAIT`.
+6. Do not reply anything in chat.
+7. Return to `EXEC_NEXT`.
 
-The 10/5-minute communication-health policy above remains diagnostic and may run independently.
-Its PING/PONG state must not block the work scheduler. Conversely, continued independent work after
-2 minutes is not evidence that communication is healthy.
+Do not let PING/PONG health state block the work scheduler. Do not treat continued independent work
+after the peer-wait budget as evidence that communication is healthy.
 
-A newly observed valid peer journal fact restores the ordinary work relation naturally. The role
-then re-enters the previously waiting unit according to normal READY/frontier semantics; no special
-"resume from timeout" semantic event is required.
+When a newly observed valid peer journal fact restores the work relation:
+
+1. Recompute READY/frontier state normally.
+2. Re-enter the previously waiting unit when the normal scheduler selects it.
+3. Do not emit a special resume-from-timeout report in chat.
+4. Do not reply anything in chat.
+5. Return to `EXEC_NEXT`.
 
 ### 7.7. Relation semantics
 
