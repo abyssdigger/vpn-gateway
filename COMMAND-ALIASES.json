@@ -1,11 +1,28 @@
 {
-  "schema": "vpng-command-aliases/1",
+  "schema": "vpng-command-aliases/2",
   "matching": {
     "full_input_only": true,
+    "full_input_only_scope": "alias_segment",
     "trim_outer_whitespace": true,
     "collapse_internal_whitespace": true,
     "case_insensitive_keywords_and_units": true,
-    "unknown_text_is_not_ignored": true
+    "unknown_text_is_not_ignored": true,
+    "composition": {
+      "allowed_envelopes": [
+        "<alias>",
+        "<prelude>. <alias>",
+        "<alias>: <conditions>",
+        "<prelude>. <alias>: <conditions>"
+      ],
+      "prelude_separator": ".",
+      "prelude_semantics": "execute_before_alias_activation",
+      "conditions_separator": ":",
+      "conditions_semantics": "additional_execution_conditions_for_canonical_intent",
+      "allow_combined": true,
+      "alias_segment_must_match_registered_pattern_completely": true,
+      "alias_segment_must_be_final_alias_segment": true,
+      "arbitrary_substring_matching": false
+    }
   },
   "types": {
     "duration": {
