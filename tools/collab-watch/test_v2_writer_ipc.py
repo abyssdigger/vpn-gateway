@@ -133,7 +133,23 @@ class WriterIPCTests(unittest.TestCase):
             for byte in header(1)+b'x':
                 s.sendall(bytes([byte]))
                 time.sleep(.045)
-        self.assertEqual(self.raw(send, seconds=.18), (REJECT, REJECT))
+        client, local = self.raw(send, seconds=.18)
+        self.assertEqual(local, REJECT)
+        self.assertIn(client, (REJECT, UNKNOWN))
+        self.assertEqual(self.seen, [])
+
+    def test_unread_input_reset_is_not_client_no_attempt(self):
+        server, client = socket.socketpair()
+        with client, server:
+            # Preload an invalid header and bytes the rejecting server will not
+            # consume. Linux closes with unread peer data, so the reply lacks
+            # clean EOF despite the server's local pre-handoff rejection.
+            client.sendall(header(1, magic=b'NOPE') + b'late')
+            client.shutdown(socket.SHUT_WR)
+            end = time.monotonic() + 2
+            local = ipc.WriterInvocation(SESSION, self.handler).serve(server, deadline=end)
+            self.assertEqual(local, REJECT)
+            self.assertEqual(ipc.receive_response(client, end), UNKNOWN)
         self.assertEqual(self.seen, [])
 
     def test_ancillary_on_header_body_and_tail(self):
