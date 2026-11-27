@@ -33,15 +33,33 @@ def _path(path):
         raise Conflict("invalid input store path") from None
 
 
-def _check_file(path):
-    info = os.lstat(path)
+def _file_identity(info):
     require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
             and stat.S_IMODE(info.st_mode) == 0o600
             and info.st_size <= MAX_DB_BYTES, "invalid input store file")
+    return info.st_dev, info.st_ino
 
 
-def _connect(path):
-    _check_file(path)
+def _check_file(path, expected_identity):
+    require(_file_identity(os.lstat(path)) == expected_identity,
+            "input store physical identity changed")
+
+
+def _pin_file(path):
+    fd = None
+    try:
+        fd = os.open(path, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW)
+        identity = _file_identity(os.fstat(fd))
+        _check_file(path, identity)
+        return fd, identity
+    except (Conflict, OSError, ValueError, TypeError):
+        if fd is not None:
+            os.close(fd)
+        raise Conflict("input store unavailable or invalid") from None
+
+
+def _connect(path, expected_identity):
+    _check_file(path, expected_identity)
     conn = sqlite3.connect(path.as_uri()+"?mode=rw", uri=True,
                            timeout=BUSY_MS/1000, isolation_level=None)
     try:
@@ -102,16 +120,41 @@ def _stored(row, expected_key):
     return original
 
 
+def _validate_ids(provider_id, attempt_store_id):
+    require(ident(provider_id) and ident(attempt_store_id)
+            and provider_id != attempt_store_id, "invalid distinct input store identities")
+
+
 class InputStore:
-    """Existing-only immutable local provider with externally pinned identities."""
-    __slots__ = ("_path", "_provider_id", "_attempt_store_id")
+    """Existing-only provider with logical IDs and a lifetime physical pin."""
+    __slots__ = ("_path", "_provider_id", "_attempt_store_id", "_fd", "_identity")
 
     def __init__(self, path, provider_id, attempt_store_id):
+        self._fd = None
         self._path = _path(path)
-        require(ident(provider_id) and ident(attempt_store_id)
-                and provider_id != attempt_store_id, "invalid distinct input store identities")
+        _validate_ids(provider_id, attempt_store_id)
         self._provider_id = provider_id
         self._attempt_store_id = attempt_store_id
+        # O_PATH pins the inode without releasing SQLite's POSIX locks on close.
+        # Holding the inode live prevents unlink/recreate from recycling it.
+        self._fd, self._identity = _pin_file(self.path)
+
+    def close(self):
+        fd = self._fd
+        self._fd = None
+        if fd is not None:
+            os.close(fd)
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def _check_pin(self):
+        require(self._fd is not None and _file_identity(os.fstat(self._fd)) == self._identity,
+                "input store physical pin unavailable")
+        _check_file(self.path, self._identity)
 
     @property
     def path(self):
@@ -129,11 +172,14 @@ class InputStore:
     def _transaction(self):
         conn = None
         try:
-            conn = _connect(self.path)
+            self._check_pin()
+            conn = _connect(self.path, self._identity)
             conn.execute("BEGIN IMMEDIATE")
+            self._check_pin()
             count, total = _validated(conn, self.provider_id, self.attempt_store_id)
             yield conn, count, total
             conn.execute("COMMIT")
+            self._check_pin()
         except (Conflict, sqlite3.Error, OSError, ValueError, TypeError, UnicodeError, RecursionError):
             # Never expose SQLite data, path, original contents or exception text.
             raise Conflict("input store unavailable or invalid") from None
@@ -174,15 +220,20 @@ class InputStore:
 
 def initialize_inputs(path, provider_id, attempt_store_id):
     """Explicit provisioning only. Never overwrite or repair a used path."""
-    store = InputStore(path, provider_id, attempt_store_id)
-    conn = None
+    path = _path(path)
+    _validate_ids(provider_id, attempt_store_id)
+    conn = fd = pin = None
     try:
-        fd = os.open(store.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC, 0o600)
-        try:
-            os.fchmod(fd, 0o600)
-        finally:
-            os.close(fd)
-        conn = _connect(store.path)
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC, 0o600)
+        os.fchmod(fd, 0o600)
+        identity = _file_identity(os.fstat(fd))
+        pin, pinned_identity = _pin_file(path)
+        require(pinned_identity == identity, "input store physical identity changed")
+        # Close the ordinary file descriptor before any SQLite transaction.
+        # Linux POSIX record locks can be released by closing any ordinary fd.
+        os.close(fd)
+        fd = None
+        conn = _connect(path, identity)
         conn.execute("BEGIN IMMEDIATE")
         for statement in (META_SQL, ROWS_SQL):
             conn.execute(statement)
@@ -190,21 +241,34 @@ def initialize_inputs(path, provider_id, attempt_store_id):
         _validated(conn, provider_id, attempt_store_id)
         conn.execute("COMMIT")
         # Persist the newly created directory entry as well as SQLite contents.
-        parent = os.open(store.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         try:
             os.fsync(parent)
         finally:
             os.close(parent)
+        _check_file(path, identity)
+        opened = open_inputs(path, provider_id, attempt_store_id)
+        if opened._identity != identity:
+            opened.close()
+            raise Conflict("input store physical identity changed")
+        return opened
     except (Conflict, sqlite3.Error, OSError, ValueError, TypeError):
         # Leave an incomplete provisioning for explicit investigation; never recreate.
         raise Conflict("explicit input store initialization failed") from None
     finally:
         if conn is not None:
             conn.close()
-    return open_inputs(path, provider_id, attempt_store_id)
+        if fd is not None:
+            os.close(fd)
+        if pin is not None:
+            os.close(pin)
 
 
 def open_inputs(path, expected_provider_id, expected_attempt_store_id):
     store = InputStore(path, expected_provider_id, expected_attempt_store_id)
-    store.validate_pair(expected_attempt_store_id)
-    return store
+    try:
+        store.validate_pair(expected_attempt_store_id)
+        return store
+    except BaseException:
+        store.close()
+        raise

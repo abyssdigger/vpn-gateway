@@ -498,3 +498,28 @@ stable local pair and an owner-controlled directory, prevent identity reuse,
 replacement and rollback, and treat backups as sensitive. Two SQLite files
 are not distributed atomicity or hostile-storage protection. No live/CLI
 activation or new write authority is introduced.
+
+
+An opened provider also pins its physical DB identity (device and inode) with
+a live Linux O_PATH close-on-exec nonsymlink inode handle for the lifetime of
+the provider object. Each transaction checks the pathname against the held
+inode and validates owner/mode/type before opening and again around the
+transaction. Retaining the descriptor prevents inode-number reuse while the
+old handle exists. Explicit close invalidates the handle. Provisioning retains
+an O_PATH pin of its exclusive-created inode through the validated open,
+closing the ordinary provisioning descriptor before SQLite operations. O_PATH
+close preserves POSIX record locks held on the same inode by SQLite in the
+process; an ordinary read-only descriptor would release them. An already opened
+provider therefore rejects even a same-logical-ID replacement. A fresh
+explicit open cannot establish historical inode continuity by itself; this
+does not solve concurrent hostile path substitution or rollback, and the
+external no-reuse/no-replacement trust boundary remains.
+
+
+Immediately after successful canonical remote readback, and before persisting
+VERIFIED, the actuator revalidates the provider pair and reloads the exact
+claimed input. Byte equality to the already recomputed bound original
+confirms the same action/effect identity; missing, replaced or changed input
+yields EFFECT_UNKNOWN without persisting a verification receipt. This is a
+last local check, not atomic coordination of two files against hostile
+concurrent replacement.

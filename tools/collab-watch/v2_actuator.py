@@ -277,6 +277,14 @@ def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
     if not persist:
         return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
     try:
+        _provider_pair(store, retention)
+        # The first exact bytes were already bound to this claimed action and
+        # effect above. Equality after a fresh validated load confirms that
+        # same canonical binding, not a refreshed or substituted original.
+        require(retention.load(key) == original, "retained input changed during readback")
+    except Exception:
+        return _result("EFFECT_UNKNOWN", "RETAINED_INPUT_UNAVAILABLE", key)
+    try:
         return _verified(store.mark_verified(key, receipt, locator))
     except Exception:
         return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)

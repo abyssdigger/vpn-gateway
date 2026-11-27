@@ -539,6 +539,41 @@ class ActuatorTests(unittest.TestCase):
         self.assertNotIn("write-token", str(result))
         self.assertNotIn("Candidate SHA:", str(result))
 
+    def test_provider_loss_during_post_readback_prevents_verified(self):
+        for mode in ("delete", "replace"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                self.path = Path(directory)/"attempts.db"
+                self.input_path = Path(directory)/"inputs.db"
+                self.store = initialize(self.path, "postread-attempt")
+                self.retention = initialize_inputs(self.input_path, "postread-input", "postread-attempt")
+                original, remote = self.material_case()
+                read = remote.read
+                changed = []
+                def remove_during_readback(req, timeout):
+                    response = read(req, timeout)
+                    if remote.applied and not changed:
+                        claimed = self.store.claimed(_bound(original)[3])
+                        self.input_path.unlink()
+                        if mode == "replace":
+                            replacement = initialize_inputs(self.input_path, "postread-input", "postread-attempt")
+                            try:
+                                replacement.save(claimed["action_key"], original)
+                            finally:
+                                replacement.close()
+                        changed.append(claimed["action_key"])
+                    return response
+                remote.read = remove_during_readback
+                result = self.run_case(original, remote)
+                self.assertEqual(result["state"], "EFFECT_UNKNOWN")
+                self.assertEqual(result["code"], "RETAINED_INPUT_UNAVAILABLE")
+                self.assertEqual(changed, [result["action_key"]])
+                record = self.store.status(result["action_key"])
+                self.assertEqual(record["state"], "STARTED")
+                self.assertIsNone(record["receipt_sha256"])
+                self.assertEqual(self.run_case(original, remote)["state"], "EFFECT_UNKNOWN")
+                self.assertEqual(len(remote.sent), 1)
+                self.retention.close()
+
     def test_repository_casing_stable_effect(self):
         original, _ = self.material_case()
         changed, _ = self.material_case(cfg=dict(CFG, repository="Owner/Repo"))

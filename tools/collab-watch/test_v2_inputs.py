@@ -1,4 +1,7 @@
 import hashlib
+import fcntl
+import subprocess
+import sys
 import os
 from pathlib import Path
 import sqlite3
@@ -33,7 +36,11 @@ class InputStoreTests(unittest.TestCase):
         self.store.save(KEY, ORIGINAL)
         with self.assertRaises(Conflict):
             initialize_inputs(self.path, "provider", "attempt")
-        self.assertEqual(open_inputs(self.path, "provider", "attempt").load(KEY), ORIGINAL)
+        self.store.close()
+        with self.assertRaises(Conflict):
+            self.store.load(KEY)
+        self.store = open_inputs(self.path, "provider", "attempt")
+        self.assertEqual(self.store.load(KEY), ORIGINAL)
         missing = self.path.parent/"missing.db"
         with self.assertRaises(Conflict):
             open_inputs(missing, "provider", "attempt")
@@ -141,3 +148,39 @@ class InputStoreTests(unittest.TestCase):
         alias.symlink_to(self.path)
         with self.assertRaises(Conflict):
             open_inputs(alias, "replacement", "attempt")
+
+
+    def test_same_identity_replacement_rejected_by_open_handle(self):
+        self.store.save(KEY, ORIGINAL)
+        self.path.unlink()
+        replacement = initialize_inputs(self.path, "provider", "attempt")
+        self.addCleanup(replacement.close)
+        replacement.save(KEY, DIFFERENT)
+        for operation in (lambda: self.store.load(KEY),
+                          lambda: self.store.save(OTHER, ORIGINAL),
+                          lambda: self.store.validate_pair("attempt")):
+            with self.assertRaises(Conflict):
+                operation()
+        self.assertEqual(replacement.load(KEY), DIFFERENT)
+        with self.assertRaises(Conflict):
+            replacement.load(OTHER)
+        self.store.close()
+        with self.assertRaises(Conflict):
+            self.store.validate_pair("attempt")
+
+
+    def test_pin_close_preserves_other_posix_locks(self):
+        # Linux ordinary fd close releases process-owned POSIX locks on the
+        # inode, even those acquired on a different fd. O_PATH must not do so.
+        fd = os.open(self.path, os.O_RDWR)
+        script = ("import fcntl,os,sys; fd=os.open(sys.argv[1],os.O_RDWR); "
+                  "fcntl.lockf(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)")
+        try:
+            fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.store.close()
+            child = subprocess.run([sys.executable, "-c", script, str(self.path)],
+                                   capture_output=True, timeout=5)
+            self.assertNotEqual(child.returncode, 0)
+            self.assertIn(b"BlockingIOError", child.stderr)
+        finally:
+            os.close(fd)
