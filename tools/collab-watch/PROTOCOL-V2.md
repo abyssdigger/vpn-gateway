@@ -714,3 +714,43 @@ Identity selection does not establish session uniqueness or exclusive
 transport ownership. Two sessions could select the same allowed pair.
 Before live automated writes, 6b must establish the trusted ownership
 and fencing boundary. No live activation, migration or authority follows.
+
+
+## Unit 6b-A — durable local owner capability and exclusion primitive
+
+One explicitly provisioned owner SQLite store binds store ID, normalized
+repository and journal epoch. Its closed schema contains only metadata and
+role slots: exact role, fixed incarnation, positive generation and SHA-256
+capability digest. First claim is generation 1; explicit replacement
+requires the exact current generation, increments it by one and cannot
+change incarnation. No expiry, clock, heartbeat, recovery/reset, deletion
+or automatic takeover exists. The external operator/transition authority
+callback must grant the exact detached nonsecret claim/replacement
+descriptor; only exact True without descriptor changes permits transition.
+An opaque server-generated 256-bit token is returned only in the capability
+and not persisted; status and capability repr omit secrets. Losing the
+token requires explicit authorized replacement.
+
+Exclusive nonblocking inode flock covers each claim/replacement transaction
+and the fence context. The fence validates the complete pinned store and
+capability including constant-time digest comparison, closes SQLite before
+yielding, and retains the same flock until caller exit. Concurrent owner
+replacement returns OWNER_BUSY; only a fresh retry may replace after fence
+release. Old capability cannot fence after replacement. No authority or
+transport action follows merely from a valid capability.
+
+Explicit O_EXCL owner-only provisioning, directory fsync, SQLite FULL/delete
+durability, bounded busy timeout and exact schema/version/meta checks apply.
+An O_PATH pin prevents live inode reuse; each operation checks regular
+owner-only nonsymlink single-link identity and bounded file size. Runtime
+open is existing-only. A fresh reopen cannot detect historical replacement
+or rollback; externally pinned one-store continuity and trusted local
+storage are required. This is not distributed or hostile-storage fencing.
+
+6b-B must hold this fence over the entire accepted actuator invocation,
+with owner-store then attempt-store lock ordering, including readback and
+reconciliation. Generation is not part of semantic effect identity.
+6b-A makes no actuator, network, GitHub, CLI, config, role selection or
+live activation change. A future trusted writer must exclusively control
+role-attributed credentials; direct agent writers otherwise bypass the
+fence. No credential custody or deployment claim is established.
