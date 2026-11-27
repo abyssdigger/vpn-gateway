@@ -115,5 +115,155 @@ def main(argv=None):
     return 0
 
 
+
+def _systemctl(*args):
+    """Read only bounded properties of the fixed evidence service."""
+    import subprocess
+    result = subprocess.run(
+        ['/usr/bin/systemctl', *args], check=True, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, text=True, encoding='ascii', timeout=5,
+        env={'PATH': '/usr/bin:/bin', 'LANG': 'C'})
+    if len(result.stdout) > 4096:
+        raise Unavailable('oversized service observation')
+    return result.stdout
+
+
+def _enable_required(fd):
+    from v2_writer_containment import pin
+    import stat
+    if not REQUIRED <= set(read_control(fd, 'cgroup.controllers').split()):
+        raise Unavailable('missing required controllers')
+    if read_control(fd, 'cgroup.procs').strip():
+        raise Unavailable('internal processes prevent delegation')
+    missing = REQUIRED - set(read_control(fd, 'cgroup.subtree_control').split())
+    if missing:
+        control = os.open('cgroup.subtree_control',
+                          os.O_WRONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=fd)
+        try:
+            st = os.fstat(control)
+            if (pin(control).mount_id != pin(fd).mount_id or st.st_uid != 0
+                    or st.st_mode & 0o022 or not stat.S_ISREG(st.st_mode)):
+                raise Unavailable('unsafe delegation control')
+            data = ' '.join('+' + name for name in sorted(missing)).encode('ascii')
+            if os.write(control, data) != len(data):
+                raise Unavailable('incomplete delegation write')
+        finally:
+            os.close(control)
+    if not REQUIRED <= set(read_control(fd, 'cgroup.subtree_control').split()):
+        raise Unavailable('delegation not established')
+
+
+def provision_systemd(unit, source_commit):
+    """Fixed GitHub-hosted disposable B1 vehicle, never a general provisioner.
+
+    Called as the transient unit's main process. Trust the reviewed checkout,
+    pinned system interpreter and disposable hosted systemd manager, not arbitrary
+    worker inputs. Only the fresh test sibling becomes the runner's owned root.
+    Outer service teardown remains separate from B1 evidence.
+    """
+    from v2_writer_containment import pin, child_directories, resolve_cgroup_path
+    import stat
+    mount_fd = slice_fd = unit_fd = manager_fd = test_fd = -1
+    phase = 'service-identity'
+    try:
+        if (not re.fullmatch(r'vpng-b1-[1-9][0-9]{0,19}-[1-9][0-9]{0,9}\.service', unit)
+                or not re.fullmatch(r'[0-9a-f]{40}', source_commit)
+                or os.getresuid() != (0, 0, 0)
+                or os.getresgid() != (0, 0, 0)
+                or len(os.listdir('/proc/self/task')) != 1):
+            raise Unavailable('invalid fixed service inputs')
+        if (Path('/proc/1/comm').read_text().strip() != 'systemd'
+                or os.path.realpath('/proc/1/exe') not in
+                ('/usr/lib/systemd/systemd', '/lib/systemd/systemd')
+                or namespace_ids() != tuple(os.stat(f'/proc/1/ns/{n}').st_ino
+                                            for n in NAMESPACES)):
+            raise Unavailable('not the host systemd namespace')
+        version = _systemctl('--version').splitlines()[0]
+        match = re.match(r'systemd ([0-9]+)(?:\s|$)', version)
+        if not match or int(match[1]) < 254:
+            raise Unavailable('DelegateSubgroup unsupported')
+        group = '/system.slice/' + unit
+        fields = ('MainPID', 'ControlGroup', 'Delegate', 'User', 'Slice')
+        observed = _systemctl('show', *('--property=' + f for f in fields), unit)
+        rows = [line.split('=', 1) for line in observed.splitlines()]
+        wanted = {'MainPID': str(os.getpid()), 'ControlGroup': group,
+                  'Delegate': 'yes', 'User': 'root', 'Slice': 'system.slice'}
+        if len(rows) != len(wanted) or dict(rows) != wanted:
+            raise Unavailable('unexpected unit properties')
+        membership = Path('/proc/self/cgroup').read_text(encoding='ascii')
+        if membership != '0::' + group + '/manager\n':
+            raise Unavailable('manager subgroup mismatch')
+        phase = 'delegation-preflight'
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+        mount_fd = os.open('/sys/fs/cgroup', flags)
+        slice_fd = os.open('system.slice', flags, dir_fd=mount_fd)
+        unit_fd = os.open(unit, flags, dir_fd=slice_fd)
+        manager_fd = os.open('manager', flags, dir_fd=unit_fd)
+        mount_id = pin(mount_fd).mount_id
+        mounts = Path('/proc/self/mountinfo').read_text(encoding='utf-8')
+        unit_path, manager_path = resolve_cgroup_path(
+            mounts, membership, os.readlink(f'/proc/self/fd/{unit_fd}'),
+            mount_id, membership_check=True)
+        if str(unit_path) != group or str(manager_path) != group + '/manager':
+            raise Unavailable('unsafe delegation mapping')
+        for fd in (mount_fd, slice_fd, unit_fd, manager_fd):
+            st = os.fstat(fd)
+            if (pin(fd).mount_id != mount_id or st.st_uid != 0
+                    or st.st_mode & 0o022 or not stat.S_ISDIR(st.st_mode)
+                    or os.fstatvfs(fd).f_flag & os.ST_RDONLY):
+                raise Unavailable('unprotected delegation path')
+        if (read_control(unit_fd, 'cgroup.type').strip() != 'domain'
+                or read_control(unit_fd, 'cgroup.procs').strip()
+                or read_control(manager_fd, 'cgroup.procs').split() != [str(os.getpid())]
+                or child_directories(manager_fd)
+                or not {'manager'} <= child_directories(unit_fd) <= {'manager', '.control'}
+                or not REQUIRED <= set(read_control(unit_fd, 'cgroup.controllers').split())
+                or len(os.listdir('/proc/self/task')) != 1):
+            raise Unavailable('invalid exclusive service inventory')
+        phase = 'test-root'
+        # Never adopt existing test directories; no repair above this unit.
+        _enable_required(unit_fd)
+        os.mkdir('test', 0o700, dir_fd=unit_fd)
+        test_fd = os.open('test', flags, dir_fd=unit_fd)
+        if (pin(test_fd).mount_id != mount_id
+                or os.readlink(f'/proc/self/fd/{test_fd}') != '/sys/fs/cgroup' + group + '/test'):
+            raise Unavailable('test root identity mismatch')
+        verify_empty_root(test_fd)
+        _enable_required(test_fd)
+        expected = pin(test_fd)
+        ns = namespace_ids()
+        preflight(test_fd, expected, REQUIRED)
+        verify_empty_root(test_fd)
+        if ns != tuple(os.stat(f'/proc/1/ns/{n}').st_ino for n in NAMESPACES):
+            raise Unavailable('namespace drift')
+        print(json.dumps({'vehicle': 'systemd-delegated-test', 'systemd_version': int(match[1])}),
+              flush=True)
+        # No ancestor/control directory FD is passed into the strict runner.
+        for fd in (manager_fd, unit_fd, slice_fd, mount_fd):
+            os.close(fd)
+        manager_fd = unit_fd = slice_fd = mount_fd = -1
+        for name in os.listdir('/proc/self/fd'):
+            fd = int(name)
+            if fd > 2 and fd != test_fd:
+                try:
+                    os.close(fd)
+                except OSError as exc:
+                    import errno
+                    if exc.errno != errno.EBADF:
+                        raise
+        return main(['--root-fd', str(test_fd), '--root-pin',
+                     str(expected.dev), str(expected.ino), str(expected.mount_id),
+                     '--namespace-pins', *(str(x) for x in ns),
+                     '--source-commit', source_commit])
+    except Exception:
+        print(json.dumps({'status': 'UNAVAILABLE', 'phase': phase,
+                          'completed': 0, 'required': len(CASES)}), flush=True)
+        return 2
+    finally:
+        for fd in (test_fd, manager_fd, unit_fd, slice_fd, mount_fd):
+            if fd >= 0:
+                os.close(fd)
+
+
 if __name__=='__main__':
     sys.exit(main())
