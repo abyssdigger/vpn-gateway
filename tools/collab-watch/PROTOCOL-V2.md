@@ -634,3 +634,46 @@ GitHub provenance. Signal rotation changes transport config binding but not
 the semantic retained config. Existing task-only acquisition, initial-OPEN
 and CompactV2 wire/type/API remain compatible and separate. No outgoing
 actuation, scheduler, authority evaluation, CLI, live cutover or main change.
+
+
+## Unit 5c — auxiliary outgoing proof and single-attempt transport
+
+Auxiliary HANDLED/PING/PONG and optional SIGNAL publication use the existing
+actuator with distinct action operations `aux_comment` and `signal_comment`.
+The frozen original uses the accepted aggregate compact baseline, prior
+composed retained state, explicit selected role/incarnation, exact body and
+preflight digest. Conditional proof binds full config, full aggregate
+inventory, baseline composed state, candidate bytes and exact admitted targets.
+The accepted aux event/relations and signal validators are reused; the internal
+nonphysical prospective relation key is never a GitHub ref, target, state,
+receipt or returned identity. No synthetic comment ID or task lifecycle exists.
+
+Canonical aux effect identity is **exactly** the existing task-control
+namespace: operation=control_comment, normalized repository, epoch, event_id.
+SIGNAL uses separate operation=signal_comment, normalized repository, epoch,
+signal_id. Request and target intent remain in the exact action; conflicting
+intent cannot claim a second STARTED effect.
+
+The same accepted concrete AttemptStore, InputStore, ownership flock,
+PREPARED/fresh proof/retention/actor/authority/STARTED sequence, closed
+production transport and readback-only reconciliation serve both families.
+Aux and SIGNAL POSTs target only validated configured rooms. Full aggregate
+fresh proof must match exactly before STARTED. Readback replays the original
+proof and baseline, then the fresh aggregate observation using original
+composed state. Exact admitted bytes/actor/identity/ref (or unique occurrence
+without response hint) are required; disappearance/ambiguity of SIGNAL is
+UNRESOLVED, never resend. No signal history becomes canonical; stable unrelated
+signal churn does not invalidate canonical aux readback. A verified historical
+receipt is not a claim that an ephemeral SIGNAL still exists.
+
+**Staged compatibility limit:** old task-only CompactV2 and task actuator
+contracts remain unchanged. Their task-only preflight cannot observe an aux
+occurrence externally published outside the shared local attempt store. Shared
+effect identity prevents two STARTED claims in one authoritative store, not
+independent external writers or a lost store. Before any mixed-family live v2
+activation, runtime/scheduler composition must require aggregate task+aux
+admission before any new role-attributed task or aux control send. The staged
+task-only path is not a mixed-family-safe live scheduler contract.
+
+No holder prose write, command execution, scheduler/clock policy, CLI,
+identity migration, epoch cutover, live activation or main publication.

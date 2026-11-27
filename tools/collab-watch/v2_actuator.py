@@ -12,17 +12,20 @@ from core import canonical, digest, positive, require, strict_json
 from journal import framed
 from project_tasks import body_hash, comment
 from split_journal import MARKER
-from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
+from v2_acquisition import acquire_v2, acquire_v2_for_initial_open, acquire_aggregate_v2
 from v2_attempts import AttemptStore
 from v2_inputs import InputStore, MAX_INPUT_BYTES
-from v2_compact import CompactV2, compact_v2
+from v2_compact import CompactV2, compact_v2, CompactAggregateV2, compact_aggregate_v2
+from v2_aux_preflight import preflight_aux_compact, preflight_signal_compact
+from v2_aux_reconcile import verify_aux, verify_signal
 from v2_create import preflight_create, acquire_creation, verify_creation
 from v2_material import preflight_material, verify_material
 from v2_preflight import (preflight_control_compact, preflight_close_compact,
                           preflight_initial_open_compact)
 from v2_reconcile import verify_control, verify_close, verify_initial_open
 
-OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close", "issue_create"}
+AUX_OPERATIONS = {"aux_comment", "signal_comment"}
+OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close", "issue_create"} | AUX_OPERATIONS
 FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
           "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
 
@@ -35,7 +38,8 @@ def freeze_inputs(operation, cfg, baseline, actor, *, selected_role, selected_in
     The returned bytes contain material, not just metadata. Never put these bytes
     in the attempt ledger, logs, or authority descriptor.
     """
-    require(isinstance(baseline, CompactV2), "invalid original baseline")
+    expected_type = CompactAggregateV2 if operation in AUX_OPERATIONS else CompactV2
+    require(isinstance(baseline, expected_type), "invalid original baseline")
     return canonical(dict(operation=operation, cfg=cfg, actor=actor, role=selected_role,
                           incarnation=selected_incarnation, proof_sha256=expected_proof_sha256,
                           baseline={"text": baseline.text, "sha256": baseline.sha256,
@@ -51,6 +55,9 @@ def _selection(data):
 def _proof(data, baseline, extra):
     cfg, actor, previous = data["cfg"], data["actor"], data["previous"]
     kind = data["operation"]
+    if kind in AUX_OPERATIONS:
+        fn = preflight_aux_compact if kind == "aux_comment" else preflight_signal_compact
+        return fn(cfg, baseline, actor, data["body"], previous, **_selection(data))
     if kind == "issue_create":
         return preflight_create(cfg, baseline, actor, data["request"], previous, **_selection(data))[0]
     if kind == "material_comment":
@@ -79,12 +86,37 @@ def _bound(original):
             and (data["task_key"] is not None) == (kind == "material_comment")
             and (data["extra_task"] is not None) == (kind == "initial_open"),
             "extraneous or missing operation input")
-    baseline = CompactV2(**data["baseline"])
+    baseline_type = CompactAggregateV2 if kind in AUX_OPERATIONS else CompactV2
+    baseline = baseline_type(**data["baseline"])
     proof = _proof(data, baseline, data["extra_task"])
     require(body_hash(data["proof_sha256"]) and digest(canonical(proof)) == data["proof_sha256"],
             "original proof mismatch")
     cfg, actor = data["cfg"], data["actor"]
     repository = cfg["repository"]
+    if kind in AUX_OPERATIONS:
+        candidate = proof["candidate"]
+        room = proof["postcondition"]["room"]
+        target = f"repos/{repository}/issues/{room}/comments"
+        request = canonical({"body": data["body"]})
+        require(len(request.encode("utf-8")) <= MAX_PAGE_BYTES, "mutation body bound")
+        if kind == "aux_comment":
+            # Exactly the task-control effect namespace, not a second aux claim.
+            effect = {"operation": "control_comment", "repository": repository.lower(),
+                      "journal_epoch": cfg["journal_epoch"], "event_id": candidate["event_id"]}
+            identity = {k: candidate[k] for k in ("event_id", "kind")}
+        else:
+            effect = {"operation": "signal_comment", "repository": repository.lower(),
+                      "journal_epoch": cfg["journal_epoch"], "signal_id": candidate["signal_id"]}
+            identity = {k: candidate[k] for k in ("signal_id", "event_id", "journal_ref",
+                                                 "journal_sha256", "to")}
+        action = {"operation": kind, "repository": repository, "target": target, "room": room,
+                  "method": "POST", "actor_id": actor, "role": data["role"],
+                  "incarnation": data["incarnation"], "journal_epoch": cfg["journal_epoch"],
+                  "candidate": identity, "proof_sha256": data["proof_sha256"],
+                  "inputs_sha256": digest(original), "request_sha256": digest(request),
+                  "intent_sha256": digest(request),
+                  "config_identity_sha256": digest(canonical(dict(cfg, repository=repository.lower())))}
+        return data, baseline, proof, effect, action, request.encode("utf-8")
     if kind == "issue_create":
         _, payload = preflight_create(cfg, baseline, actor, data["request"], data["previous"], **_selection(data))
         effect = proof["effect"]
@@ -174,6 +206,9 @@ def _witness(proof, baseline, extra):
 
 
 def _fresh(data, read_token, read_opener, *, before):
+    if data["operation"] in AUX_OPERATIONS:
+        c, t, h, s = acquire_aggregate_v2(data["cfg"], token=read_token, opener=read_opener)
+        return c, t, (h, s)
     if before and data["operation"] == "initial_open":
         return acquire_v2_for_initial_open(data["cfg"], data["actor"], data["body"],
                                             **_selection(data), token=read_token, opener=read_opener)
@@ -292,13 +327,21 @@ def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
         elif hint is not None:
             require(set(hint) == {"room", "comment_id"} and hint["room"] == action["room"]
                     and positive(hint["comment_id"]) and action["method"] == "POST", "hint binding mismatch")
-        control, tasks, _ = _fresh(data, read_token, read_opener, before=False)
+        control, tasks, extra = _fresh(data, read_token, read_opener, before=False)
         if action["operation"] == "issue_create":
             physical = acquire_creation(data["cfg"], effect, read_token, read_opener)
             verified = verify_creation(data["cfg"], baseline, data["actor"], data["request"],
                                        control, tasks, physical, data["previous"], **_selection(data),
                                        expected_proof_sha256=data["proof_sha256"], hint=hint)
             receipt, locator = digest(canonical(verified)), verified["issue"]
+        elif action["operation"] in AUX_OPERATIONS:
+            verify = verify_aux if action["operation"] == "aux_comment" else verify_signal
+            verified = verify(data["cfg"], baseline, data["actor"], data["body"], control, tasks,
+                              *extra, data["previous"], **_selection(data),
+                              expected_proof_sha256=data["proof_sha256"], expected_ref=hint)
+            occurrence = verified["occurrence"]
+            receipt = digest(canonical(verified))
+            locator = {"room": occurrence["room"], "physical_ref": occurrence["physical_ref"]}
         else:
             receipt, locator = _receipt(data, baseline, control, tasks, hint)
     except Exception:
@@ -410,13 +453,15 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
             return _claimed_result(store, claimed, action, retention, read_token, read_opener)
         if reconcile_only:
             return _result("NO_ATTEMPT", "NO_CLAIMED_EFFECT")
-        provisional = {"kind": "not_applicable"} if data["operation"] in ("material_comment", "issue_create") else {"kind": "pending"}
+        provisional = {"kind": "not_applicable"} if data["operation"] in ({"material_comment", "issue_create"} | AUX_OPERATIONS) else {"kind": "pending"}
         key = store.prepare(dict(action, witness=provisional), effect)["action_key"]
     except Exception:
         return _result("NO_ATTEMPT", "INPUT_OR_STORE_UNAVAILABLE", key)
     try:
         control, tasks, extra = _fresh(data, read_token, read_opener, before=True)
-        fresh = compact_v2(data["cfg"], control, tasks, data["previous"])
+        fresh = (compact_aggregate_v2(data["cfg"], control, tasks, *extra, data["previous"])
+                 if data["operation"] in AUX_OPERATIONS else
+                 compact_v2(data["cfg"], control, tasks, data["previous"]))
         require(digest(canonical(_proof(data, fresh, extra))) == data["proof_sha256"],
                 "fresh preflight mismatch")
         if action["operation"] == "issue_create":
