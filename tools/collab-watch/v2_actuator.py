@@ -16,12 +16,13 @@ from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
 from v2_attempts import AttemptStore
 from v2_inputs import InputStore, MAX_INPUT_BYTES
 from v2_compact import CompactV2, compact_v2
+from v2_create import preflight_create, acquire_creation, verify_creation
 from v2_material import preflight_material, verify_material
 from v2_preflight import (preflight_control_compact, preflight_close_compact,
                           preflight_initial_open_compact)
 from v2_reconcile import verify_control, verify_close, verify_initial_open
 
-OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close"}
+OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close", "issue_create"}
 FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
           "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
 
@@ -50,6 +51,8 @@ def _selection(data):
 def _proof(data, baseline, extra):
     cfg, actor, previous = data["cfg"], data["actor"], data["previous"]
     kind = data["operation"]
+    if kind == "issue_create":
+        return preflight_create(cfg, baseline, actor, data["request"], previous, **_selection(data))[0]
     if kind == "material_comment":
         return preflight_material(cfg, baseline, data["task_key"], actor, data["body"],
                                   previous, **_selection(data))
@@ -71,8 +74,8 @@ def _bound(original):
             "invalid retained input fields")
     kind = data["operation"]
     require(kind in OPERATIONS, "unsupported action")
-    require((data["body"] is None) == (kind == "issue_close")
-            and (data["request"] is not None) == (kind == "issue_close")
+    require((data["body"] is None) == (kind in ("issue_close", "issue_create"))
+            and (data["request"] is not None) == (kind in ("issue_close", "issue_create"))
             and (data["task_key"] is not None) == (kind == "material_comment")
             and (data["extra_task"] is not None) == (kind == "initial_open"),
             "extraneous or missing operation input")
@@ -82,6 +85,20 @@ def _bound(original):
             "original proof mismatch")
     cfg, actor = data["cfg"], data["actor"]
     repository = cfg["repository"]
+    if kind == "issue_create":
+        _, payload = preflight_create(cfg, baseline, actor, data["request"], data["previous"], **_selection(data))
+        effect = proof["effect"]
+        target = f"repos/{repository}/issues"
+        request = canonical(payload)
+        require(len(request.encode("utf-8")) <= MAX_PAGE_BYTES, "mutation body bound")
+        action = {"operation": kind, "repository": repository, "target": target,
+                  "room": data["request"]["room"], "task": data["request"]["task"], "method": "POST",
+                  "actor_id": actor, "role": data["role"], "incarnation": data["incarnation"],
+                  "journal_epoch": cfg["journal_epoch"], "candidate": {"revision": 1},
+                  "proof_sha256": data["proof_sha256"], "inputs_sha256": digest(original),
+                  "request_sha256": digest(request), "intent_sha256": digest(request),
+                  "config_identity_sha256": digest(canonical(dict(cfg, repository=repository.lower())))}
+        return data, baseline, proof, effect, action, request.encode("utf-8")
     if kind in ("control_comment", "initial_open"):
         candidate = proof["candidate"]
         event = framed(data["body"], MARKER)
@@ -195,6 +212,15 @@ def _http(opener, headers, url, method, request, expected_status):
 
 def _send(opener, headers, action, request):
     """One physical mutation only. Any returned locator is an unverified hint."""
+    if action["operation"] == "issue_create":
+        value = _http(opener, headers, API + "/" + action["target"], "POST", request, 201)
+        number, iid = value.get("number"), value.get("id")
+        root = f"{API}/repos/{action['repository']}"
+        require(positive(number) and positive(iid) and "pull_request" not in value
+                and isinstance(value.get("url"), str) and value["url"].lower() == (root+"/issues/"+str(number)).lower()
+                and isinstance(value.get("repository_url"), str) and value["repository_url"].lower() == root.lower(),
+                "invalid creation response locator")
+        return {"issue_number": number, "issue_id": iid}
     root = f"{API}/repos/{action['repository']}/issues/{action['room']}"
     value = _http(opener, headers, API + "/" + action["target"], action["method"],
                   request, 200 if action["method"] == "PATCH" else 201)
@@ -260,11 +286,21 @@ def _reconcile(store, row, retention, read_token, read_opener, *, persist=True):
         return _verified(row)
     try:
         hint = row["response_hint"]
-        if hint is not None:
+        if hint is not None and action["operation"] == "issue_create":
+            require(set(hint) == {"issue_number", "issue_id"} and all(positive(v) for v in hint.values()),
+                    "creation hint binding mismatch")
+        elif hint is not None:
             require(set(hint) == {"room", "comment_id"} and hint["room"] == action["room"]
                     and positive(hint["comment_id"]) and action["method"] == "POST", "hint binding mismatch")
         control, tasks, _ = _fresh(data, read_token, read_opener, before=False)
-        receipt, locator = _receipt(data, baseline, control, tasks, hint)
+        if action["operation"] == "issue_create":
+            physical = acquire_creation(data["cfg"], effect, read_token, read_opener)
+            verified = verify_creation(data["cfg"], baseline, data["actor"], data["request"],
+                                       control, tasks, physical, data["previous"], **_selection(data),
+                                       expected_proof_sha256=data["proof_sha256"], hint=hint)
+            receipt, locator = digest(canonical(verified)), verified["issue"]
+        else:
+            receipt, locator = _receipt(data, baseline, control, tasks, hint)
     except Exception:
         if not persist:
             return _result("EFFECT_UNKNOWN", "STORE_FAILURE_AFTER_START", key)
@@ -374,7 +410,7 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
             return _claimed_result(store, claimed, action, retention, read_token, read_opener)
         if reconcile_only:
             return _result("NO_ATTEMPT", "NO_CLAIMED_EFFECT")
-        provisional = {"kind": "not_applicable"} if data["operation"] == "material_comment" else {"kind": "pending"}
+        provisional = {"kind": "not_applicable"} if data["operation"] in ("material_comment", "issue_create") else {"kind": "pending"}
         key = store.prepare(dict(action, witness=provisional), effect)["action_key"]
     except Exception:
         return _result("NO_ATTEMPT", "INPUT_OR_STORE_UNAVAILABLE", key)
@@ -383,6 +419,8 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
         fresh = compact_v2(data["cfg"], control, tasks, data["previous"])
         require(digest(canonical(_proof(data, fresh, extra))) == data["proof_sha256"],
                 "fresh preflight mismatch")
+        if action["operation"] == "issue_create":
+            acquire_creation(data["cfg"], effect, read_token, read_opener, expect_absent=True)
         witness = _witness(proof, fresh, extra)
         if witness is None:
             return _result("PREPARED", "CHRONOLOGY_INELIGIBLE", key)

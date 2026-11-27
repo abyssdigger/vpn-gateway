@@ -523,3 +523,44 @@ confirms the same action/effect identity; missing, replaced or changed input
 yields EFFECT_UNKNOWN without persisting a verification receipt. This is a
 last local check, not atomic coordination of two files against hostile
 concurrent replacement.
+
+
+## Unit 4d — single-attempt project-task Issue creation
+
+A creation effect is scoped to normalized repository, exact journal epoch
+and logical task key. A PREPARED but unstarted action may refresh title/spec;
+after STARTED, different intent conflicts. Migration of a task across epochs
+requires a separate identity contract. The selected SPEC, incarnation, actor,
+configured journal room, r1 request and exact generated title/body are bound.
+No physical Issue identity is invented by prospective preflight.
+
+The hidden creation marker begins with `<!-- vpng-collab-task-create/2`,
+then one canonical bounded JSON line, a closing `-->`, a blank line and
+the exact human specification. It binds repository/epoch/task/r1/room,
+role/incarnation/actor, human title/spec digests and effect digest. The
+complete generated body digest, including the marker, is the r1 OPEN
+specification digest. Reserved creation-marker injection is rejected.
+
+Separate read-only creation inventory uses the fixed repository Issues
+endpoint, state=all, created ascending, 100 rows per page, fixed numeric
+pagination and the established page/row/byte ceilings. PRs count toward
+bounds. Two complete normalized scans must agree; malformed reserved markers,
+foreign resources, conflicting physical ID/number, no progress, incomplete
+pages or unstable inventory fail closed. Before STARTED require zero matching
+markers. After STARTED require exactly one matching non-PR marker and an
+equal fixed numeric Issue GET. Even a response hint cannot bypass unique
+inventory verification. No search-index text or response URL is followed.
+
+The existing closed actuator retains exact inputs, validates the actor and
+authority and the provider pair, durably STARTs before exactly one POST,
+records optional numeric Issue identity as hint, then verifies physical
+readback with canonical task replay and final retained-input check. Loss of
+response, zero or multiple markers, wrong hint, or readback failure cannot
+rearm. Creation receipt is not registration: later initial OPEN is separate
+and binds the complete generated body digest. An already observed exact r1
+OPEN may corroborate readback; a conflicting binding cannot.
+
+The marker is cooperative immutable-by-contract, not proof of unobserved
+GitHub edit history. No distributed atomicity, hostile rollback protection,
+external racing creator guarantee, live activation, CLI, epoch cutover or
+main publication is established.

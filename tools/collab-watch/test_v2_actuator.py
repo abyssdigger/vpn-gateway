@@ -22,6 +22,8 @@ from v2_attempts import initialize, open_store
 from v2_inputs import initialize_inputs, open_inputs
 from v2_compact import compact_v2
 from v2_material import preflight_material
+from v2_create import preflight_create
+from test_v2_create import REQ, resource
 from v2_preflight import preflight_control_compact, preflight_close_compact, preflight_initial_open_compact
 from v2_actuator import actuate, freeze_inputs, _bound, _stable_intent, _write_transport
 
@@ -141,6 +143,71 @@ class ActuatorTests(unittest.TestCase):
         remote = Remote(snapshots(rows, [task, extra]), snapshots(rows+[out], [task, extra]), 13,
                         dict(out, issue_url=ROOT+"/issues/34"))
         return original, remote
+
+    def creation_case(self, request=REQ):
+        rows, task = fixture()
+        baseline = compact_v2(CFG, {"34": rows}, {"42": task})
+        proof, payload = preflight_create(CFG, baseline, 13, request, **SPEC)
+        original = freeze_inputs("issue_create", CFG, baseline, 13, **SPEC,
+                                 expected_proof_sha256=digest(canonical(proof)), request=request)
+        before = snapshots(rows, [task])
+        before["/issues"] = []
+        after = copy.deepcopy(before)
+        created = resource(payload)
+        after["/issues"] = [created]
+        after["/issues/43"] = created
+        remote = Remote(before, after, 13, copy.deepcopy(created))
+        return original, remote
+
+    def test_creation_exact_send_refresh_and_recovery(self):
+        original, remote = self.creation_case()
+        self.assertEqual(self.run_case(original, remote, lambda _:False)["state"],"PREPARED")
+        self.assertFalse(remote.sent)
+        changed, other = self.creation_case(dict(REQ, title="Revised before start"))
+        result = self.run_case(changed, other)
+        self.assertEqual(result["state"],"VERIFIED",result)
+        self.assertEqual(result["locator"],{"issue_number":43,"issue_id":4003})
+        self.assertEqual(other.sent[0][:2],("POST",ROOT+"/issues"))
+        self.assertEqual(self.run_case(original,remote)["state"],"CONFLICT")
+        self.assertFalse(remote.sent)
+        self.assertEqual(self.run_case(changed,other)["state"],"VERIFIED")
+        self.assertEqual(len(other.sent),1)
+
+    def test_creation_no_hint_reopen_and_no_resend(self):
+        original, remote = self.creation_case()
+        remote.error = True
+        post = remote.after
+        remote.after = remote.before
+        result = self.run_case(original,remote)
+        self.assertEqual(result["state"],"UNRESOLVED")
+        self.store = open_store(self.path,"actuator-test")
+        remote.after = post
+        result = self.run_case(original,remote,reconcile_only=True)
+        self.assertEqual(result["state"],"VERIFIED",result)
+        self.assertEqual(len(remote.sent),1)
+
+    def test_creation_preexisting_and_wrong_hint(self):
+        original, remote = self.creation_case()
+        remote.before["/issues"] = remote.after["/issues"]
+        result = self.run_case(original,remote)
+        self.assertEqual(result["state"],"PREPARED")
+        self.assertFalse(remote.sent)
+        original, remote = self.creation_case()
+        remote.response["id"] = 9999
+        result = self.run_case(original,remote)
+        self.assertEqual(result["state"],"UNRESOLVED")
+        self.assertEqual(self.run_case(original,remote)["state"],"UNRESOLVED")
+        self.assertEqual(len(remote.sent),1)
+
+    def test_creation_duplicate_marker_after_send(self):
+        original, remote = self.creation_case()
+        created = remote.after["/issues"][0]
+        remote.after["/issues"].append(resource({"title":created["title"],"body":created["body"]},44,4004))
+        remote.error = True
+        result = self.run_case(original,remote)
+        self.assertEqual(result["state"],"UNRESOLVED")
+        self.assertEqual(self.run_case(original,remote)["state"],"UNRESOLVED")
+        self.assertEqual(len(remote.sent),1)
 
     def close_case(self):
         rows, task = fixture()
