@@ -985,3 +985,22 @@ are the only admitted operations; SIGNAL/material/close/create/initial OPEN
 remain separate. No acquisition, store or actuator behavior. 8b must integrate
 the exact gate under owner/attempt fencing with checkpoint revalidation
 before STARTED; 8a alone protects no live send.
+
+
+### Unit 8b-A — checkpoint stability fence
+
+RuntimeStateStore.fence(expected_generation, expected_state_sha256) uses the
+same validated BEGIN IMMEDIATE transaction and pinned identity as load/save.
+An exact existing checkpoint is mandatory. It yields only generation and
+state digest, retains the transaction through the context body and revalidates
+physical identity on exit. It never changes the checkpoint or generation.
+Competing checkpoint saves cannot commit while the transaction is held;
+the existing bounded busy policy applies. Caller exceptions unwind the
+transaction; missing, stale, invalid or replaced stores fail closed.
+
+The later writer must acquire locks in owner -> attempt -> checkpoint order.
+The checkpoint fence covers final validation through durable STARTED only;
+no network acquisition or send may occur inside it. Failure after STARTED
+cannot restore send eligibility. Checkpoint generation/digest are freshness
+evidence, not effect identity. This unit alone performs no STARTED or
+actuator behavior and protects no live send.

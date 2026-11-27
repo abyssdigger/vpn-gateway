@@ -192,6 +192,19 @@ class RuntimeStateStore:
         with self._transaction() as (_, checkpoint):
             return checkpoint
 
+    @contextmanager
+    def fence(self, expected_generation, expected_state_sha256):
+        """Hold a validated checkpoint stable; never modify it."""
+        require(_generation(expected_generation) and body_hash(expected_state_sha256),
+                "invalid checkpoint fence identity")
+        with self._transaction() as (_, checkpoint):
+            require(checkpoint is not None
+                    and checkpoint["generation"] == expected_generation
+                    and checkpoint["state_sha256"] == expected_state_sha256,
+                    "checkpoint fence stale or missing")
+            yield {"generation": checkpoint["generation"],
+                   "state_sha256": checkpoint["state_sha256"]}
+
     def save(self, state, expected_generation):
         require(type(expected_generation) is int and 0 <= expected_generation < MAX_GENERATION,
                 "invalid checkpoint expected generation")

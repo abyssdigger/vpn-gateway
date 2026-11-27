@@ -162,3 +162,95 @@ class RuntimeStateTests(unittest.TestCase):
         with self.assertRaises(Conflict):
             self.store.save(self.state, 1)
         self.assertIsNone(new.load())
+
+
+    def test_fence_exact_metadata_no_mutation(self):
+        saved = self.store.save(self.state, 0)
+        with self.store.fence(1, saved["state_sha256"]) as evidence:
+            self.assertEqual(evidence, {"generation": 1, "state_sha256": saved["state_sha256"]})
+            evidence["generation"] = 99
+        self.assertEqual(self.store.load(), saved)
+
+    def test_fence_rejects_missing_stale_and_invalid_identity(self):
+        with self.assertRaises(Conflict):
+            with self.store.fence(1, "0"*64):
+                self.fail("missing checkpoint yielded")
+        first = self.store.save(self.state, 0)
+        for g, sha in ((0, first["state_sha256"]), (2, first["state_sha256"]),
+                       (True, first["state_sha256"]), (1.0, first["state_sha256"]),
+                       (-1, first["state_sha256"]), (MAX_GENERATION+1, first["state_sha256"]),
+                       (1, "0"*64), (1, ""), (1, None), (1, "g"*64)):
+            with self.subTest(g=g, sha=sha), self.assertRaises(Conflict):
+                with self.store.fence(g, sha):
+                    self.fail("invalid fence yielded")
+        self.assertEqual(self.store.load(), first)
+        second = self.store.save(self.state, 1)
+        with self.assertRaises(Conflict):
+            with self.store.fence(first["generation"], first["state_sha256"]):
+                self.fail("stale generation yielded")
+        self.assertEqual(self.store.load(), second)
+
+    def test_fence_exception_releases_without_mutation(self):
+        saved = self.store.save(self.state, 0)
+        class CallerError(Exception):
+            pass
+        with self.assertRaises(CallerError):
+            with self.store.fence(1, saved["state_sha256"]):
+                raise CallerError()
+        self.assertEqual(self.store.load(), saved)
+        self.assertEqual(self.store.save(self.state, 1)["generation"], 2)
+
+    def test_fence_excludes_concurrent_checkpoint_save(self):
+        first = self.store.save(self.state, 0)
+        other = self.reopen()
+        started = threading.Event()
+
+        def competing_save():
+            started.set()
+            try:
+                return other.save(self.state, 1)
+            except Conflict:
+                return None
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with self.store.fence(1, first["state_sha256"]):
+                attempt = pool.submit(competing_save)
+                self.assertTrue(started.wait(3))
+                # Wait for the competing call to exhaust the bounded SQLite busy
+                # window, while the same fence transaction remains held.
+                self.assertIsNone(attempt.result(timeout=10))
+            self.assertEqual(other.load(), first)
+            self.assertEqual(other.save(self.state, 1)["generation"], 2)
+
+    def test_fence_revalidates_physical_and_logical_identity(self):
+        from v2_runtime_state import RuntimeStateStore
+        first = self.store.save(self.state, 0)
+        for args in (("wrong", REPO, EPOCH), (SID, "other/project", EPOCH), (SID, REPO, "other")):
+            bad = RuntimeStateStore(self.path, *args)
+            try:
+                with self.assertRaises(Conflict):
+                    with bad.fence(1, first["state_sha256"]):
+                        self.fail("wrong store identity yielded")
+            finally:
+                bad.close()
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("CREATE TABLE unexpected_fence (x)")
+        with self.assertRaises(Conflict):
+            with self.store.fence(1, first["state_sha256"]):
+                self.fail("wrong schema yielded")
+        self.path.rename(self.path.with_suffix(".old"))
+        new = initialize_state(self.path, SID, REPO, EPOCH)
+        self.addCleanup(new.close)
+        with self.assertRaises(Conflict):
+            with self.store.fence(1, first["state_sha256"]):
+                self.fail("replaced path yielded")
+        self.assertIsNone(new.load())
+
+    def test_fence_revalidates_path_on_exit(self):
+        first = self.store.save(self.state, 0)
+        old = self.path.with_suffix(".old")
+        with self.assertRaises(Conflict):
+            with self.store.fence(1, first["state_sha256"]):
+                self.path.rename(old)
+        old.rename(self.path)
+        self.assertEqual(self.store.load(), first)
