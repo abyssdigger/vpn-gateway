@@ -38,7 +38,7 @@ class FencedTests(unittest.TestCase):
         self.addCleanup(self.other.close)
 
     def task_case(self):
-        return task_fixtures.ActuatorTests.material_case(self)
+        return task_fixtures.ActuatorTests.control_case(self)
 
     def aux_case(self):
         return aux_fixtures.AuxActuatorTests.case(self)
@@ -52,6 +52,7 @@ class FencedTests(unittest.TestCase):
                                   lambda _: True)
 
     def run_case(self, cap, original, remote, authorize=lambda _: True, **kwargs):
+        kwargs.setdefault("runtime_state", remote.runtime_state)
         with patch("v2_actuator._write_transport", return_value=remote):
             return actuate_fenced(self.owner, cap, self.store, original, self.retention, authorize,
                                   read_token="read-token", write_token="write-token",

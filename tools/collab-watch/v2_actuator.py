@@ -15,7 +15,10 @@ from split_journal import MARKER
 from v2_acquisition import acquire_v2, acquire_v2_for_initial_open, acquire_aggregate_v2
 from v2_attempts import AttemptStore
 from v2_inputs import InputStore, MAX_INPUT_BYTES
-from v2_compact import CompactV2, compact_v2, CompactAggregateV2, compact_aggregate_v2
+from v2_compact import (CompactV2, compact_v2, CompactAggregateV2, compact_aggregate_v2,
+                        derive_task_compact)
+from v2_aggregate_gate import gate_aggregate_candidate
+from v2_runtime_state import RuntimeStateStore
 from v2_aux_preflight import preflight_aux_compact, preflight_signal_compact
 from v2_aux_reconcile import verify_aux, verify_signal
 from v2_create import preflight_create, acquire_creation, verify_creation
@@ -25,6 +28,7 @@ from v2_preflight import (preflight_control_compact, preflight_close_compact,
 from v2_reconcile import verify_control, verify_close, verify_initial_open
 
 AUX_OPERATIONS = {"aux_comment", "signal_comment"}
+AGGREGATE_CONTROL_OPERATIONS = {"control_comment", "aux_comment"}
 OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close", "issue_create"} | AUX_OPERATIONS
 FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
           "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
@@ -411,8 +415,39 @@ def _ownership_fd(store):
         raise
 
 
+def _checkpoint_for_control(data, runtime_state):
+    cfg = data["cfg"]
+    require(type(runtime_state) is RuntimeStateStore
+            and runtime_state._repository == cfg["repository"].lower()
+            and runtime_state._epoch == cfg["journal_epoch"], "checkpoint scope mismatch")
+    checkpoint = runtime_state.load()
+    require(checkpoint is not None, "retained checkpoint required")
+    state = checkpoint["state"]
+    prior = state["task"] if data["operation"] == "control_comment" else state
+    require(canonical(prior) == canonical(data["previous"]), "frozen checkpoint frontier mismatch")
+    require(digest(canonical(state)) == checkpoint["state_sha256"], "checkpoint digest mismatch")
+    return checkpoint
+
+
+def _admit_control(data, proof, witness, checkpoint, read_token, read_opener):
+    cfg = data["cfg"]
+    previous = checkpoint["state"]
+    graph = acquire_aggregate_v2(cfg, token=read_token, opener=read_opener)
+    aggregate = compact_aggregate_v2(cfg, *graph, previous)
+    gate = gate_aggregate_candidate(cfg, aggregate, data["operation"], data["actor"],
+                                    data["body"], data["previous"], previous,
+                                    data["proof_sha256"], **_selection(data))
+    require(gate["prior_composed_state_sha256"] == checkpoint["state_sha256"]
+            and gate["proof_sha256"] == data["proof_sha256"], "aggregate gate binding mismatch")
+    if data["operation"] == "control_comment":
+        task = derive_task_compact(cfg, aggregate)
+        require(task.sha256 == gate["task_compact_sha256"]
+                and task.inventory_sha256 == gate["task_inventory_sha256"]
+                and _witness(proof, task, None) == witness, "aggregate witness mismatch")
+
+
 def actuate(store, original, retention, authorize, *, read_token=None, write_token=None,
-            read_opener=None, reconcile_only=False):
+            read_opener=None, reconcile_only=False, runtime_state=None):
     """Single local owner across sender, response hint and recovery.
 
     A concurrent caller never observes/finalizes an in-flight STARTED attempt.
@@ -428,13 +463,13 @@ def actuate(store, original, retention, authorize, *, read_token=None, write_tok
     try:
         return _actuate(store, original, retention, authorize, read_token=read_token,
                         write_token=write_token, read_opener=read_opener,
-                        reconcile_only=reconcile_only)
+                        reconcile_only=reconcile_only, runtime_state=runtime_state)
     finally:
         os.close(fd)
 
 
 def _actuate(store, original, retention, authorize, *, read_token=None, write_token=None,
-             read_opener=None, reconcile_only=False):
+             read_opener=None, reconcile_only=False, runtime_state=None):
     """Compose accepted preflight, acquisition, durable attempt and readback.
 
     Only the concrete, externally pinned durable InputStore is accepted.
@@ -457,21 +492,30 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
         key = store.prepare(dict(action, witness=provisional), effect)["action_key"]
     except Exception:
         return _result("NO_ATTEMPT", "INPUT_OR_STORE_UNAVAILABLE", key)
+    aggregate_control = data["operation"] in AGGREGATE_CONTROL_OPERATIONS
+    checkpoint = None
+    if aggregate_control:
+        try:
+            checkpoint = _checkpoint_for_control(data, runtime_state)
+        except Exception:
+            return _result("PREPARED", "CHECKPOINT_UNAVAILABLE_OR_STALE", key)
     try:
-        control, tasks, extra = _fresh(data, read_token, read_opener, before=True)
-        fresh = (compact_aggregate_v2(data["cfg"], control, tasks, *extra, data["previous"])
-                 if data["operation"] in AUX_OPERATIONS else
-                 compact_v2(data["cfg"], control, tasks, data["previous"]))
-        require(digest(canonical(_proof(data, fresh, extra))) == data["proof_sha256"],
-                "fresh preflight mismatch")
-        if action["operation"] == "issue_create":
-            acquire_creation(data["cfg"], effect, read_token, read_opener, expect_absent=True)
-        witness = _witness(proof, fresh, extra)
+        if aggregate_control:
+            # Frozen witness; final aggregate admission follows actor/authority.
+            witness = _witness(proof, baseline, data["extra_task"])
+        else:
+            control, tasks, extra = _fresh(data, read_token, read_opener, before=True)
+            fresh = (compact_aggregate_v2(data["cfg"], control, tasks, *extra, data["previous"])
+                     if data["operation"] in AUX_OPERATIONS else
+                     compact_v2(data["cfg"], control, tasks, data["previous"]))
+            require(digest(canonical(_proof(data, fresh, extra))) == data["proof_sha256"],
+                    "fresh preflight mismatch")
+            if action["operation"] == "issue_create":
+                acquire_creation(data["cfg"], effect, read_token, read_opener, expect_absent=True)
+            witness = _witness(proof, fresh, extra)
+            require(witness == _witness(proof, baseline, data["extra_task"]), "witness binding mismatch")
         if witness is None:
             return _result("PREPARED", "CHRONOLOGY_INELIGIBLE", key)
-        # Identical full proof => identical original inventory; the witness
-        # must be independently reconstructible during recovery.
-        require(witness == _witness(proof, baseline, data["extra_task"]), "witness binding mismatch")
         exact = dict(action, witness=witness)
         key = store.prepare(exact, effect)["action_key"]
         retention.save(key, original)
@@ -496,16 +540,40 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
         require(retention.load(key) == original, "durable input provider mismatch")
     except Exception:
         return _result("PREPARED", "INPUT_PROVIDER_UNAVAILABLE", key)
-    try:
-        started = store.start(key)  # Durable before any external write.
-    except Exception:
+    if aggregate_control:
         try:
-            claimed = store.claimed(effect)
-            if claimed is not None:
-                return _claimed_result(store, claimed, action, retention, read_token, read_opener)
+            _admit_control(data, proof, witness, checkpoint, read_token, read_opener)
         except Exception:
-            pass
-        return _result("EFFECT_UNKNOWN", "START_NOT_CONFIRMED", key)
+            return _result("PREPARED", "AGGREGATE_ADMISSION_FAILED", key)
+        start_entered = False
+        try:
+            with runtime_state.fence(checkpoint["generation"], checkpoint["state_sha256"]):
+                _provider_pair(store, retention)
+                require(retention.load(key) == original, "durable input provider mismatch")
+                start_entered = True
+                started = store.start(key)
+        except Exception:
+            if not start_entered:
+                return _result("PREPARED", "CHECKPOINT_FENCE_OR_INPUT_FAILED", key)
+            # STARTED may be durable. Never send on uncertainty.
+            try:
+                claimed = store.claimed(effect)
+                if claimed is not None:
+                    key = claimed["action_key"]
+            except Exception:
+                pass
+            return _result("EFFECT_UNKNOWN", "START_OR_FENCE_EXIT_UNCONFIRMED", key)
+    else:
+        try:
+            started = store.start(key)  # Durable before any external write.
+        except Exception:
+            try:
+                claimed = store.claimed(effect)
+                if claimed is not None:
+                    return _claimed_result(store, claimed, action, retention, read_token, read_opener)
+            except Exception:
+                pass
+            return _result("EFFECT_UNKNOWN", "START_NOT_CONFIRMED", key)
     # No path from this point returns to send eligibility.
     try:
         hint = _send(opener, headers, action, request)

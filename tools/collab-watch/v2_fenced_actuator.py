@@ -11,7 +11,8 @@ def _result(state, code):
 
 
 def actuate_fenced(owner_store, capability, store, original, retention, authorize, *,
-                   read_token=None, write_token=None, read_opener=None, reconcile_only=False):
+                   read_token=None, write_token=None, read_opener=None, reconcile_only=False,
+                   runtime_state=None):
     """Bind an exact frozen action to the current owner, then retain its fence.
 
     Lock order is owner-store -> attempt-store. Neither capability nor
@@ -37,7 +38,7 @@ def actuate_fenced(owner_store, capability, store, original, retention, authoriz
             entered = True
             return actuate(store, original, retention, authorize, read_token=read_token,
                            write_token=write_token, read_opener=read_opener,
-                           reconcile_only=reconcile_only)
+                           reconcile_only=reconcile_only, runtime_state=runtime_state)
     except Exception as exc:
         # A failure during invocation or fence exit cannot establish no send.
         # BaseException deliberately unwinds both flocks and is not swallowed.

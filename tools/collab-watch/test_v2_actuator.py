@@ -21,6 +21,8 @@ from test_v2_acquisition import Response, Opener, snapshots, ROOT
 from v2_attempts import initialize, open_store
 from v2_inputs import initialize_inputs, open_inputs
 from v2_compact import compact_v2
+from v2_aux import project_aux
+from v2_runtime_state import initialize_state
 from v2_material import preflight_material
 from v2_create import preflight_create
 from test_v2_create import REQ, resource
@@ -49,6 +51,7 @@ class Remote:
         self.redirect = False
         self.crash = False
         self.store_check = None
+        self.runtime_state = None
     def read(self, req, timeout):
         source = self.after if self.applied else self.before
         opener = Opener(source)
@@ -79,6 +82,32 @@ class ReadOpener:
         self.remote = remote
     def open(self, req, timeout):
         return self.remote.read(req, timeout)
+
+
+def attach_checkpoint(test, remote, state, cfg=CFG):
+    path = Path(tempfile.mkdtemp(dir=test.tmp.name))/"checkpoint.db"
+    remote.runtime_state = initialize_state(path, "checkpoint-test", cfg["repository"],
+                                             cfg["journal_epoch"])
+    test.addCleanup(remote.runtime_state.close)
+    remote.runtime_state.save(state, 0)
+    return remote.runtime_state
+
+
+def task_control_fixture(test, rows, task, candidate):
+    previous = project_aux(CFG, {"34": rows}, {"42": task}, [], [])[1]
+    baseline = compact_v2(CFG, {"34": rows}, {"42": task}, previous["task"])
+    proof = preflight_control_compact(CFG, baseline, 11, candidate["body"],
+                                     previous["task"], **BUILDER)
+    original = freeze_inputs("control_comment", CFG, baseline, 11, **BUILDER,
+                             expected_proof_sha256=digest(canonical(proof)),
+                             body=candidate["body"], previous=previous["task"])
+    before, after = snapshots(rows, [task]), snapshots(rows+[candidate], [task])
+    for graph in (before, after):
+        graph["/issues/35/comments"] = []
+        graph["/issues/37/comments"] = []
+    remote = Remote(before, after, 11, dict(candidate, issue_url=ROOT+"/issues/34"))
+    attach_checkpoint(test, remote, previous)
+    return original, remote
 
 
 class ActuatorTests(unittest.TestCase):
@@ -124,13 +153,7 @@ class ActuatorTests(unittest.TestCase):
         prior = rows[:1]
         if witness:
             prior = prior+[row(800, 99, "ordinary witness", 7)]
-        baseline = compact_v2(CFG, {"34": prior}, {"42": task})
-        proof = preflight_control_compact(CFG, baseline, 11, rows[1]["body"], **BUILDER)
-        original = freeze_inputs("control_comment", CFG, baseline, 11, **BUILDER,
-                                 expected_proof_sha256=digest(canonical(proof)), body=rows[1]["body"])
-        remote = Remote(snapshots(prior, [task]), snapshots(prior+[rows[1]], [task]), 11,
-                        dict(rows[1], issue_url=ROOT+"/issues/34"))
-        return original, remote
+        return task_control_fixture(self, prior, task, rows[1])
 
     def initial_case(self):
         rows, task = fixture()
@@ -371,7 +394,7 @@ class ActuatorTests(unittest.TestCase):
         self.write_context.remote = remote
         self.write_context.real = real_transport
         args = dict(read_token="read-token", write_token="write-token",
-                    read_opener=ReadOpener(remote))
+                    read_opener=ReadOpener(remote), runtime_state=remote.runtime_state)
         args.update(kwargs)
         return actuate(self.store, original, self.retention, authorize, **args)
 
@@ -586,9 +609,10 @@ class ActuatorTests(unittest.TestCase):
                     original, remote = self.control_case()
                     data, baseline, _, effect, _, _ = _bound(original)
                     body = data["body"].replace('{"', '{ "', 1)
-                    proof = preflight_control_compact(CFG, baseline, 11, body, **BUILDER)
+                    proof = preflight_control_compact(CFG, baseline, 11, body, data["previous"], **BUILDER)
                     alternative = freeze_inputs("control_comment", CFG, baseline, 11, **BUILDER,
-                                                expected_proof_sha256=digest(canonical(proof)), body=body)
+                                                expected_proof_sha256=digest(canonical(proof)), body=body,
+                                                previous=data["previous"])
                     self.assertEqual(effect, _bound(alternative)[3])
                     self.assertNotEqual(_bound(original)[4]["request_sha256"],
                                         _bound(alternative)[4]["request_sha256"])

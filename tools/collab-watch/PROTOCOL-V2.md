@@ -1004,3 +1004,21 @@ no network acquisition or send may occur inside it. Failure after STARTED
 cannot restore send eligibility. Checkpoint generation/digest are freshness
 evidence, not effect identity. This unit alone performs no STARTED or
 actuator behavior and protects no live send.
+
+
+### Unit 8b-B — canonical control send admission
+
+New control_comment and aux_comment effects require an exact concrete
+RuntimeStateStore checkpoint. Claimed effects remain reconciliation-only
+regardless of checkpoint availability. Frozen family previous must match
+the exact checkpoint task partition or composed state; no fresh fallback.
+Frozen witness and durable original precede actor/authority checks.
+One final complete aggregate acquisition and 8a gate admit the candidate;
+task witness is reconstructed from that same wire. Owner -> attempt ->
+checkpoint lock order holds checkpoint stable across retained-input
+revalidation and durable STARTED. Only clean fence exit permits one send.
+Pre-STARTED failure cannot send; uncertainty after possible STARTED is
+EFFECT_UNKNOWN with no send, and durable claims remain recovery-only.
+Checkpoint generation/digest do not enter effect/action/authority/wire or
+receipt identity. Other mutation families remain staged, not aggregate-safe.
+Trusted credential custody, remaining runtime and live/cutover gates apply.

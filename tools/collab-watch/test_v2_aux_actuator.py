@@ -13,12 +13,12 @@ from test_project_tasks import row, ts
 from test_split_journal import CFG, fixture
 from test_v2_aux import aux, handled, pong, signal, target
 from test_v2_acquisition import ROOT, snapshots
-from test_v2_actuator import Remote, ReadOpener, Crash
+from test_v2_actuator import Remote, ReadOpener, Crash, attach_checkpoint, task_control_fixture
 from v2_actuator import actuate, freeze_inputs, _bound
 from v2_attempts import initialize, open_store
 from v2_inputs import initialize_inputs, open_inputs
 from v2_compact import compact_v2, compact_aggregate_v2
-from v2_aux import MARKER
+from v2_aux import MARKER, project_aux
 from v2_aux_preflight import preflight_aux_compact, preflight_signal_compact
 from v2_preflight import preflight_control_compact
 
@@ -34,14 +34,15 @@ def graph(rows, task, holders, signals):
     return result
 
 
-def original_for(operation, baseline, candidate):
+def original_for(operation, baseline, candidate, previous=None):
     event = framed(candidate["body"], MARKER if operation == "aux_comment" else SIGNAL_MARKER)
     actor = candidate["user"]["id"]
     preflight = preflight_aux_compact if operation == "aux_comment" else preflight_signal_compact
     kwargs = selection(event["from"])
-    proof = preflight(CFG, baseline, actor, candidate["body"], **kwargs)
+    proof = preflight(CFG, baseline, actor, candidate["body"], previous, **kwargs)
     return freeze_inputs(operation, CFG, baseline, actor, **kwargs,
-                         expected_proof_sha256=digest(canonical(proof)), body=candidate["body"])
+                         expected_proof_sha256=digest(canonical(proof)), body=candidate["body"],
+                         previous=previous)
 
 
 class AuxProofTests(unittest.TestCase):
@@ -131,7 +132,8 @@ class AuxActuatorTests(unittest.TestCase):
 
     def run_case(self, original, remote, authorize=lambda _: True, **kwargs):
         self.context.remote = remote
-        args = dict(read_token="read-token", write_token="write-token", read_opener=ReadOpener(remote))
+        args = dict(read_token="read-token", write_token="write-token", read_opener=ReadOpener(remote),
+                    runtime_state=remote.runtime_state)
         args.update(kwargs)
         return actuate(self.store, original, self.retention, authorize, **args)
 
@@ -142,14 +144,18 @@ class AuxActuatorTests(unittest.TestCase):
         holder = [row(601, 12, "holder question", 25)] if holder is None else holder
         signals = [] if signals is None else signals
         candidate = candidate or aux("p", "PING", 501, "GUARD", "BUILDER", ping_id="p")
-        baseline = compact_aggregate_v2(CFG, {"34": rows}, {"42": task}, holder, signals)
-        original = original_for(operation, baseline, candidate)
+        previous = (project_aux(CFG, {"34": rows}, {"42": task}, holder, signals)[1]
+                    if operation == "aux_comment" else None)
+        baseline = compact_aggregate_v2(CFG, {"34": rows}, {"42": task}, holder, signals, previous)
+        original = original_for(operation, baseline, candidate, previous)
         before = graph(rows, task, holder, signals)
         room = 34 if operation == "aux_comment" else 37
         after = graph(rows+[candidate] if room == 34 else rows, task, holder,
                       signals+[candidate] if room == 37 else signals)
         remote = Remote(before, after, candidate["user"]["id"],
                         dict(candidate, issue_url=f"{ROOT}/issues/{room}"))
+        if previous is not None:
+            attach_checkpoint(self, remote, previous)
         return original, remote
 
     def signal_case(self, cid=701):
@@ -162,12 +168,7 @@ class AuxActuatorTests(unittest.TestCase):
         rows, task = fixture()
         task["comments"] = task["comments"][:1]
         before = rows[:1]+[row(800, 99, "ordinary witness", 7)]
-        baseline = compact_v2(CFG, {"34": before}, {"42": task})
-        proof = preflight_control_compact(CFG, baseline, 11, rows[1]["body"], **selection("BUILDER"))
-        original = freeze_inputs("control_comment", CFG, baseline, 11, **selection("BUILDER"),
-                                 expected_proof_sha256=digest(canonical(proof)), body=rows[1]["body"])
-        remote = Remote(snapshots(before, [task]), snapshots(before+[rows[1]], [task]),
-                        11, dict(rows[1], issue_url=ROOT+"/issues/34"))
+        original, remote = task_control_fixture(self, before, task, rows[1])
         return original, remote, before, task
 
     def test_durable_start_exact_post_and_no_resend(self):
