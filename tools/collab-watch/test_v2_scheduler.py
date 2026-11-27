@@ -108,7 +108,7 @@ class SchedulerTests(unittest.TestCase):
         builder, state = self.run_view("BUILDER", obs)
         guard, _ = self.run_view("GUARD", obs)
         self.assertEqual(len(builder["signal_diagnostics"]["incoming"]), 1)
-        self.assertEqual(len(guard["signal_diagnostics"]["outgoing"]), 1)
+        self.assertFalse(guard["signal_diagnostics"]["incoming"])
         self.assertEqual(builder["gc_evidence"], builder["signal_diagnostics"]["incoming"])
         self.assertFalse(guard["gc_evidence"])
         self.assertEqual(self.run_view("SPEC", obs)[0]["signal_diagnostics"]["incoming"], [])
@@ -121,19 +121,30 @@ class SchedulerTests(unittest.TestCase):
         self.assertFalse(rotated["signal_diagnostics"]["incoming"])
         self.assertEqual(obs, self.obs(extra, [self.s]))  # no deletion
 
-    def test_quarantine_is_actor_scoped_and_never_work(self):
-        malformed = row(410, self.cfg["roles"]["GUARD"]["actor_id"], "not framed", 26)
-        other = row(411, self.cfg["roles"]["SPEC"]["actor_id"], "not framed", 26)
-        obs = self.obs([self.p], [self.s, malformed, other, row(412, 999, "unknown", 26)])
-        plain, state = self.run_view("GUARD", self.obs([self.p]))
-        guard, new_state = self.run_view("GUARD", obs, state)
-        self.assertEqual(state, new_state)
-        self.assertEqual(plain["work"], guard["work"])
-        self.assertEqual([x["physical_ref"] for x in guard["signal_diagnostics"]["actor_scoped_quarantine"]],
-                         ["issue:37#issuecomment-410"])
-        builder, _ = self.run_view("BUILDER", obs)
-        self.assertFalse(builder["signal_diagnostics"]["actor_scoped_quarantine"])
-        self.assertEqual(len(builder["signal_diagnostics"]["incoming"]), 1)
+    def test_quarantine_global_with_shared_worker_actor(self):
+        cfg = copy.deepcopy(self.cfg)
+        for role in cfg["roles"]:
+            cfg["roles"][role]["actor_id"] = 10
+        shared_ping = dict(self.p, user={"id": 10})
+        shared_signal = dict(self.s, user={"id": 10})
+        malformed = row(410, 10, "not framed", 26)
+        ignored = row(411, 999, "unknown", 26)
+        before = ({"34": [shared_ping]}, {}, [], [])
+        obs = ({"34": [shared_ping]}, {}, [], [shared_signal, malformed, ignored])
+        projection, expected = project_aux(cfg, *obs)
+        for role in ("BUILDER", "GUARD", "SPEC"):
+            plain, state = self.run_view(role, before, cfg=cfg)
+            view, new_state = self.run_view(role, obs, state, cfg)
+            self.assertEqual(state, new_state)
+            self.assertEqual(new_state, expected)
+            self.assertEqual(plain["work"], view["work"])
+            self.assertEqual(set(view["signal_diagnostics"]), {"incoming", "unconsumed"})
+            self.assertEqual(view["global_transport_diagnostics"], {
+                "conflicts": projection["signal_status"]["conflicts"],
+                "ignored_external": projection["signal_status"]["ignored_external"]})
+            self.assertEqual([x["physical_ref"] for x in view["global_transport_diagnostics"]["conflicts"]],
+                             ["issue:37#issuecomment-410"])
+            self.assertEqual(len(view["signal_diagnostics"]["incoming"]), int(role == "BUILDER"))
 
     def test_previous_exact_and_conflict_propagates(self):
         obs = self.obs([self.p])
@@ -150,7 +161,7 @@ class SchedulerTests(unittest.TestCase):
     def test_empty_work_not_stop_and_no_invented_fields(self):
         view, _ = self.run_view("SPEC", self.obs(holders=[]))
         self.assertEqual(set(view), {"identity", "work", "health", "signal_diagnostics",
-                                     "gc_evidence", "authority"})
+                                     "gc_evidence", "authority", "global_transport_diagnostics"})
         self.assertEqual(set(view["work"]), {"task", "holder_mailbox", "holder_inputs"})
         self.assertFalse(view["work"]["holder_mailbox"])
         self.assertEqual(view["work"]["task"]["state"], "WAITING")

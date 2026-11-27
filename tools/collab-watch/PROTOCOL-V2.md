@@ -800,13 +800,13 @@ scheduler fields enter it.
 
 The closed selected-role view separates task readiness reasons and holder
 mailbox/input facts (work) from incoming/outgoing PING occurrence evidence
-(health), incoming/outgoing valid SIGNAL diagnostics, unconsumed physical
-refs and GC eligibility evidence addressed to the selected role. Valid
-outgoing SIGNAL attribution is derived only from its admitted target sender.
-Quarantined signals have no admitted semantic recipient: only physical
-selected-actor conflict refs are exposed as actor-scoped diagnostics
-(shared actor does not prove role); no malformed payload is interpreted to
-infer work. Unknown external rows are not role-addressed. GC evidence is
+(health), admitted incoming SIGNAL diagnostics, unconsumed physical refs
+and GC eligibility evidence addressed to the selected role. Valid SIGNAL
+exposure is recipient-only; no outgoing attribution is inferred.
+Quarantined signals have no admitted semantic recipient. Conflict and
+ignored-external observations are copied into separate global/unattributed
+transport diagnostics, never role-attributed even when multiple roles share
+a physical actor. No malformed payload is parsed to infer role or work. GC evidence is
 not delete authority. Holder command classification is data, never executed.
 No health/delivery/GC observation can clear or change task/holder work.
 

@@ -1,8 +1,8 @@
 """Pure selected-role view over the one accepted composed v2 projection."""
 from __future__ import annotations
 
-from core import read_comment, require
-from split_journal import physical_ref, validate_v2_config
+from core import require
+from split_journal import validate_v2_config
 from v2_aux import project_aux
 from v2_identity import select_identity
 
@@ -24,7 +24,6 @@ def project_scheduler(cfg, observation, previous, bindings, runtime_model, *, se
     mailbox = projection["holder_mailboxes"][role]
     incoming, outgoing = [], []
     aux = projection["aux_facts"]
-    journal = dict(projection["task"]["facts"], **aux)
     for health in projection["health"]:
         fact = aux[health["ping_ref"]]
         event = fact["event"]
@@ -38,16 +37,7 @@ def project_scheduler(cfg, observation, previous, bindings, runtime_model, *, se
     signal_status = projection["signal_status"]
     valid = signal_status["valid"]
     addressed = [item for item in valid if item["recipient"] == role]
-    authored = [item for item in valid if journal[item["journal_ref"]]["event"]["from"] == role]
-    relevant_refs = {item["physical_ref"] for item in addressed + authored}
-    # A quarantined record has no admitted semantic recipient. Attribute only
-    # the observed physical actor, explicitly not a proven transport role.
-    actor = cfg["roles"][role]["actor_id"]
-    actor_refs = set()
-    for raw in signals:
-        cid, sender, _ = read_comment(raw)
-        if sender == actor:
-            actor_refs.add(physical_ref(cfg["signal_room"], cid))
+    relevant_refs = {item["physical_ref"] for item in addressed}
     view = {
         "identity": identity,
         "work": {
@@ -57,10 +47,12 @@ def project_scheduler(cfg, observation, previous, bindings, runtime_model, *, se
         },
         "health": {"incoming": incoming, "outgoing": outgoing},
         "signal_diagnostics": {
-            "incoming": addressed, "outgoing": authored,
+            "incoming": addressed,
             "unconsumed": [ref for ref in signal_status["unconsumed"] if ref in relevant_refs],
-            "actor_scoped_quarantine": [
-                item for item in signal_status["conflicts"] if item["physical_ref"] in actor_refs],
+        },
+        "global_transport_diagnostics": {
+            "conflicts": signal_status["conflicts"],
+            "ignored_external": signal_status["ignored_external"],
         },
         "gc_evidence": [item for item in projection["gc_candidates"] if item["recipient"] == role],
         "authority": "not evaluated; observation only",
