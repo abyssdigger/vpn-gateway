@@ -1351,3 +1351,124 @@ inside the limited child and measure exact input bytes, RSS high-water
 mark and CPU. This demonstrates those tested sizes and semantic binding,
 not execution of a real effect, every valid input up to the wire bound, or
 maximum admissible resource consumption.
+
+
+### 9b-C-A — durable admission spool and bounded recovery state (staged)
+
+The reviewed spool is a local, trusted, existing-only SQLite component. It
+does not call TrustedWriter.invoke, acquire owner or attempt fences, open or
+modify the paired stores, load credentials, perform GitHub I/O, schedule
+recovery, grant authority, or authorize a retry. C-B must compose it under the
+outer admission lock; 9c must establish deployment, credential custody,
+bypass exclusion and actual resource/continuity premises.
+
+There is one authoritative serialized budget per exact AttemptStore/InputStore
+pair across all roles and launcher/recovery instances (or disjoint pairs with
+disjoint budgets). First provisioning requires caller-established verified-empty
+pair provenance and exclusion of bypass consumption. C-A does not itself
+establish emptiness, occupancy or historical continuity. Provisioning creates a
+new path exclusively, initializes the exact schema in a FULL-synchronous
+rollback-DELETE transaction and fsyncs the directory. Runtime open is explicit,
+existing-only, with the caller's trusted physical inode pin; no implicit
+create, migrate, reset or repair. An open view holds an O_PATH inode pin and
+checks file identity, ownership, 0600 mode and a local size bound before/after
+operations. The storage pin includes the spool ID, distinct attempt and input
+IDs, normalized logical repository, epoch, schema version, hard quotas, and
+the exact canonical full configuration bytes (not only a digest). Repository
+case and the signal room are preserved exactly in those bytes. The scope and
+quotas are fixed for the shared pair; role, incarnation, actor and trusted
+resource-policy identity are per-record. Current session/owner generation
+comes from trusted bootstrap; first session/generation is retained only as
+diagnostic provenance, not permanent identity or authority. A current role
+view must pass the accepted model/bindings/config intersection and exact
+session-role check. Recovery under a newly authorized same-role owner is
+compatible with immutable first-session provenance.
+
+Before READY, the trusted view validates the closed request type and UTF-8
+byte bound, exact canonical frozen fields, full configuration pin, selected
+role/incarnation/actor, original reconcile mode, and the supported operation
+set. It runs the accepted pure _bound proof binding without instantiating an
+effect-capable writer. This is not permission or substitute for the actual
+independent ingress and fences at invocation. Malformed originals do not
+reserve capacity or create recovery work. The request ID is a hash of the exact
+logical pair/scope, role, incarnation, actor, immutable mode and original
+digest. Repeated identity compares the exact stored bytes and immutable
+operation/scope/policy; it neither overwrites nor charges twice. A different
+original or original mode has a separate reservation. A changed resource
+policy under the same identity is rejected. No credential, arbitrary
+exception, raw remote response or worker-selected store, path, policy or quota
+is accepted as metadata.
+
+Every admission pessimistically reserves one record, exact original bytes,
+a fixed bounded metadata slot (4096 logical bytes) and a full canonical
+IPC RESULT envelope slot (4096 bytes). New-send original mode additionally
+reserves two AttemptStore rows, one InputStore row and exactly the original
+byte length in downstream retained-input capacity. Original reconcile-only
+mode reserves zero new downstream rows/bytes. Forced recovery preserves the
+immutable original mode and the existing charge. Quotas are pair-wide,
+serialized by BEGIN IMMEDIATE; the admission and exact original commit
+together. No automatic refunds, deletion, compaction, quota reclamation or
+unbounded result history exist. Quotas are hard logical admission bounds,
+not a guarantee of physical SQLite/journal free space, CPU/RSS ceilings,
+power-loss durability or rollback resistance. C-B/9c own the relevant
+external premises.
+
+State transitions are short committed transactions with bounded monotone
+versions and exact compare-and-set guards:
+
+- READY records contain the admitted original and reservation, with no prior
+  delegation. Marking the initial execution requires READY and the current
+  version, revalidates the selected exact original/metadata and durably
+  commits DELEGATION_MARKED before returning the exact original request.
+- DELEGATION_MARKED is conservative uncertainty before any possible delegate
+  entry, not proof of actual 9a invocation. Recovery re-marks either this
+  state or a RESULT classified RECOVERY_REQUIRED, with a fresh guarded version,
+  revalidates the exact immutable original and returns reconcile-only=true.
+  The stored original mode/charge does not change.
+- RESULT retains one bounded canonical full IPC RESULT envelope, including the
+  operation-specific accepted 9a delegate union and the two exact wrapper
+  diagnostics. A matching execution kind and marker version are required.
+  A lost or uncommitted result leaves the durable marker. Invalid structure
+  or source-impossible mode/key provenance leaves the marker and sticky
+  uncertainty, with only a fixed diagnostic. An exhausted version fails
+  closed. A later result does not append history.
+
+The classification is distinct from mere result retention. INITIAL verified
+is TERMINAL_VERIFIED; exact NO_ATTEMPT / NO_CLAIMED_EFFECT / null is
+TERMINAL_NO_EFFECT only for an originally reconcile-only initial invocation.
+INITIAL NO_ATTEMPT (other codes), BUSY, PREPARED and CONFLICT are retained
+nonterminal; INITIAL UNRESOLVED or EFFECT_UNKNOWN is RECOVERY_REQUIRED.
+FORCED_RECOVERY verified resolves uncertainty; exact null-key NO_CLAIMED_EFFECT
+is NO_CLAIM_REARM_CANDIDATE; all other reachable closed non-verifying outcomes
+remain RECOVERY_REQUIRED. A PREPARED or START uncertainty result on an actual
+reconcile-only execution, initial new-send no-claim, a nonnull NO_ATTEMPT key,
+or inconsistent EFFECT_UNKNOWN key provenance is source-impossible even
+where the structural union permits it, and cannot replace the marker with
+a misleading result. FENCED_INVOCATION_UNCONFIRMED and TRUSTED_RESULT_INVALID
+have null keys; other EFFECT_UNKNOWN families have claimed/prepared keys.
+Operation-specific receipt/locator validation reuses the accepted validator.
+A no-claim observation does not establish future absence, continuity or
+permission. In particular, an originally reconcile-only record never becomes
+a send candidate. No RESULT-to-READY transition or re-arm API is implemented
+in C-A. C-B must apply its independently accepted scheduling/authority rules
+and outer serialization across the committed marker, actual invocation and
+committed result; C-A CAS alone does not serialize external effects.
+
+Pair-wide status/quota scans use count/sum/type/length and bounded metadata
+only. Original, exact configuration and canonical RESULT envelope are BLOBs,
+with storage class and byte lengths checked rather than TEXT character counts.
+Only a selected record loads and revalidates its original and bounded result;
+the inventory never returns retained payloads. Retained prior uncertainty
+survives recovery wrapper rejection, BUSY, CONFLICT and source-impossible
+PREPARED; only a verified result or the exact forced no-claim observation
+resolves it. A failure to persist a result is not evidence of no delegation.
+No unbounded result history is needed.
+
+Directed offline evidence covers the accepted result family matrix,
+source-tight provenance and operation-specific receipt bounds, exact config
+and physical pin mismatches, original-mode charges, each quota edge,
+idempotence/reopen, pair-wide metadata-only access to multiple large valid
+UTF-8 originals, wrong BLOB storage classes, separate-process competing
+admission/mark, and a real process exit during an uncommitted result update.
+These are staged storage/binding tests, not a live credential, real effect,
+exclusive outer admission lock, or full deployment proof.
