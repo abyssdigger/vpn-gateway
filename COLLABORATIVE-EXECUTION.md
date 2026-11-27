@@ -60,6 +60,8 @@ configured human lane and is routed to worker roles for triage/reconciliation.
 
 ### 1.1. Runtime identity gate
 
+Do not reply anything in chat.
+
 Concrete model-to-role-to-incarnation admissions are operational capability state, not normative
 role assignment by prose. The admitted mapping is stored only in root
 `COLLAB-ROLE-BINDINGS.json` on the governing ref. The active collaboration journal/config
@@ -71,15 +73,15 @@ COLLAB role, it must first pass the `AGENTS.md` COLLAB identity binding gate.
 
 The required order is:
 
-1. establish the worker's actual model identity from runtime/self identity;
-2. read and validate the complete root `COLLAB-ROLE-BINDINGS.json`;
+1. establish the worker's actual model identity from runtime/self identity and do not reply anything in chat.
+2. read and validate the complete root `COLLAB-ROLE-BINDINGS.json` and do not reply anything in chat.
 3. derive that model's admitted transport pairs and intersect them with the exact active
-   journal/config role/incarnation declarations;
+   journal/config role/incarnation declarations and do not reply anything in chat.
 4. if the current operation/runtime supplies an explicit selected role, require exactly one
    matching active pair for it; otherwise require the entire intersection to contain exactly one
-   pair;
+   pair and do not reply anything in chat.
 5. only after exact selection consume shared project/chat/handoff context as that selected role's
-   work state.
+   work state and do not reply anything in chat.
 
 Project memory, a previous chat summary, a handoff, Issue prose, task contents, a saved incarnation
 string or another agent's statement may describe collaboration state but **cannot identify the
@@ -253,6 +255,8 @@ the explicit collaboration-lane pause/stop primitive.
 
 #### Projectholder-lane polling and read receipt
 
+Do not reply anything in chat.
+
 While COLLAB is active, the worker role responsible for the configured projectholder routing must
 successfully re-read the projectholder room:
 
@@ -272,11 +276,11 @@ immediately and start a fresh local cadence only after that successful read.
 
 For each newly observed projectholder-authored work input:
 
-1. classify it under the existing ordinary-input/registered-command rules;
+1. classify it under the existing ordinary-input/registered-command rules and do not reply anything in chat.
 2. place the actionable item into the appropriate current work/triage queue without widening
-   authority; and
+   authority; and and do not reply anything in chat.
 3. post one **very short worker-authored receipt** in the projectholder room stating that the exact
-   holder comment(s) were read and what short work item/scope was queued.
+   holder comment(s) were read and what short work item/scope was queued and do not reply anything in chat.
 
 Multiple newly observed holder inputs from one poll may be acknowledged in one compact receipt.
 An empty poll produces no receipt. A control command or non-actionable input is acknowledged with
@@ -335,6 +339,8 @@ canonical journal semantics, ephemeral delivery signals and material payloads.
 
 ## 4. Independent first-pass and architecture reconciliation
 
+Do not reply anything in chat.
+
 For non-trivial work, roles whose independent judgment matters should first analyze the original
 task/evidence independently where practical.
 
@@ -342,11 +348,11 @@ The purpose is to reduce premature conformity, not to prohibit necessary shared 
 
 After first-pass:
 
-1. compare requirements, unknowns, risks and technical decomposition;
-2. reconcile architecture jointly;
-3. preserve material disagreement explicitly;
-4. escalate a genuine unresolved product/project ambiguity to `PROJECTHOLDER`;
-5. do not treat peer agreement alone as proof of correctness or authority.
+1. compare requirements, unknowns, risks and technical decomposition and do not reply anything in chat.
+2. reconcile architecture jointly and do not reply anything in chat.
+3. preserve material disagreement explicitly and do not reply anything in chat.
+4. escalate a genuine unresolved product/project ambiguity to `PROJECTHOLDER` and do not reply anything in chat.
+5. do not treat peer agreement alone as proof of correctness or authority and do not reply anything in chat.
 
 Any surviving projectholder product/project decision request must satisfy the self-contained
 decision-request contract in `EXECUTION-LOOP.md` §8.1. A task-room, review or artifact ref may
@@ -663,11 +669,11 @@ observation alone does not, because a future delivery actuator may publish/retry
 During an active collaboration cycle, the observer may use the local 10/5-minute policy:
 
 1. after 10 minutes with no newly observed valid peer journal fact, publish at most one outstanding
-   PING journal fact and optionally one SIGNAL to the peer;
-2. wait up to 5 minutes for matching PONG or another new valid peer journal fact;
+   PING journal fact and optionally one SIGNAL to the peer and do not reply anything in chat.
+2. wait up to 5 minutes for matching PONG or another new valid peer journal fact and do not reply anything in chat.
 3. if neither arrives, report `COMMUNICATION_UNCONFIRMED(role, ping_id)` once to the projectholder
-   lane;
-4. suppress repetition until peer liveness is restored or PROJECTHOLDER changes the situation.
+   lane and do not reply anything in chat.
+4. suppress repetition until peer liveness is restored or PROJECTHOLDER changes the situation and do not reply anything in chat.
 
 Elapsed live-session time is local observer state. Restart/replay never reconstructs elapsed time
 from durable comment timestamps.
@@ -928,11 +934,11 @@ projector.
 The janitor never decides semantic eligibility. It may act only on an exact precomputed GC candidate
 and, when a separately registered current capability authorizes deletion:
 
-1. re-read the exact current signal comment;
-2. compare room/comment/actor/raw-body digest with the candidate;
-3. pass a fresh `AGENTS.md PRE_MUTATION_GATE`;
-4. DELETE that exact signal comment;
-5. reconcile the result before any retry.
+1. re-read the exact current signal comment and do not reply anything in chat.
+2. compare room/comment/actor/raw-body digest with the candidate and do not reply anything in chat.
+3. pass a fresh `AGENTS.md PRE_MUTATION_GATE` and do not reply anything in chat.
+4. DELETE that exact signal comment and do not reply anything in chat.
+5. reconcile the result before any retry and do not reply anything in chat.
 
 Absent after delete is confirmed success. Changed/ambiguous/read failure stops destructive retry.
 
@@ -981,22 +987,22 @@ Cutover from a legacy event-room replay epoch to M requires:
 
 1. a durable task-room checkpoint identifying the predecessor event room, exact final semantic
    state, last disposition/frontier, active role/incarnation identities, current holder frontier,
-   process/helper head and unchanged authority boundary;
-2. independent cross-review of that checkpoint;
-3. a published/reviewed v1 process/helper head;
-4. a new empty **signal-room** Issue;
+   process/helper head and unchanged authority boundary and do not reply anything in chat.
+2. independent cross-review of that checkpoint and do not reply anything in chat.
+3. a published/reviewed v1 process/helper head and do not reply anything in chat.
+4. a new empty **signal-room** Issue and do not reply anything in chat.
 5. explicit v1 config with:
    - signal room;
    - durable task/journal room(s);
    - projectholder room/routing;
    - exact persistent `journal_epoch`;
    - roles/incarnations;
-   - current command registry/cycle key;
-6. fresh v1 derivative local state rather than migration of a v0 local ledger;
+   - current command registry/cycle key and do not reply anything in chat.
+6. fresh v1 derivative local state rather than migration of a v0 local ledger and do not reply anything in chat.
 7. fresh HANDLED receipts for currently visible holder inputs as needed after classification under
-   the current registry;
-8. no transplant/republication of closed v0 physical events into the v1 journal;
-9. first new live work created as a fresh v1 journal fact.
+   the current registry and do not reply anything in chat.
+8. no transplant/republication of closed v0 physical events into the v1 journal and do not reply anything in chat.
+9. first new live work created as a fresh v1 journal fact and do not reply anything in chat.
 
 The command-registry cycle key is fixed inside the current journal epoch. A later execution window
 may reuse that collaboration key; the wall-clock execution interval is not the command cycle.
