@@ -923,3 +923,23 @@ Intents are observation/control requests only, never PING publication,
 transport retry, authority, STOP or semantic work/disposition. No clock,
 network, persistence, model, command evaluation or checkpoint integration.
 The independent 2m peer wait budget remains a separate unit.
+
+
+## Unit 7c-C — one bounded peer-wait attempt
+
+advance_peer_wait(descriptor, previous, now_ms) accepts exactly role,
+incarnation, peer, dependency_key and wait_token, all bounded identifiers;
+peer differs from role. None explicitly begins a fresh attempt at the
+caller-supplied nonnegative integer monotonic time. Subsequent calls bind
+the exact descriptor and nondecreasing time. At >=120000ms it emits exactly
+one PEER_WAIT_BUDGET_EXPIRED with the exact descriptor and latches expiry.
+Same-now/later calls do not repeat. A later bounded wait for the same
+unresolved dependency uses a new token and explicit fresh state after
+EXEC_NEXT. Elapsed age is not reconstructed after restart.
+
+Expiry returns scheduler control to EXEC_NEXT only. It does not resolve,
+cancel or close the dependency, mark peer communication failure, authorize
+a role action, waive independent review or establish STOP. No health state,
+journal/projection, clock, sleep, I/O, persistence, checkpoint or actuator
+participates. The outer runtime owns actual waiting, exact semantic relation
+satisfaction, scheduling and lifecycle transitions.
