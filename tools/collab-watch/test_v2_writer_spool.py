@@ -114,7 +114,7 @@ class ClassifierTests(unittest.TestCase):
                         if state == "VERIFIED":
                             expected = sp.TV
                         elif code == "NO_CLAIMED_EFFECT":
-                            expected = sp.NC if execution == sp.FORCED else sp.TN
+                            expected = sp.TN if mode else sp.NC
                         elif execution == sp.FORCED or state in ("EFFECT_UNKNOWN", "UNRESOLVED"):
                             expected = sp.RR
                         else:
@@ -347,16 +347,17 @@ class SpoolTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM spool_records").fetchone(), (1,))
 
     def test_original_read_never_rearms_and_valid_receipts(self):
-        store, _, _ = self.provision()
+        store, path, args = self.provision()
         rid = store.admit(request(self.original, True))
         self.assertEqual(store.mark_initial(rid, 1), request(self.original, True))
         self.assertEqual(store.persist_result(rid, 2, sp.INITIAL, PREPARED), sp.RR)
         marker = store.load(rid)
         self.assertEqual(marker["diagnostic"], "PROVENANCE_INVALID")
         store.mark_recovery(rid, marker["version"])
-        self.assertEqual(store.persist_result(rid, marker["version"]+1, sp.FORCED, NO_CLAIM), sp.NC)
+        self.assertEqual(store.persist_result(rid, marker["version"]+1, sp.FORCED, NO_CLAIM), sp.TN)
         r = store.load(rid)
-        self.assertEqual((r["reconcile_only"], r["uncertain"]), (1, 0))
+        self.assertEqual((r["reconcile_only"], r["uncertain"], r["classification"]), (1, 0, sp.TN))
+        self.assertEqual(self.reopen(store, path, args).load(rid)["classification"], sp.TN)
         for mark in (store.mark_initial, store.mark_recovery):
             with self.assertRaises(Conflict):
                 mark(rid, r["version"])
@@ -365,6 +366,21 @@ class SpoolTests(unittest.TestCase):
         store.mark_initial(rid, 1)
         self.assertEqual(store.persist_result(rid, 2, sp.INITIAL, VERIFIED), sp.TV)
         self.assertEqual(strict_json(store.load(rid)["result"].decode())["result"], VERIFIED)
+
+    def test_no_claim_classification_metadata_cannot_cross_original_mode(self):
+        for mode, forged in ((True, sp.NC), (False, sp.TN)):
+            with self.subTest(mode=mode):
+                store, path, _ = self.provision()
+                rid = store.admit(request(self.original, mode))
+                store.mark_initial(rid, 1)
+                store.mark_recovery(rid, 2)
+                self.assertEqual(store.persist_result(rid, 3, sp.FORCED, NO_CLAIM),
+                                 sp.TN if mode else sp.NC)
+                with sqlite3.connect(path) as db:
+                    db.execute("UPDATE spool_records SET classification=? WHERE request_id=?",
+                               (forged, rid))
+                with self.assertRaises(Conflict):
+                    store.status()
 
     def test_wrong_blob_storage_classes_fail_closed(self):
         for col, table in (("config", "spool_meta"), ("original", "spool_records"),

@@ -181,7 +181,7 @@ def classify_result(value, operation, original_mode, execution):
     if state == "VERIFIED":
         classification = TV
     elif code == "NO_CLAIMED_EFFECT":
-        classification = NC if execution == FORCED else TN
+        classification = TN if original_mode else NC
     elif execution == FORCED or state in ("UNRESOLVED", "EFFECT_UNKNOWN"):
         classification = RR
     else:
@@ -265,8 +265,8 @@ def _invalid_sql():
         "WHEN 'RESULT' THEN CASE WHEN version>=3 AND execution IN ('INITIAL','FORCED_RECOVERY') "
         "AND classification IN (" + ",".join("'" + c + "'" for c in CLASSES) + ") "
         "AND uncertain=CASE classification WHEN 'RECOVERY_REQUIRED' THEN 1 ELSE 0 END "
-        "AND (execution!='FORCED_RECOVERY' OR classification NOT IN ('RETAINED_NONTERMINAL','TERMINAL_NO_EFFECT')) "
-        "AND (execution!='INITIAL' OR classification!='NO_CLAIM_REARM_CANDIDATE') "
+        "AND (execution!='FORCED_RECOVERY' OR classification!='RETAINED_NONTERMINAL') "
+        "AND (classification!='NO_CLAIM_REARM_CANDIDATE' OR (execution='FORCED_RECOVERY' AND reconcile_only=0)) "
         "AND (classification!='TERMINAL_NO_EFFECT' OR reconcile_only=1) "
         "AND diagnostic IS NULL AND typeof(result)='blob' "
         f"AND length(result) BETWEEN 1 AND {RESULT_RESERVE} THEN 0 ELSE 1 END ELSE 1 END"

@@ -1439,8 +1439,9 @@ TERMINAL_NO_EFFECT only for an originally reconcile-only initial invocation.
 INITIAL NO_ATTEMPT (other codes), BUSY, PREPARED and CONFLICT are retained
 nonterminal; INITIAL UNRESOLVED or EFFECT_UNKNOWN is RECOVERY_REQUIRED.
 FORCED_RECOVERY verified resolves uncertainty; exact null-key NO_CLAIMED_EFFECT
-is NO_CLAIM_REARM_CANDIDATE; all other reachable closed non-verifying outcomes
-remain RECOVERY_REQUIRED. A PREPARED or START uncertainty result on an actual
+is NO_CLAIM_REARM_CANDIDATE only for original new-send mode (false), or
+TERMINAL_NO_EFFECT for original reconcile-only mode (true); all other reachable
+closed non-verifying outcomes remain RECOVERY_REQUIRED. A PREPARED or START uncertainty result on an actual
 reconcile-only execution, initial new-send no-claim, a nonnull NO_ATTEMPT key,
 or inconsistent EFFECT_UNKNOWN key provenance is source-impossible even
 where the structural union permits it, and cannot replace the marker with
