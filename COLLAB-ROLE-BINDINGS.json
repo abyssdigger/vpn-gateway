@@ -1,21 +1,35 @@
 {
-  "schema": "vpng-collab-role-bindings/1",
+  "schema": "vpng-collab-role-bindings/2",
   "bindings": [
     {
       "model": "GPT-5.6 Sol",
-      "transport_role": "GUARD",
-      "incarnation": "guard-gpt56-sol-current",
-      "additional_responsibilities": [
-        "SPEC"
+      "status": "admitted",
+      "transport_pairs": [
+        {
+          "transport_role": "GUARD",
+          "incarnation": "guard-gpt56-sol-current"
+        },
+        {
+          "transport_role": "SPEC",
+          "incarnation": "spec-gpt56-sol-v2"
+        }
       ],
-      "status": "active"
+      "additional_responsibilities": {
+        "GUARD": [
+          "SPEC"
+        ]
+      }
     },
     {
       "model": "GPT-6.2",
-      "transport_role": "BUILDER",
-      "incarnation": "builder-gpt62-current",
-      "additional_responsibilities": [],
-      "status": "active"
+      "status": "admitted",
+      "transport_pairs": [
+        {
+          "transport_role": "BUILDER",
+          "incarnation": "builder-gpt62-current"
+        }
+      ],
+      "additional_responsibilities": {}
     }
   ]
 }

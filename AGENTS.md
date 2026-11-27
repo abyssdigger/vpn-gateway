@@ -57,24 +57,52 @@ a worker entering/resuming COLLAB or preparing any role-attributed COLLAB action
 
 1. establish its actual current model identity from runtime/self identity, never from project
    memory, handoff text, Issue prose or another worker's statement;
-2. read the exact root `COLLAB-ROLE-BINDINGS.json` from the governing active ref;
-3. require exactly one active binding for that model and derive the worker's transport role and
-   incarnation from that binding;
-4. when an active journal/config declares the role/incarnation, require an exact match; and
-5. only then recover task/journal/handoff state as that role.
+2. read and validate the complete closed root `COLLAB-ROLE-BINDINGS.json` from the governing active
+   ref, then derive the set of admitted transport `role/incarnation` pairs for that exact model;
+   root admission is capability only, not an active role, live-session ownership or authority;
+3. obtain the active collaboration journal/config role map independently of recovered context and
+   intersect it with the model's admitted root pairs; process-only/additional responsibilities do
+   not create transport pairs;
+4. when the current operation/runtime explicitly selects a transport role, require exactly one
+   matching pair in that intersection; when no role is explicitly selected, require the whole
+   intersection itself to contain exactly one pair; and
+5. only after that exact selection recover task/journal/handoff state as the selected role and
+   incarnation.
+
+An explicit selected role is current operation/runtime input. It must never be inferred from project
+memory, a previous chat summary, a handoff, Issue prose, current task contents, a saved incarnation
+string or another worker's statement. If more than one admitted active pair remains and no role was
+explicitly selected, the result is `IDENTITY_CONFLICT`; the worker must not guess.
+
+One model may be admitted to multiple distinct transport pairs. Different live sessions of that
+model may select different active roles concurrently when the active collaboration config contains
+those pairs, and one session may switch roles only by making a new explicit selection and
+re-running this gate. Distinct roles remain distinct protocol identities and use distinct
+incarnations; selecting one never merges its lifecycle meaning with another.
+
+Identity selection establishes neither repository/tool authority nor exclusive live-session
+ownership. Every role-attributed mutation still passes the normal authority gates, and any active
+protocol owner/fencing rule for the selected role/incarnation remains an additional prerequisite.
+
+For the current v1 pilot, the active journal config contains the existing GUARD and BUILDER pairs
+but no distinct SPEC transport actor. Therefore GPT-5.6 Sol still resolves uniquely to
+`GUARD / guard-gpt56-sol-current` when no role is selected. Its process responsibility for SPEC
+does not activate the separately admitted future SPEC transport pair. A future config that contains
+both GPT-5.6 GUARD and SPEC pairs requires explicit role selection for role-attributed action or
+recovery.
 
 Recovered chat/project context may restore **work state**, but must never establish or override the
-worker's model, role or incarnation identity.
+worker's model, selected role or incarnation identity.
 
-Missing, ambiguous or contradictory binding is `IDENTITY_CONFLICT`. Until resolved, the worker
-must not emit role-attributed comments/journal facts, acquire or grant role leases, or perform
-repository/tool mutations on behalf of that role. Read-only diagnosis and truthful reporting remain
-permitted.
+Missing, ambiguous, stale or contradictory admission/config selection is `IDENTITY_CONFLICT`.
+Until resolved, the worker must not emit role-attributed comments/journal facts, acquire or grant
+role leases, or perform repository/tool mutations on behalf of that role. Read-only diagnosis and
+truthful reporting remain permitted.
 
-Concrete model-to-role assignments belong only in `COLLAB-ROLE-BINDINGS.json`, not in this
-document. Changing that operational binding does not require editing `AGENTS.md`; however, if the
-change also alters role/incarnation data that an active collaboration protocol declares immutable,
-the collaboration's reviewed epoch/config migration rule still applies.
+Concrete model-to-role admissions belong only in `COLLAB-ROLE-BINDINGS.json`, not in this
+document. Changing root admission alone cannot rewrite an active collaboration epoch. If a
+role/incarnation pair is added to or changed in an active journal/config whose identity is
+immutable, the collaboration's reviewed epoch/config migration rule still applies.
 
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into

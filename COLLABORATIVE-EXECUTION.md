@@ -8,11 +8,13 @@ requirement, architecture, review or evidence semantics owned elsewhere.
 
 ## 1. Roles and incarnations
 
-A **role** is a stable collaboration responsibility. An **incarnation** is the current concrete
-chat/session/model instance serving that role.
+A **role** is a stable collaboration responsibility. An **incarnation** is the protocol transport
+identity assigned to that role in an active collaboration config/epoch. Incarnation is not the
+same thing as a live chat/session: live ownership of a role/incarnation is a separate runtime
+fencing question.
 
-The projectholder defines role responsibility. A role change or replacement of an incarnation
-does not silently change authority.
+The projectholder defines role responsibility. A role change, transport-pair selection or
+replacement of a live owner does not silently change authority.
 
 A typical development collaboration may use:
 
@@ -30,19 +32,38 @@ These names are project configuration, not universal product semantics.
 a genuine projectholder decision, SPEC routes that decision request under the normal holder contract
 instead of silently choosing an option.
 
-One incarnation may carry both `SPEC` and `GUARD` responsibilities. Their lifecycle meanings
-remain distinct: authoring/maintaining a task specification is not acceptance of BUILDER's result.
-In the current v1 pilot, SPEC is carried by the GUARD incarnation as a process responsibility and
-does **not** add a new journal transport actor or mutate the immutable current-epoch role config.
-A future journal-epoch migration may materialize it as a distinct transport role if useful.
+One model may be admitted to more than one transport role, but every admitted transport role has
+its own exact incarnation and retains its own lifecycle meaning. In particular, SPEC authoring and
+GUARD acceptance never become the same protocol act merely because both roles are served by
+GPT-5.6 Sol.
+
+Different live sessions of one admitted model may select different active transport roles
+concurrently when the active collaboration config contains those role/incarnation pairs. A single
+session may also change selected role only through a new explicit role selection and identity-gate
+validation before its next role-attributed action. Neither case merges work state, role semantics,
+authority or acceptance.
+
+This identity model does not by itself prove exclusive live-session ownership. Any mutation-capable
+runtime must additionally satisfy the active owner/fencing contract for the selected
+role/incarnation. A stale or non-owner session remains unable to perform the fenced role-attributed
+mutation even if its model is admitted to that role.
+
+In the current v1 pilot, SPEC is still carried by the GUARD incarnation as an additional process
+responsibility and does **not** exist as a distinct active journal transport actor. Root admission
+may already contain the future distinct
+`SPEC / spec-gpt56-sol-v2` pair, but that pair becomes selectable only after a reviewed active
+journal/config migration actually declares it. The current v1 GUARD identity therefore remains
+`GUARD / guard-gpt56-sol-current`.
 
 `PROJECTHOLDER` is not a schedulable worker role in v0. Projectholder input arrives through the
 configured human lane and is routed to worker roles for triage/reconciliation.
 
 ### 1.1. Runtime identity gate
 
-Concrete model-to-role-to-incarnation assignments are operational state, not normative process
-text. The current mapping is stored only in root `COLLAB-ROLE-BINDINGS.json` on the governing ref.
+Concrete model-to-role-to-incarnation admissions are operational capability state, not normative
+role assignment by prose. The admitted mapping is stored only in root
+`COLLAB-ROLE-BINDINGS.json` on the governing ref. The active collaboration journal/config
+independently declares which role/incarnation pairs exist in that epoch.
 
 Before a worker may recover collaborative state **as itself**, publish any role-attributed comment
 or journal fact, acquire/grant a role lease, or perform a repository/tool mutation on behalf of a
@@ -51,18 +72,37 @@ COLLAB role, it must first pass the `AGENTS.md` COLLAB identity binding gate.
 The required order is:
 
 1. establish the worker's actual model identity from runtime/self identity;
-2. read `COLLAB-ROLE-BINDINGS.json`;
-3. derive exactly one active transport role/incarnation from that mapping;
-4. compare it with any active journal/config role/incarnation declaration;
-5. only after an exact match, consume shared project/chat/handoff context as that role's work state.
+2. read and validate the complete root `COLLAB-ROLE-BINDINGS.json`;
+3. derive that model's admitted transport pairs and intersect them with the exact active
+   journal/config role/incarnation declarations;
+4. if the current operation/runtime supplies an explicit selected role, require exactly one
+   matching active pair for it; otherwise require the entire intersection to contain exactly one
+   pair;
+5. only after exact selection consume shared project/chat/handoff context as that selected role's
+   work state.
 
-Project memory, a previous chat summary, a handoff, Issue prose, a saved incarnation string or another
-agent's statement may describe collaboration state but **cannot identify the current worker**.
+Project memory, a previous chat summary, a handoff, Issue prose, task contents, a saved incarnation
+string or another agent's statement may describe collaboration state but **cannot identify the
+current worker's selected transport role**.
+
+If several active pairs remain for one model, role selection must be an explicit current
+operation/runtime input. Switching GUARD <-> SPEC therefore requires a new explicit selection and
+a new identity-gate pass; recovered context cannot silently carry the prior role across that switch.
 
 Failure at any step is `IDENTITY_CONFLICT`: fail closed for role-attributed writes/mutations and
-continue only read-only diagnosis/reporting. A binding change that also changes immutable v1 semantic
-role/incarnation configuration requires the normal reviewed journal-epoch migration; editing the
-binding file alone cannot rewrite an existing epoch.
+continue only read-only diagnosis/reporting.
+
+Passing this identity gate grants neither repository/tool authority nor live ownership of the
+selected role. Normal mutation authority and any owner/fencing contract are separate gates.
+
+The current v1 active config declares GUARD and BUILDER but no distinct SPEC transport role, so
+GPT-5.6 Sol still has one active intersection and resolves to the existing GUARD pair without an
+explicit role selection. Its additional SPEC process responsibility does not activate the future
+SPEC transport pair.
+
+A binding change that also changes role/incarnation data declared immutable by the active
+collaboration protocol requires the normal reviewed journal-epoch/config migration. Editing the
+root binding file alone cannot rewrite an existing epoch.
 
 ## 2. Activation and authority
 
