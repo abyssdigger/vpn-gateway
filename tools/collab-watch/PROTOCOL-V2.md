@@ -1219,3 +1219,52 @@ credential custody across processes, filesystem rollback resistance, removal of
 the existing connector/direct-write bypass, or live deployment. Those require
 separate 9b/9c contracts, implementation and evidence. Tests use synthetic
 transport and existing real local-store/fence fixtures, not GitHub mutation.
+
+
+### 9b-A — bounded one-shot IPC framing and trusted session binding
+
+The staged local stream protocol uses a 10-byte request header: magic VPNG,
+version 1, reconcile flag (exactly 0 or 1), unsigned big-endian 32-bit original
+UTF-8 byte count. Nonzero length is bounded by MAX_INPUT_BYTES, followed by
+exact bytes and EOF after client write-half-close. No nested JSON envelope,
+worker role/session/owner metadata, or one-packet assumption. The receiver
+reads incrementally in chunks no larger than 64 KiB, rejects ancillary data
+and MSG_CTRUNC/MSG_TRUNC, and applies one absolute monotonic deadline across
+header, body, EOF and UTF-8 decoding. No full-body eager allocation from the
+header. Original JSON remains opaque; accepted 9a owns canonical semantic
+admission.
+
+Trusted caller creates a one-shot WriterInvocation from detached immutable
+SessionBinding (role, incarnation, positive owner generation, bounded session
+ID) and a trusted local handler. After complete validated frame and EOF it
+attempts exactly one handler entry with the exact 9a request dict and this
+trusted binding. Endpoint possession is delegation of the same session,
+not fresh identity. No SO_PEERCRED/UID/PID identity assertion, worker
+registration, role selection or owner-authority lookup in this framing unit.
+
+Response: 9-byte VPNR/version-1/unsigned big-endian length header, bounded
+canonical JSON (maximum 4096 bytes), EOF. Closed outcomes: INGRESS_REJECTED
+with only state (trusted local rejection before handoff); RESULT with
+state and the trusted handler's closed accepted 9a result union; or
+HANDOFF_UNCERTAIN with only state. Reuse accepted 9a result validation,
+including the two wrapper diagnostics, without taking operation identity
+from worker JSON. The actual operation/result association remains the trusted
+handler's responsibility. No exception text in wire results. Response send
+has the same absolute deadline or a separately supplied absolute deadline.
+Set the local handoff boundary before handler entry; handler exception,
+malformed result, deadline overrun or failed response write after that
+boundary is uncertain, not no-attempt. Server's returned outcome is local
+knowledge, not proof of client delivery. Client returns uncertainty on any
+absent, malformed, truncated, late or reset response, including when server
+locally rejected before handoff. No automatic retries. Reconciliation after
+uncertainty requires the exact retained/spooled original; durable scheduler
+recovery admission belongs to 9b-C and cannot be self-selected by the flag.
+
+This module creates no worker processes/threads and performs no real
+credential/GitHub I/O. It bounds logical frame size and receive chunks, not
+decoded/canonicalization heap, aggregate concurrency or handler runtime.
+A synchronous handler cannot be interrupted by this module; an overrun
+observed on return is uncertain. Actual launch/session provenance,
+process/UID/CPU/heap/deadline supervision, durable admission and recovery
+spool, and alternate-path/live deployment proofs remain 9b-B, 9b-C and 9c.
+Tests use synthetic local handler and Linux socketpairs only.
