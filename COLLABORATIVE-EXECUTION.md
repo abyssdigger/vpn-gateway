@@ -612,6 +612,14 @@ from durable comment timestamps.
 `COMMUNICATION_UNCONFIRMED` never declares a session ended, creates DORMANT, reassigns work,
 changes incarnation/model or widens/revokes authority.
 
+An explicit PROJECTHOLDER instruction to treat a peer as having failed a ping, or otherwise to
+accept the current communication episode as unconfirmed, may stop further diagnosis/repetition of
+that ping episode as directed. It changes only communication-health handling. It does **not**
+satisfy, waive or reassign the peer's pending obligation; substitute for a required independent
+review/acceptance; permit another role to emit the peer's result/verdict; or create a `STOP` basis.
+The underlying work dependency remains unresolved until its owning semantic relation is actually
+satisfied or explicitly changed by the owning process/authority.
+
 ### 7.6.1. Non-blocking peer wait budget
 
 Peer-response waiting and communication-health diagnosis are separate mechanisms.
@@ -627,8 +635,10 @@ On peer-wait expiry the waiting role must immediately return to `EXEC_NEXT`:
 1. if any independent authorized `WORK` exists, continue it;
 2. if the current unit alone depends on the peer, keep that unit explicitly
    `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit;
-3. if no independent work exists, another bounded peer wait may be entered, subject to the same
-   session-safety boundary and without converting repeated timeout into semantic closure.
+3. if no independent work exists and any applicable bounded wait can still observe the unresolved
+   dependency, enter `WAIT`; this may observe the peer relation or another admitted lane and need
+   not repeat the same failed PING. Return to `EXEC_NEXT` after each bounded wait, subject to the
+   same session-safety boundary and without converting repeated timeout into semantic closure.
 
 A peer-wait timeout never:
 - reassigns the peer's obligation or role;
@@ -638,6 +648,13 @@ A peer-wait timeout never:
 - permits bypassing required independent review or preflight;
 - advances canonical processed/handled state;
 - creates a STOP basis by itself.
+
+The same rule applies after `COMMUNICATION_UNCONFIRMED` or a PROJECTHOLDER-confirmed failed ping.
+Those facts may remove a reason to keep synchronously waiting on that particular ping, but they do
+not make the unresolved peer dependency terminal. If independent `WORK` is exhausted while an
+applicable bounded wait can still observe the required peer/review/input relation, the
+collaboration remains in `WAIT -> EXEC_NEXT`; only a real generic/overlay stop basis or the
+session-safety boundary may end the loop.
 
 The 10/5-minute communication-health policy above remains diagnostic and may run independently.
 Its PING/PONG state must not block the work scheduler. Conversely, continued independent work after
