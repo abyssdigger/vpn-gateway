@@ -382,6 +382,37 @@ class SpoolTests(unittest.TestCase):
                 with self.assertRaises(Conflict):
                     store.status()
 
+    def test_single_link_pin_and_pair_inventory_scope(self):
+        store, path, args = self.provision()
+        inode = store.inode
+        rid = store.admit(request(self.original))
+        alias = path.with_name("alias.db")
+        os.link(path, alias)
+        try:
+            for target in (path, alias):
+                with self.assertRaises(Conflict):
+                    sp.Spool.open(target, expected_inode=inode, **args)
+            with self.assertRaises(Conflict):
+                store.status()
+        finally:
+            alias.unlink()
+        self.assertEqual(store.inode, inode)
+        self.assertEqual(store.list_metadata()[0]["request_id"], rid)
+        # Global metadata-only inventory must not route a malformed identity.
+        for column, bad, good in (("actor", 999, store._actor),
+                                  ("incarnation", "wrong", store._incarnation),
+                                  ("first_session", "not valid!", store._session.session_id),
+                                  ("policy_id", "not valid!", store._policy.policy_id),
+                                  ("original_sha256", "1"*64, store.load(rid)["original_sha256"])):
+            with self.subTest(column=column):
+                with sqlite3.connect(path) as db:
+                    db.execute("UPDATE spool_records SET "+column+"=? WHERE request_id=?", (bad, rid))
+                with self.assertRaises(Conflict):
+                    store.list_metadata()
+                with sqlite3.connect(path) as db:
+                    db.execute("UPDATE spool_records SET "+column+"=? WHERE request_id=?", (good, rid))
+        self.assertEqual(store.list_metadata()[0]["request_id"], rid)
+
     def test_wrong_blob_storage_classes_fail_closed(self):
         for col, table in (("config", "spool_meta"), ("original", "spool_records"),
                            ("result", "spool_records")):

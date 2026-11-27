@@ -196,7 +196,8 @@ def _path(path):
 
 def _identity(info):
     require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
-            and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= MAX_DB_BYTES,
+            and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1
+            and info.st_size <= MAX_DB_BYTES,
             "invalid spool file")
     return info.st_dev, info.st_ino
 
@@ -466,8 +467,22 @@ class Spool:
     def list_metadata(self):
         """Bounded pair-wide inventory; no retained payload/result BLOB loaded."""
         with self._transaction() as (db, _):
-            return [dict(zip(META_COLS, row)) for row in db.execute(
-                "SELECT " + ",".join(META_COLS) + " FROM spool_records ORDER BY request_id")]
+            roles = strict_json(self._cfg.decode("utf-8"))["roles"]
+            rows = []
+            for raw in db.execute("SELECT " + ",".join(META_COLS) +
+                                  " FROM spool_records ORDER BY request_id"):
+                row = dict(zip(META_COLS, raw))
+                role = row["role"]
+                require(role in roles and row["incarnation"] == roles[role]["incarnation"]
+                        and row["actor"] == roles[role]["actor_id"]
+                        and ident(row["policy_id"]) and ident(row["first_session"]),
+                        "stored inventory scope mismatch")
+                expected = _sha(_encode([self._scope, role, row["incarnation"],
+                                         row["actor"], bool(row["reconcile_only"]),
+                                         row["original_sha256"]]))
+                require(expected == row["request_id"], "stored inventory identity mismatch")
+                rows.append(row)
+            return rows
 
     def _selected(self, db, request_id):
         require(type(request_id) is str and body_hash(request_id), "invalid request id")

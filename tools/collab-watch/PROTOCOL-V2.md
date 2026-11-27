@@ -1473,3 +1473,84 @@ UTF-8 originals, wrong BLOB storage classes, separate-process competing
 admission/mark, and a real process exit during an uncommitted result update.
 These are staged storage/binding tests, not a live credential, real effect,
 exclusive outer admission lock, or full deployment proof.
+
+### 9b-C-B1 — staged pair coordinator
+
+A trusted, process-local coordinator composes the accepted spool and actual
+9a TrustedWriter over real temporary/local stores. It does not implement
+launcher/child or worker isolation, a scheduler, credential custody, real
+GitHub effects, or deployment. All effect-capable invocations in the staged
+composition must cooperate in one physical pair-admission domain.
+
+Bootstrap is trusted and external to the worker frame. It supplies the exact
+spool, AttemptStore, InputStore, OwnerStore and optional checkpoint identities,
+absolute paths and expected physical device/inode pins, exact SessionBinding
+and ResourcePolicy identity. These distinct pins must match the already
+constructed spool and accepted writer objects, repository/epoch/config,
+role/incarnation/actor and capability generation. Existing InputStore,
+OwnerStore and checkpoint lifetime pins remain authoritative; the coordinator
+retains its own O_PATH pin for the AttemptStore, whose accepted implementation
+reopens by path. Expected identity is not obtained by reopening an unknown
+file. All paths are checked before and after relevant operations. Single-link
+0600 regular files owned by the trusted process UID are required. The spool
+rejects hardlink aliases because the same database inode under different
+names may have different SQLite rollback-journal paths. These are local
+consistency checks, not hostile filesystem replacement/rollback proof; stable
+trusted directories and continuous external pin custody remain prerequisites.
+
+The actual process that can invoke the writer opens the exact spool inode
+and holds a nonblocking exclusive Linux flock across pair-wide recovery
+priority, admission, durable marker, writer invocation and durable result.
+The lock is not a supervisor-held substitute; no fork/exec while held.
+There is no SQLite transaction spanning the invocation. Lock order is pair
+admission -> owner -> attempt -> checkpoint. All short SQLite transactions
+are closed before the ordinary lock descriptor is closed. Lock contention
+does not enter the admission, marker or writer paths.
+
+Pair-wide scheduling inventory remains bounded and metadata-only. In addition
+to structural/quota checks it validates every role/incarnation/actor against
+the pinned config, metadata identifiers and request identity recomputed from
+the pinned scope and recorded digest. Selected originals and result envelopes
+are independently validated as in C-A; this is not a cryptographic
+authentication claim about an arbitrarily tampered SQLite database.
+
+Ordinary execution accepts exactly original new-send mode (false). Under
+the lock it first blocks on any DELEGATION_MARKED or RESULT/RECOVERY_REQUIRED
+record anywhere in the pair, even when the record belongs to another role.
+It then admits the exact original, requires READY, commits the initial
+marker, invokes the real 9a writer exactly once, and commits the classified
+result before reporting a committed delegate result. A duplicate non-READY
+record is not a retry source or a new invocation. No worker-originated
+reconcile-only request may enter the reserved recovery route.
+
+The separate trusted recovery selector accepts only a durable record ID
+and expected version, never caller-supplied original bytes, mode, or result.
+The current role view checks exact selected row, policy, pair and session
+scope. The marker is guarded again and the immutable request reconstructed
+with forced reconcile-only from its stored original. This consumes the
+existing reservation even when ordinary admission is exhausted. The current
+accepted owner fence inside 9a, not the spool's historical generation, decides
+whether the capability is current. Rejection retains uncertainty; a matching
+current replacement owner may recover. Cross-role scheduler routing is
+deferred; ordinary work cannot run around an unresolved record for another
+role. RN, NC and terminal records remain parked. There is no NC-to-READY,
+new-send re-arm, reset or refund API.
+
+A local pre-delegate rejection has no fabricated 9a result. Failure at or
+after the marker attempt is conservatively uncertain, including a commit
+whose acknowledgement or post-commit pin check was lost. A returned
+CommittedResult is constructed only from the selected, validated, committed
+spool envelope. Invalid or unpersisted results do not become successful
+local results. Process death releases the OS lock but does not erase the
+committed marker or establish absence of an effect. IPC delivery truth and
+the trusted launcher/resource-reserve routing remain C-B2; production
+credential custody, alternate-path exclusion, hostile tree containment and
+deployment remain 9c.
+
+Directed staged evidence uses the actual accepted writer/temporary stores
+with synthetic transport: marker visible and lock held at send; competing
+processes/roles; zero admission/marker/invoke on lock busy; physical alias and
+pin mismatch; cross-role pending recovery; actual abrupt process exits after
+marker and after delegate result before spool persistence; full-quota
+recovery, stale/current owner capability, wrong policy/role/pair, no second
+send, and parked NC/RN. None of this is live GitHub or production evidence.
