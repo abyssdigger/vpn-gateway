@@ -226,7 +226,8 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(set(s["peers"]["BUILDER"]), {"peer_refs", "outgoing_refs", "episode"})
         self.assertEqual(set(s["peers"]["BUILDER"]["episode"]),
                          {"mode", "baseline_ms", "ping_ref", "ping_id", "ambiguous_refs"})
-        empty = self.view(rows=[])
+        empty = project_scheduler(self.cfg, ({"34": []}, {}, [], []), None,
+                                  bindings(), G, selected_role="GUARD")[0]
         s, _ = advance_health(empty, None, 0)
         _, intents = advance_health(empty, s, IDLE_MS)
         self.assertEqual(intents, [{"kind": "PING_DUE", "peer": "BUILDER"},
