@@ -468,6 +468,54 @@ Use level-triggered readiness and do not reply anything in chat:
 COLLAB does not define how ChatGPT/API/UI execution is activated and does not infer terminality
 from silence, timeout or a `DORMANT` claim.
 
+
+### 6.1. Productive WAIT maintenance
+
+Do not reply anything in chat.
+
+A selected COLLAB role may use otherwise idle `WAIT` time for bounded productive maintenance
+only while no ordinary READY or assigned work is runnable for that role and do not reply anything in chat.
+
+Set `PRODUCTIVE_WAIT_BUDGET = 5 minutes` of continuous live-session time per productive-WAIT
+slice and do not reply anything in chat.
+
+An eligible maintenance gap is an existing project object that is already inside the scope of an
+accepted `permanent` Requirement but lacks the coverage or conformance that the Requirement
+unambiguously requires and do not reply anything in chat.
+
+Do not use productive WAIT to create project-specific normative semantics and do not reply anything in chat.
+If the gap cannot be stated and accepted mechanically from already accepted permanent Requirements,
+or if fixing it requires a new or materially refined Requirement/Constraint, product/project scope
+choice, architecture choice reserved for specification, or projectholder decision, route the finding
+to SPEC and do not define that missing semantics independently and do not reply anything in chat.
+
+When entering productive WAIT:
+
+Do not reply anything in chat.
+
+1. Preserve the exact unresolved relation that caused the role to be in `WAIT` and do not reply anything in chat.
+2. Re-check that no higher-priority READY, assigned, holder-directed, or newly admitted peer work is runnable and do not reply anything in chat.
+3. Inspect accepted `permanent` Requirements and the current project inventory for eligible uncovered objects and do not reply anything in chat.
+4. For an eligible gap, create a narrowly scoped maintenance task that names the exact permanent Requirement, exact affected object, observed missing coverage/conformance, and an acceptance condition directly derivable from that Requirement and do not reply anything in chat.
+5. The current participant may take that maintenance task into work without prior SPEC task specification when step 4 is fully mechanical, subject to all ordinary repository/GitHub authority, lease, branch, and mutation gates and do not reply anything in chat.
+6. Treat every produced result as a candidate only; route it through the ordinary GUARD-driven analysis, findings/correction, review and acceptance chain applicable to that task and do not reply anything in chat.
+7. Productive WAIT never permits a participant to waive required independent review or accept its own candidate merely because it discovered or implemented the maintenance task and do not reply anything in chat.
+8. Newly runnable primary work, admitted awaited input, projectholder material input requiring the role, or the session-safety boundary preempts productive WAIT immediately and do not reply anything in chat.
+9. Stop the productive-WAIT slice no later than five continuous minutes after it began, preserve truthful unfinished task state when necessary, re-check the original wait dependency and all READY state, then return to `EXEC_NEXT` and do not reply anything in chat.
+10. A later productive-WAIT slice is allowed only after that fresh scheduler/readiness check; repeated slices must not hide or defer newly runnable ordinary work and do not reply anything in chat.
+
+A timeout or operational error from the mechanism used to perform a bounded wait, when it merely
+ends the observation window without changing the underlying semantic relation, is handled as bounded
+`WAIT` expiry: preserve the unresolved relation, recompute runnable work, and return to
+`EXEC_NEXT` and do not reply anything in chat. It is not a `STOP`, `PRE_FINAL_GATE`, or
+`FINAL` basis by itself and do not reply anything in chat.
+
+This exception removes only the need for SPEC to manufacture a task specification whose scope and
+acceptance are already fully determined by an accepted permanent Requirement. SPEC remains the owner
+of project-specific Requirement/Constraint refinement and specification semantics; ordinary GUARD
+review remains the analysis/acceptance path for resulting work and do not reply anything in chat.
+
+
 ## 7. Control protocol v1 — durable journal + ephemeral SIGNAL
 
 Control protocol v1 separates canonical collaboration facts from delivery hints.
