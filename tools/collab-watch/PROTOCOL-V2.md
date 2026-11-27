@@ -1045,3 +1045,24 @@ fallback is allowed. This is read-only bounded observation, not atomic remote
 snapshot, replay, proof, authority, checkpoint or actuator admission. 8c-B
 must perform the pure gate over this exact coherent object and retained
 composed frontier; actuator integration remains separate.
+
+
+### Unit 8c-B — retained-only initial-OPEN aggregate gate
+
+`gate_initial_open_aggregate` requires the exact `InitialOpenAggregateV2`
+observation and closed retained composed state. Frozen task history must
+canonically match its task partition. The gate compacts the aggregate
+partitions once against that retained state, projects them, derives the task
+compact from the same wire and invokes accepted initial-OPEN preflight with
+the exact prospective extra partition. The frozen proof digest must match;
+the candidate logical ID must be absent from both task and aux facts.
+
+The closed conditional result binds aggregate and task compact/inventory
+digests, normalized extra-observation digest, distinct prior/projected
+composed-state digests, exact proof digest, event ID and selected role/
+incarnation. It exposes no raw prose or authorization. Holder or signal
+churn may affect aggregate identity without changing the task proof.
+Exact observation type prevents accidental split-API composition but does
+not authenticate provenance or establish remote atomicity. The trusted
+caller must supply the real coherent observation. No acquisition, storage,
+timer, actuator, STARTED, send, or live activation is performed.
