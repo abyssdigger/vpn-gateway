@@ -888,3 +888,38 @@ the integrity ledger without adding a semantic obligation.
 No delta baseline, elapsed clock, timer, pending-PING adoption, health intent,
 authority evaluation, network access, persistence or mutation is introduced.
 Those runtime policies remain separate from this pure view extension.
+
+
+## Unit 7c-B — ephemeral communication-health policy
+
+advance_health(view, previous, now_ms) is pure, accepts the admitted selected
+role view, and returns detached local state and deterministic intent list.
+State binds selected role/incarnation, peer set and last nonnegative integer
+monotonic time. For each peer retain content-bound physical peer refs and
+outgoing PING ref/ID/digest, local baseline, mode and exact current/ambiguous
+episode references. Changed/disappeared retained evidence, identity drift or
+backwards time fails closed. Observation order is irrelevant.
+
+Fresh state baselines all existing evidence without reconstructing age. A
+single pending outgoing PING adopts a fresh 5m response window; multiple
+pending PINGs emit one ambiguous intent; matched PINGs do not start a window.
+Any newly observed peer journal occurrence takes precedence over new PINGs
+and deadlines, resets to IDLE and marks all outgoing evidence seen. Thus old
+durably pending PINGs locally satisfied by another valid peer fact do not
+prevent a new PING_DUE after a subsequent full 10m silence. No canonical PONG
+is fabricated. Ambiguity covers competing current-episode PING refs (all
+pending on restart); previously locally satisfied refs do not rearm.
+
+At >= 10m IDLE emits one PING_DUE(peer) and latches. Only an exact newly
+admitted pending outgoing PING starts a fresh 5m response window. Concurrent
+new pending PINGs or a second during WAITING_RESPONSE emit one
+HEALTH_EPISODE_AMBIGUOUS(peer, sorted ping_refs); new pending PINGs in
+UNCONFIRMED/AMBIGUOUS without new peer evidence fail closed. At >= 5m without
+peer evidence emit one COMMUNICATION_UNCONFIRMED(peer, ping_id, ping_ref);
+latch until new peer evidence. Equal monotonic observations are allowed.
+No SIGNAL/holder/task-work/actor/timestamp input participates.
+
+Intents are observation/control requests only, never PING publication,
+transport retry, authority, STOP or semantic work/disposition. No clock,
+network, persistence, model, command evaluation or checkpoint integration.
+The independent 2m peer wait budget remains a separate unit.
