@@ -99,10 +99,17 @@ class DeploymentContractTests(unittest.TestCase):
                 m["alternate_paths"][p] = "present"
                 r = report(m, registry)
                 self.assertIn("alternate_path:"+p, r.new_effect_blockers)
-                if p in ("read_credential", "mutable_bootstrap"):
-                    self.assertIn("alternate_path:"+p, r.recovery_only_blockers)
-                m["alternate_paths"][p] = "excluded"
-                self.assertIn("evidence:"+p, report(m, registry, fail=(p,)).new_effect_blockers)
+                self.assertIn("alternate_path:"+p, r.recovery_only_blockers)
+                for disposition in ("excluded", "mediated", "not_applicable"):
+                    m["alternate_paths"][p] = disposition
+                    for opts in ({"fail": (p,)}, {"omit": (p,)}):
+                        with self.subTest(path=p, disposition=disposition, evidence=opts):
+                            r = report(m, registry, **opts)
+                            self.assertIn("evidence:"+p, r.new_effect_blockers)
+                            self.assertIn("evidence:"+p, r.recovery_only_blockers)
+                    r = report(m, registry)
+                    self.assertEqual(r.new_effect_blockers, ())
+                    self.assertEqual(r.recovery_only_blockers, ())
         m, registry = fixture()
         for p in ("aggregate_containment", "pair_mediation", "write_custody"):
             self.assertIn("evidence:"+p, report(m, registry, omit=(p,)).new_effect_blockers)
@@ -110,6 +117,8 @@ class DeploymentContractTests(unittest.TestCase):
     def test_separate_recovery_contract_and_lifetime(self):
         m, registry = fixture()
         m["authority"]["lifetime"] = "point_in_time_revocable"
+        self.assertTrue(PATHS <= COMMON)
+        self.assertFalse(PATHS & NEW)
         r = report(m, registry, omit=NEW)
         self.assertIn("authority_lifetime", r.new_effect_blockers)
         self.assertEqual(r.recovery_only_blockers, ())

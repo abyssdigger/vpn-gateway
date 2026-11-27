@@ -1661,11 +1661,15 @@ The closed alternate-path inventory includes model/session connector/tools,
 network clients, ambient Git credentials/agents/helpers, workflow triggers
 and tokens, nominal read credential, local/remote brokers, alternate writer
 or store path, mutable bootstrap and descendant escape. Excluded, mediated
-or not-applicable claims require independently established evidence; present
-or unknown paths block the new-effect contract. A present/unknown read-credential
-or mutable-bootstrap path also contradicts common recovery trust premises.
-Effective provider read-only
-scope is separately required, not inferred from separate credential names.
+or not-applicable claims require independently established evidence for the
+exact manifest/environment. Every alternate-path class is a common premise
+for both lanes; present, unknown, unevidenced or failed paths block both
+contracts. The current manifest describes one shared deployment/tool
+environment: a read-only recovery invocation does not remove an alternate
+worker mutation capability. A separately isolated recovery environment would
+require a separately reviewed binding and evidence model, not an exemption.
+Effective provider read-only scope is separately required, not inferred from
+separate credential names.
 A cooperating flock is not global mediation; UID/RLIMIT/scheduler slot is
 not aggregate containment; local Linux isolation does not remove external
 model tool permissions.
@@ -1677,11 +1681,12 @@ cannot satisfy the new-effect contract. Actual decision enforcement is
 deferred; no cross-system atomic revocation is claimed. Any uncertainty after
 possible STARTED/send remains reconciliation-only.
 
-New-effect contract checks add all alternate-path, write-custody, lifetime,
-exact-authority, checkpoint, pair mediation, physical headroom, aggregate and
-ordinary-resource and write-transport evidence to the common requirements.
-Recovery-only retains common trusted installation/identity, store continuity,
-read-only provider/transport, isolation, reserve and recovery fence evidence.
+New-effect contract checks add write-custody, lifetime, exact-authority,
+checkpoint, pair mediation, physical headroom, aggregate and ordinary-resource
+and write-transport evidence to the common requirements.
+Recovery-only retains all common alternate-path evidence, trusted
+installation/identity, store continuity, read-only provider/transport,
+isolation, reserve and recovery fence evidence.
 It does not require fresh new-send authority, write availability or current
 checkpoint for already-claimed reconciliation; the accepted trusted selector,
 durable original/version and current owner fence remain runtime prerequisites.

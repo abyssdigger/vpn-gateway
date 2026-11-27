@@ -19,10 +19,10 @@ PATHS = frozenset(("model_tools", "network_clients", "git_credentials",
                    "mutable_bootstrap", "descendants"))
 COMMON = frozenset(("trusted_installation", "identity_binding", "store_continuity",
                     "read_only_provider", "recovery_isolation", "recovery_reserve",
-                    "recovery_fence", "read_transport"))
+                    "recovery_fence", "read_transport")) | PATHS
 NEW = frozenset(("write_custody", "exact_action_authority", "authority_lifetime",
                  "checkpoint", "aggregate_containment", "physical_headroom",
-                 "ordinary_resources", "write_transport", "pair_mediation")) | PATHS
+                 "ordinary_resources", "write_transport", "pair_mediation"))
 PREDICATES = COMMON | NEW
 STORES = ("owner", "attempt", "input", "checkpoint", "spool")
 LIFETIMES = ("bounded_irrevocable", "maintained_fence", "point_in_time_revocable")
@@ -293,10 +293,9 @@ def inspect_contract(raw, *, expected_root=None, observations=None, now=None):
             (common if p in COMMON else new).add("evidence:" + p)
     for path, disposition in m["alternate_paths"].items():
         if disposition not in ("excluded", "mediated", "not_applicable"):
-            new.add("alternate_path:" + path)
-            # These paths contradict common trust premises even for read-only recovery.
-            if path in ("read_credential", "mutable_bootstrap"):
-                common.add("alternate_path:" + path)
+            # Both lanes share one deployment/tool environment. Read-only
+            # invocation does not remove the worker's alternate effect routes.
+            common.add("alternate_path:" + path)
     if m["authority"]["lifetime"] not in ("bounded_irrevocable", "maintained_fence"):
         new.add("authority_lifetime")
     if m["transport"]["kind"] != "reviewed_external":
