@@ -677,3 +677,40 @@ task-only path is not a mixed-family-safe live scheduler contract.
 
 No holder prose write, command execution, scheduler/clock policy, CLI,
 identity migration, epoch cutover, live activation or main publication.
+
+
+## Unit 6a-A — staged multi-role identity model
+
+The proposed root capability schema `vpng-collab-role-bindings/2` has a
+closed bindings list. Each model row has exact model identity, admission
+status (admitted or disabled), nonempty allowed transport pairs
+(`transport_role`, `incarnation`), and separate process responsibilities
+keyed by the transport role that carries them. The pilot transport role
+set is SPEC/GUARD/BUILDER; SPEC/ARCHITECTURE additional responsibilities
+are not transport pairs or terminal GUARD acceptance authority. All model
+rows, including disabled ones, are validated. Duplicate models, duplicate
+pairs, duplicate per-model roles or incarnation reuse fail closed.
+
+`select_identity` takes the parsed capability document, independently
+established exact runtime model, active role map (actor_id + incarnation)
+and optional explicit selected transport role. It intersects admitted
+pairs with the active config; a specified role must match exactly, and
+without explicit role selection exactly one pair must remain. It returns
+only model/transport_role/incarnation. Each role switch requires a fresh
+explicit selection and validation. Recovered context, inferred task role,
+or caller-supplied incarnation cannot select/override the pair. The
+module is pure and does not authenticate the provenance of its inputs,
+evaluate authority, establish live-session ownership or execute anything.
+
+The staged fixture preserves existing BUILDER and GUARD identities, adds
+a distinct future SPEC incarnation for the GUARD model and preserves its
+separate v1 SPEC responsibility. The active v1 role map still selects
+GUARD uniquely; the proposed v2 role map requires an explicit GUARD/SPEC
+choice. This unit validates a proposed schema only. Root installation and
+governing identity-gate replacement remain separately gated in 6a-B;
+active v1 config/epoch and root binding are not changed by 6a-A.
+
+Identity selection does not establish session uniqueness or exclusive
+transport ownership. Two sessions could select the same allowed pair.
+Before live automated writes, 6b must establish the trusted ownership
+and fencing boundary. No live activation, migration or authority follows.
