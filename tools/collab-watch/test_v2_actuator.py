@@ -21,7 +21,7 @@ from v2_attempts import initialize, open_store
 from v2_compact import compact_v2
 from v2_material import preflight_material
 from v2_preflight import preflight_control_compact, preflight_close_compact, preflight_initial_open_compact
-from v2_actuator import actuate, freeze_inputs, _bound, _write_transport
+from v2_actuator import actuate, freeze_inputs, _bound, _stable_intent, _write_transport
 
 BUILDER = dict(selected_role="BUILDER", selected_incarnation="b")
 GUARD = dict(selected_role="GUARD", selected_incarnation="g")
@@ -106,6 +106,10 @@ class ActuatorTests(unittest.TestCase):
         task = issue()
         task["repository"] = cfg["repository"]
         rows = [opening(task)]
+        if cfg["journal_epoch"] != CFG["journal_epoch"]:
+            rows[0]["body"] = rows[0]["body"].replace(
+                '"journal_epoch":"' + CFG["journal_epoch"] + '"',
+                '"journal_epoch":"' + cfg["journal_epoch"] + '"', 1)
         if extra_row:
             rows.append(row(800, 99, "ordinary new prose", 7))
         out = material(1001, "RESULT", 5)
@@ -454,6 +458,23 @@ class ActuatorTests(unittest.TestCase):
         result = self.run_case(original, remote)
         self.assertEqual(result["state"], "VERIFIED")
         self.assertEqual(self.run_case(changed, other), result)
+        self.assertFalse(other.sent)
+
+    def test_action_affecting_epoch_change_conflicts(self):
+        original, remote = self.material_case()
+        changed, other = self.material_case(cfg=dict(CFG, journal_epoch="v2-next"))
+        _, _, _, effect, action, _ = _bound(original)
+        _, _, _, changed_effect, changed_action, _ = _bound(changed)
+        self.assertEqual(effect, changed_effect)
+        self.assertNotEqual(_stable_intent(action), _stable_intent(changed_action))
+        result = self.run_case(original, remote)
+        self.assertEqual(result["state"], "VERIFIED")
+        old = self.store.claimed(effect)
+        self.assertEqual(self.run_case(changed, other),
+                         {"state":"CONFLICT", "code":"EFFECT_CLAIM_CONFLICT",
+                          "action_key":old["action_key"]})
+        self.assertEqual(self.store.claimed(effect), old)
+        self.assertEqual(len(remote.sent), 1)
         self.assertFalse(other.sent)
 
     def test_repository_casing_stable_effect(self):
