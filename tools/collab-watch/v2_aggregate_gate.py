@@ -1,8 +1,8 @@
 """Pure retained-only aggregate admission for canonical control candidates."""
 from __future__ import annotations
 
-from core import Conflict, canonical, digest, require
-from project_tasks import body_hash
+from core import Conflict, canonical, digest, positive, require
+from project_tasks import body_hash, stamp
 from split_journal import PROTOCOL as TASK_PROTOCOL
 from v2_aux import PROTOCOL as AUX_PROTOCOL
 from v2_acquisition import InitialOpenAggregateV2
@@ -11,6 +11,7 @@ from v2_compact import (CompactAggregateV2, compact_aggregate_v2, derive_task_co
 from v2_preflight import (preflight_control_compact, preflight_initial_open_compact,
                           preflight_close_compact)
 from v2_material import preflight_material
+from v2_create import CreationAggregateV2, marker, preflight_create
 from v2_aux_preflight import preflight_aux_compact
 
 PROTOCOL = "vpng-collab-aggregate-candidate-gate/2"
@@ -162,3 +163,65 @@ def gate_task_state_aggregate(cfg, aggregate, operation, actor, frozen_task_prev
                 "selected_incarnation": selected_incarnation, "authority": NO_AUTHORITY}
     except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
         raise Conflict("task-state aggregate gate failed") from None
+
+
+def gate_creation_aggregate(cfg, coherent, actor, request, frozen_task_previous,
+                            composed_previous, expected_proof_sha256, *,
+                            selected_role, selected_incarnation):
+    """Retained-only creation admission; exact observation is not provenance."""
+    try:
+        require(type(coherent) is CreationAggregateV2, "exact creation aggregate required")
+        _retained_shape(composed_previous)
+        require(canonical(frozen_task_previous) == canonical(composed_previous["task"]),
+                "frozen retained task frontier mismatch")
+        require(body_hash(expected_proof_sha256), "invalid expected proof SHA")
+        aggregate = compact_aggregate_v2(
+            cfg, coherent.control, coherent.tasks, coherent.holder_rows,
+            coherent.signal_rows, composed_previous)
+        _, projected = project_compact_aggregate_v2(cfg, aggregate, composed_previous)
+        derived = derive_task_compact(cfg, aggregate)
+        proof, _ = preflight_create(
+            cfg, derived, actor, request, frozen_task_previous,
+            selected_role=selected_role, selected_incarnation=selected_incarnation)
+        proof_sha = digest(canonical(proof))
+        require(proof_sha == expected_proof_sha256, "frozen creation proof mismatch")
+        require(proof["operation"] == "issue_create"
+                and proof["selected_role"] == selected_role == "SPEC"
+                and proof["selected_incarnation"] == selected_incarnation,
+                "creation selection mismatch")
+        effect_sha = digest(canonical(proof["effect"]))
+        require(type(coherent.inventory) is list, "invalid creation inventory")
+        numbers = set()
+        last_id = 0
+        matching = False
+        for row in coherent.inventory:
+            require(type(row) is dict and set(row) == {
+                "number", "id", "actor_id", "title", "body", "state", "created_at", "pr"},
+                "invalid normalized creation inventory row")
+            require(positive(row["number"]) and positive(row["id"])
+                    and positive(row["actor_id"]) and type(row["title"]) is str
+                    and (row["body"] is None or type(row["body"]) is str)
+                    and row["state"] in ("open", "closed") and type(row["pr"]) is bool,
+                    "invalid normalized creation inventory values")
+            stamp(row["created_at"])
+            require(row["id"] > last_id and row["number"] not in numbers,
+                    "unordered or conflicting normalized inventory")
+            last_id = row["id"]
+            numbers.add(row["number"])
+            meta = marker(cfg["repository"], row)
+            if meta is not None and meta["effect_sha256"] == effect_sha:
+                matching = True
+        require(not matching, "creation effect already physically present")
+        return {"protocol": PROTOCOL, "operation": "issue_create",
+                "aggregate_sha256": aggregate.sha256,
+                "aggregate_inventory_sha256": aggregate.inventory_sha256,
+                "task_compact_sha256": derived.sha256,
+                "task_inventory_sha256": derived.inventory_sha256,
+                "creation_inventory_sha256": digest(canonical(coherent.inventory)),
+                "prior_composed_state_sha256": digest(canonical(composed_previous)),
+                "projected_composed_state_sha256": digest(canonical(projected)),
+                "proof_sha256": proof_sha, "effect_sha256": effect_sha,
+                "selected_role": selected_role, "selected_incarnation": selected_incarnation,
+                "authority": NO_AUTHORITY}
+    except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
+        raise Conflict("creation aggregate gate failed") from None

@@ -1138,3 +1138,20 @@ rejected on candidate-effect identity. Invalid identities/markers, unstable
 observations or exhausted bounds fail closed. This is bounded read-only
 observation, not atomic remote snapshot, proof, policy, authority, store,
 actuator or mutation. The later pure gate owns candidate absence.
+
+
+### Unit 8e-B — pure retained creation aggregate gate
+
+`gate_creation_aggregate` requires the exact CreationAggregateV2 and
+closed retained composed state; frozen task history must equal the task
+partition. Compact the graph once, project against retained history,
+derive task compact from that same wire and recompute the accepted creation
+preflight/proof and SPEC selection. Validate the entire normalized inventory
+in its 8e-A ascending-ID order with unique IDs/numbers, closed row shapes
+and accepted marker validation. Any matching creation-effect marker,
+including PR or multiple matches, rejects. Unrelated valid markers and
+unmarked rows remain bound by the whole inventory digest. No row filtering.
+The detached conditional result binds aggregate/task digests, creation
+inventory digest, prior/projected state, proof/effect digests and selection.
+No raw request/payload, authority, acquisition, clock, persistence, actuator
+or STARTED. Exact observation type is not provenance authentication.
