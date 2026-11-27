@@ -101,13 +101,16 @@
         }
       },
       "canonical_intent": {
-        "action": "start_new_cdc",
+        "action": "start_new_cdc_with_collab",
         "duration_seconds": "{duration}",
+        "entrypoint": "EXECUTION-LOOP.md#START",
         "overlays": [
-          "COLLAB"
-        ]
+          "CONTINUOUS-DEVELOPMENT.md",
+          "COLLABORATIVE-EXECUTION.md"
+        ],
+        "direct_overlay_entry_forbidden": true
       },
-      "equivalent_explicit_request": "Запусти новый CDC на {duration} с COLLAB."
+      "equivalent_explicit_request": "Start a new {duration} CDC+COLLAB cycle. Enter only through `EXECUTION-LOOP.md` -> `START`. Do not enter through `CONTINUOUS-DEVELOPMENT.md` or `COLLABORATIVE-EXECUTION.md` directly. Follow `START` exactly."
     }
   ]
 }
