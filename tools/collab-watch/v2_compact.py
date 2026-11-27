@@ -10,6 +10,7 @@ from collab_watch import MAX_LOCAL_BYTES, MAX_OBSERVED_COMMENTS
 from core import canonical, digest, positive, require, strict_json
 from project_tasks import body_hash, comment, stamp
 from split_journal import PREFIX, project_v2, validate_v2_config
+from v2_aux import PREFIX as AUX_PREFIX, project_aux
 
 WIRE = "vpng-collab-compact-observation/2"
 MATERIAL_PREFIX = "<!-- vpng-collab-task-material/"
@@ -57,7 +58,7 @@ def _pack_events(events):
     return [e for _, e in sorted(unique.items())]
 
 
-def _unpack_rows(rows, retain):
+def _unpack_rows(rows, retain, opaque_allowed=lambda actor: True):
     """Only raw rows reach the canonical projector; opaque rows are inventory."""
     require(isinstance(rows, list), "invalid compact row list")
     semantic = []
@@ -70,7 +71,7 @@ def _unpack_rows(rows, retain):
         previous_id = cid
         require(stamp(created) <= stamp(updated), "invalid compact row chronology")
         if kind == "opaque":
-            require(body_hash(data), "invalid opaque digest")
+            require(opaque_allowed(actor) and body_hash(data), "invalid opaque digest or partition")
             continue
         require(isinstance(data, str) and retain(actor, data), "invalid raw compact partition")
         raw = {"id": cid, "user": {"id": actor}, "created_at": created,
@@ -80,7 +81,7 @@ def _unpack_rows(rows, retain):
     return semantic
 
 
-def _views(cfg, value):
+def _views(cfg, value, *, control_retain=None, extra_count=0):
     """Reconstruct only semantic snapshots, not fabricated opaque bodies."""
     validate_v2_config(cfg)
     require(isinstance(value, dict) and set(value) ==
@@ -92,9 +93,11 @@ def _views(cfg, value):
     require(isinstance(value["tasks"], dict), "invalid task partitions")
     control = {}
     tasks = {}
-    count = 0
+    count = extra_count
+    if control_retain is None:
+        control_retain = lambda a, b: _control_raw(cfg, a, b)
     for key, rows in value["control"].items():
-        control[key] = _unpack_rows(rows, lambda a, b: _control_raw(cfg, a, b))
+        control[key] = _unpack_rows(rows, control_retain)
         count += len(rows)
     for key, task in value["tasks"].items():
         require(isinstance(task, dict) and set(task) ==
@@ -171,3 +174,92 @@ def semantic_view(cfg, observation):
 def project_compact_v2(cfg, observation, previous=None):
     control, tasks, _ = semantic_view(cfg, observation)
     return project_v2(cfg, control, tasks, previous)
+
+
+AGGREGATE_WIRE = "vpng-collab-aggregate-compact-observation/2"
+
+
+@dataclass(frozen=True, slots=True)
+class CompactAggregateV2:
+    text: str
+    sha256: str
+    inventory_sha256: str
+
+
+def _aggregate_control_raw(cfg, actor, body):
+    return (actor in {role["actor_id"] for role in cfg["roles"].values()}
+            and body.startswith((PREFIX, AUX_PREFIX)))
+
+
+def _aggregate_holder_raw(cfg, actor, body):
+    return actor == cfg["projectholder"]["actor_id"]
+
+
+def _all_raw(actor, body):
+    return True
+
+
+def _read_aggregate(cfg, text, expected_sha256):
+    validate_v2_config(cfg)
+    require(isinstance(text, str) and body_hash(expected_sha256)
+            and len(text.encode("utf-8")) <= MAX_LOCAL_BYTES
+            and digest(text) == expected_sha256, "aggregate transfer digest/size mismatch")
+    value = strict_json(text)
+    require(canonical(value) == text and isinstance(value, dict)
+            and set(value) == {"protocol", "config_sha256", "control", "tasks", "holder", "signals"},
+            "invalid aggregate compact wire")
+    require(value["protocol"] == AGGREGATE_WIRE
+            and value["config_sha256"] == digest(canonical(cfg)), "aggregate config/protocol mismatch")
+    holder = _unpack_rows(value["holder"], lambda a, b: _aggregate_holder_raw(cfg, a, b),
+                          lambda a: a != cfg["projectholder"]["actor_id"])
+    signals = _unpack_rows(value["signals"], _all_raw, lambda a: False)
+    # Reuse accepted task envelope and event validation, not a second task projector.
+    task_wire = {key: value[key] for key in ("config_sha256", "control", "tasks")}
+    task_wire["protocol"] = WIRE
+    control, tasks = _views(cfg, task_wire,
+                            control_retain=lambda a, b: _aggregate_control_raw(cfg, a, b),
+                            extra_count=len(value["holder"]) + len(value["signals"]))
+    inventory = digest(canonical({k: value[k] for k in ("control", "tasks", "holder", "signals")}))
+    return (control, tasks, holder, signals), inventory
+
+
+def compact_aggregate_v2(cfg, control, tasks, holder_rows, signal_rows, previous=None):
+    """Prove exact composed projection and retained-state equivalence.
+
+    Input must be trusted, complete normalized aggregate acquisition. Inventory
+    digests bind opaque rows but cannot prove honest classification/provenance.
+    """
+    baseline = project_aux(cfg, control, tasks, holder_rows, signal_rows, previous)
+    value = {"protocol": AGGREGATE_WIRE, "config_sha256": digest(canonical(cfg)),
+             "control": {key: _pack_rows(rows, lambda a, b: _aggregate_control_raw(cfg, a, b))
+                         for key, rows in control.items()},
+             "tasks": {key: dict(task, comments=_pack_rows(task["comments"], _task_raw),
+                                 events=_pack_events(task["events"]))
+                       for key, task in tasks.items()},
+             "holder": _pack_rows(holder_rows, lambda a, b: _aggregate_holder_raw(cfg, a, b)),
+             "signals": _pack_rows(signal_rows, _all_raw)}
+    wire = canonical(value)
+    sha = digest(wire)
+    partitions, inventory = _read_aggregate(cfg, wire, sha)
+    require(project_aux(cfg, *partitions, previous) == baseline,
+            "aggregate raw/compact semantic mismatch")
+    return CompactAggregateV2(wire, sha, inventory)
+
+
+def decode_compact_aggregate_v2(cfg, text, expected_sha256, previous=None):
+    """Admit exact trusted aggregate bytes; semantic conflicts fail closed."""
+    partitions, inventory = _read_aggregate(cfg, text, expected_sha256)
+    project_aux(cfg, *partitions, previous)
+    return CompactAggregateV2(text, expected_sha256, inventory)
+
+
+def aggregate_semantic_view(cfg, observation):
+    require(type(observation) is CompactAggregateV2, "invalid aggregate compact observation type")
+    partitions, inventory = _read_aggregate(cfg, observation.text, observation.sha256)
+    require(inventory == observation.inventory_sha256, "aggregate compact inventory mismatch")
+    return (*partitions, inventory)
+
+
+def project_compact_aggregate_v2(cfg, observation, previous=None):
+    *partitions, _ = aggregate_semantic_view(cfg, observation)
+    return project_aux(cfg, *partitions, previous)

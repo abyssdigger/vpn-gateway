@@ -8,7 +8,11 @@ from core import Conflict, canonical, digest
 from split_journal import project_v2
 from test_split_journal import (CFG, SHA, candidate, close, control, disposition, fixture,
                                 issue, material, opening, ref, row, ts)
-from v2_compact import compact_v2, decode_compact_v2, project_compact_v2, semantic_view
+from v2_compact import (compact_v2, decode_compact_v2, project_compact_v2, semantic_view,
+                        compact_aggregate_v2, decode_compact_aggregate_v2,
+                        aggregate_semantic_view, project_compact_aggregate_v2)
+from v2_aux import project_aux
+from test_v2_aux import aux, pong, handled, target, signal
 
 
 class CompactV2Tests(unittest.TestCase):
@@ -189,6 +193,141 @@ class CompactV2Tests(unittest.TestCase):
             decode_compact_v2(CFG, packed.text, packed.sha256)
         with patch("v2_compact.MAX_OBSERVED_COMMENTS", 1), self.assertRaises(Conflict):
             decode_compact_v2(CFG, packed.text, packed.sha256)
+
+
+
+class AggregateCompactTests(unittest.TestCase):
+    def setUp(self):
+        rows, task = fixture()
+        self.ping = aux("p", "PING", 501, "GUARD", "BUILDER", ping_id="p")
+        self.pong = pong("q", 502, self.ping)
+        self.h = handled("h", 503, "BUILDER", target("p", self.ping))
+        self.control = {"34": rows + [self.ping, self.pong, self.h, row(510, 10, "opaque control", 25)]}
+        self.tasks = {"42": task}
+        self.holder = [row(601, 12, "!COLLAB STOP cycle=test", 25),
+                       row(602, 99, "opaque holder", 26)]
+        self.signals = [signal(701, "p", self.ping, "GUARD", "BUILDER"),
+                        row(702, 10, "quarantined signal prose", 26),
+                        row(703, 99, "ignored external signal", 26)]
+
+    def equivalent(self, control=None, tasks=None, holder=None, signals=None, previous=None, cfg=CFG):
+        parts = (self.control if control is None else control,
+                 self.tasks if tasks is None else tasks,
+                 self.holder if holder is None else holder,
+                 self.signals if signals is None else signals)
+        expected = project_aux(cfg, *parts, previous)
+        packed = compact_aggregate_v2(cfg, *parts, previous)
+        self.assertEqual(decode_compact_aggregate_v2(cfg, packed.text, packed.sha256, previous), packed)
+        self.assertEqual(project_compact_aggregate_v2(cfg, packed, previous), expected)
+        return packed, expected
+
+    def test_exact_round_trip_retained_and_diagnostics(self):
+        packed, (p, previous) = self.equivalent()
+        self.assertEqual(self.equivalent(previous=previous)[1], (p, previous))
+        c, t, h, s, inventory = aggregate_semantic_view(CFG, packed)
+        self.assertEqual(inventory, packed.inventory_sha256)
+        self.assertEqual(h, self.holder[:1])
+        self.assertEqual(s, self.signals)
+        self.assertEqual(len(p["gc_candidates"]), 1)
+        self.assertEqual(len(p["signal_status"]["conflicts"]), 1)
+        self.assertEqual(len(p["signal_status"]["ignored_external"]), 1)
+        self.assertIn(self.ping, c["34"])
+        self.assertNotIn("opaque control", packed.text)
+        self.assertNotIn("opaque holder", packed.text)
+        self.assertEqual(t, self.tasks)
+        self.assertEqual(self.equivalent(signals=[] , previous=previous)[1][1], previous)
+
+    def test_rotation_and_config_transfer_binding(self):
+        packed, (p, previous) = self.equivalent()
+        cfg = dict(CFG, signal_room=38)
+        rotated, (p2, state) = self.equivalent(signals=[], previous=previous, cfg=cfg)
+        self.assertEqual(state, previous)
+        self.assertEqual(p2["task"], p["task"])
+        self.assertNotEqual(rotated.sha256, packed.sha256)
+        with self.assertRaises(Conflict):
+            decode_compact_aggregate_v2(cfg, packed.text, packed.sha256, previous)
+
+    def test_opaque_inventory_identity(self):
+        packed, expected = self.equivalent()
+        for change in ("add", "remove", "body", "timestamp", "actor", "id"):
+            holder = copy.deepcopy(self.holder)
+            if change == "add":
+                holder.append(row(603, 99, "extra opaque", 27))
+            elif change == "remove":
+                holder.pop()
+            elif change == "body":
+                holder[-1]["body"] += " changed"
+            elif change == "timestamp":
+                holder[-1]["updated_at"] = ts(27)
+            elif change == "actor":
+                holder[-1]["user"]["id"] = 98
+            else:
+                holder[-1]["id"] += 2
+            new, actual = self.equivalent(holder=holder)
+            self.assertEqual(actual, expected)
+            self.assertNotEqual(new.inventory_sha256, packed.inventory_sha256)
+            self.assertNotEqual(new.sha256, packed.sha256)
+
+    def test_malformed_reserved_control_families_fail_both_paths(self):
+        packed, _ = self.equivalent()
+        for body in ("<!-- vpng-collab-journal/999 -->", "<!-- vpng-collab-aux/999 -->",
+                     "<!-- vpng-collab-aux/2 -->\\nbroken"):
+            bad = row(999, 10, body, 30)
+            control = {"34": self.control["34"]+[bad]}
+            with self.assertRaises(Conflict):
+                project_aux(CFG, control, self.tasks, self.holder, self.signals)
+            with self.assertRaises(Conflict):
+                self.equivalent(control=control)
+            obj = json.loads(packed.text)
+            obj["control"]["34"].append(["raw", 999, 10, ts(30), ts(30), body])
+            wire = canonical(obj)
+            with self.assertRaises(Conflict):
+                decode_compact_aggregate_v2(CFG, wire, digest(wire))
+
+    def test_wire_bounds_and_closed_raw_partitions(self):
+        packed, (_, previous) = self.equivalent()
+        def decode(value):
+            wire = canonical(value)
+            return decode_compact_aggregate_v2(CFG, wire, digest(wire))
+        for partition in ("holder", "signals"):
+            value = json.loads(packed.text)
+            value[partition][0][0] = "opaque"
+            value[partition][0][-1] = digest(value[partition][0][-1])
+            with self.assertRaises(Conflict):
+                decode(value)
+        for key in ("control", "tasks", "holder", "signals"):
+            value = json.loads(packed.text)
+            del value[key]
+            with self.assertRaises(Conflict):
+                decode(value)
+        for n in (len(self.control["34"])+sum(len(t["comments"])+len(t["events"]) for t in self.tasks.values()),
+                  len(self.control["34"])+sum(len(t["comments"])+len(t["events"]) for t in self.tasks.values())+len(self.holder)):
+            with patch("v2_compact.MAX_OBSERVED_COMMENTS", n), self.assertRaises(Conflict):
+                decode_compact_aggregate_v2(CFG, packed.text, packed.sha256)
+        with patch("v2_compact.MAX_LOCAL_BYTES", len(packed.text.encode())-1), self.assertRaises(Conflict):
+            decode_compact_aggregate_v2(CFG, packed.text, packed.sha256)
+        with self.assertRaises(Conflict):
+            decode_compact_aggregate_v2(CFG, packed.text, "0"*64)
+        with self.assertRaises(Conflict):
+            self.equivalent(holder=self.holder[1:], previous=previous)
+
+    def test_old_wire_byte_compatibility_and_type_separation(self):
+        old = compact_v2(CFG, self.control, self.tasks)
+        # Existing task-only format remains exactly its original canonical shape.
+        obj = json.loads(old.text)
+        self.assertEqual(set(obj), {"protocol", "config_sha256", "control", "tasks"})
+        self.assertEqual(obj["protocol"], "vpng-collab-compact-observation/2")
+        self.assertEqual(next(r[0] for r in obj["control"]["34"] if r[1] == 501), "opaque")
+        new, _ = self.equivalent()
+        self.assertEqual(compact_v2(CFG, self.control, self.tasks), old)
+        with self.assertRaises(Conflict):
+            decode_compact_v2(CFG, new.text, new.sha256)
+        with self.assertRaises(Conflict):
+            decode_compact_aggregate_v2(CFG, old.text, old.sha256)
+        with self.assertRaises(Conflict):
+            project_compact_aggregate_v2(CFG, old)
+        with self.assertRaises(Conflict):
+            project_compact_v2(CFG, new)
 
 
 if __name__ == "__main__":

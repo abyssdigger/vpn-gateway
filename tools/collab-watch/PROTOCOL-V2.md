@@ -603,3 +603,34 @@ Signal disappearance or rotation does not alter the canonical ledger.
 Task projection/roles, holder mailbox, delivery, health, signal diagnostics
 and GC are separately visible. No acquisition, actuator, CLI, command execution,
 live activation, epoch migration, or main publication is introduced.
+
+
+## Unit 5b — aggregate read and compact transport
+
+`acquire_aggregate_v2` returns a typed four-part `AggregateV2` observation:
+control, tasks, holder_rows, signal_rows. One existing bounded Reader acquires
+control, discovers task Issues from that same control observation, reads all
+tasks, then reads holder and signal comments. A second fresh Reader repeats
+the entire pass. Only equal complete normalized graph observations are returned.
+All read endpoints, identity checks, redirect policy, pagination and aggregate
+per-pass byte/row budgets remain those of the accepted Reader. This is a
+stable-observation contract, not an atomic GitHub snapshot. Signal churn can
+fail acquisition; it does not change canonical retained state.
+
+The distinct `CompactAggregateV2` wire
+`vpng-collab-aggregate-compact-observation/2` binds the full transport config
+and all physical inventory partitions. Raw control retention includes both
+reserved task/aux families from known workers; task material retention is
+unchanged; all configured-holder actor rows and all signal-room rows are raw.
+The latter includes quarantined/ignored signal observations. Other comments
+may be opaque, binding physical ID, actor, timestamps and raw-body digest.
+Normalized acquisition rejects inconsistent physical overlaps before packing.
+The compact decoder rejects opaque configured-holder and signal rows.
+`compact_aggregate_v2` requires exact complete raw/compact `project_aux`
+projection and retained-state equality, including with prior retained state.
+`decode_compact_aggregate_v2` admits trusted exact transferred bytes and
+replays the same projector; digests do not prove honest classification or
+GitHub provenance. Signal rotation changes transport config binding but not
+the semantic retained config. Existing task-only acquisition, initial-OPEN
+and CompactV2 wire/type/API remain compatible and separate. No outgoing
+actuation, scheduler, authority evaluation, CLI, live cutover or main change.

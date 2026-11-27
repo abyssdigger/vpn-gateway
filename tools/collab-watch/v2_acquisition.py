@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 from http.client import HTTPException
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
@@ -202,3 +203,39 @@ def acquire_v2_for_initial_open(cfg, actor, body, *, selected_role, selected_inc
         return _acquire(cfg, token, opener, candidate)
     except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
         raise Conflict("v2 initial OPEN acquisition failed: invalid, incomplete, unstable or already observed") from None
+
+
+class AggregateV2(NamedTuple):
+    """Complete normalized partitions from one twice-observed graph."""
+    control: dict
+    tasks: dict
+    holder_rows: list
+    signal_rows: list
+
+
+def acquire_aggregate_v2(cfg, token=None, opener=None):
+    """Two equal whole-graph scans; one Reader and aggregate budget per scan.
+
+    No projection, network writes or authority evaluation. Equality is an
+    observation contract, not a claim of an atomic GitHub snapshot.
+    """
+    try:
+        validate_v2_config(cfg)
+        if opener is None:
+            opener = build_opener(NoRedirect())
+
+        def scan():
+            reader = Reader(cfg, token, opener)
+            control = {str(room): reader.comments(room) for room in cfg["journal_rooms"]}
+            refs = discover_tasks(cfg, control)
+            tasks = {key: reader.task(cfg, ref) for key, ref in refs.items()}
+            holder = reader.comments(cfg["projectholder"]["room"])
+            signals = reader.comments(cfg["signal_room"])
+            return AggregateV2(control, tasks, holder, signals)
+
+        first = scan()
+        second = scan()
+        require(canonical(first) == canonical(second), "aggregate observation changed")
+        return second
+    except (Conflict, ValueError, TypeError, KeyError, AttributeError, UnicodeError, RecursionError):
+        raise Conflict("v2 aggregate acquisition failed: invalid, incomplete, unstable or inaccessible observation") from None

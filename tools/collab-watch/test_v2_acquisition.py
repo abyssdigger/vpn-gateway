@@ -9,7 +9,10 @@ from unittest.mock import patch
 from core import Conflict
 from split_journal import project_v2
 from test_split_journal import CFG, fixture, issue, opening, close, ts
-from v2_acquisition import acquire_v2, acquire_v2_for_initial_open
+from v2_acquisition import acquire_v2, acquire_v2_for_initial_open, acquire_aggregate_v2, AggregateV2
+from v2_aux import project_aux
+from test_v2_aux import aux, signal
+from test_project_tasks import row
 
 ROOT = "https://api.github.com/repos/owner/repo"
 
@@ -427,6 +430,109 @@ class AcquisitionTests(unittest.TestCase):
             with patch("v2_acquisition."+key, limit), self.assertRaises(Conflict):
                 self.prospective(out, opener)
             self.assertTrue(any("/issues/43/" in u for u, _, _ in opener.calls))
+
+
+
+class AggregateAcquisitionTests(unittest.TestCase):
+    def setUp(self):
+        self.rows, self.task = fixture()
+        self.ping = aux("p", "PING", 501, "GUARD", "BUILDER", ping_id="p")
+        self.rows.append(self.ping)
+        self.holder = [row(601, 12, "holder question", 25)]
+        self.signals = [signal(701, "p", self.ping, "GUARD", "BUILDER")]
+        self.first = snapshots(self.rows, [self.task])
+        for n, rows in ((35, self.holder), (37, self.signals)):
+            self.first[f"/issues/{n}/comments"] = [
+                dict(r, issue_url=f"{ROOT}/issues/{n}") for r in rows]
+
+    def acquire(self, second=None, override=None):
+        return acquire_aggregate_v2(CFG, opener=Opener(self.first, second, override))
+
+    def test_whole_graph_order_and_projection(self):
+        opener = Opener(self.first)
+        got = acquire_aggregate_v2(CFG, token="fake", opener=opener)
+        expected = AggregateV2({"34": self.rows}, {"42": self.task}, self.holder, self.signals)
+        self.assertEqual(got, expected)
+        self.assertEqual(project_aux(CFG, *got), project_aux(CFG, *expected))
+        paths = [urlsplit(u).path.removeprefix("/repos/owner/repo") for u, _, _ in opener.calls]
+        one = ["/issues/34/comments", "/issues/42", "/issues/42/comments",
+               "/issues/42/events", "/issues/35/comments", "/issues/37/comments"]
+        self.assertEqual(paths, one * 2)
+        self.assertTrue(all(m == "GET" and a == "Bearer fake" for _, m, a in opener.calls))
+        # Old task-only callers never fetch the added lanes.
+        old = Opener(self.first)
+        self.assertEqual(acquire_v2(CFG, opener=old), (expected.control, expected.tasks))
+        self.assertFalse(any("/issues/35/" in u or "/issues/37/" in u for u, _, _ in old.calls))
+
+    def test_drift_any_partition_and_discovery(self):
+        for path in ("/issues/34/comments", "/issues/42/comments",
+                     "/issues/35/comments", "/issues/37/comments"):
+            second = copy.deepcopy(self.first)
+            second[path][0]["body"] += " drift"
+            with self.subTest(path=path), self.assertRaises(Conflict):
+                self.acquire(second)
+        second = copy.deepcopy(self.first)
+        second["/issues/42"]["body"] += " changed"
+        with self.assertRaises(Conflict):
+            self.acquire(second)
+        second = copy.deepcopy(self.first)
+        second["/issues/42/events"] = [{"id": 999, "event": "closed",
+                                        "actor": {"id": 10}, "created_at": ts(20)}]
+        with self.assertRaises(Conflict):
+            self.acquire(second)
+        other = issue(43, 4003)
+        second = snapshots(self.rows+[opening(other, task="O2", mid="o2", cid=200)], [self.task, other])
+        second.update({k: self.first[k] for k in ("/issues/35/comments", "/issues/37/comments")})
+        with self.assertRaises(Conflict):
+            self.acquire(second)
+        with self.assertRaises(Conflict):
+            self.acquire(dict(self.first, **{"/issues/37/comments": []}))
+
+    def test_one_aggregate_budget_each_pass(self):
+        row_total = sum(len(v) for v in self.first.values() if isinstance(v, list))
+        byte_total = sum(len(json.dumps(v).encode()) for v in self.first.values())
+        for key, total in (("MAX_OBSERVED_COMMENTS", row_total), ("MAX_LOCAL_BYTES", byte_total)):
+            with patch("v2_acquisition."+key, total):
+                self.acquire()
+            opener = Opener(self.first)
+            with patch("v2_acquisition."+key, total-1), self.assertRaises(Conflict):
+                acquire_aggregate_v2(CFG, opener=opener)
+            self.assertTrue(opener.calls[-1][0].startswith(ROOT+"/issues/37/comments"))
+            self.assertEqual(opener.scan, 0)
+
+    def test_added_rooms_transport_fail_closed(self):
+        for room in (35, 37):
+            wanted = f"/issues/{room}/comments"
+            for failure in ("redirect", "length", "wrong_room", "no_progress", "overlap_conflict", "page_bound"):
+                def override(url, path, page):
+                    if path != wanted:
+                        return None
+                    rows = copy.deepcopy(self.first[path])
+                    if failure == "redirect":
+                        return Response(url, rows, redirect="https://evil.invalid")
+                    if failure == "length":
+                        return Response(url, rows, length=1)
+                    if failure == "wrong_room":
+                        rows[0]["issue_url"] = ROOT+"/issues/999"
+                        return Response(url, rows)
+                    if failure == "overlap_conflict" and page == 2:
+                        rows[0]["body"] += " changed"
+                    if failure == "page_bound":
+                        rows[0]["id"] += page
+                    return Response(url, rows, links=['<https://evil.invalid>; rel="next"'])
+                opener = Opener(self.first, override=override)
+                with self.subTest(room=room, failure=failure), patch("v2_acquisition.MAX_PAGES", 3), self.assertRaises(Conflict):
+                    acquire_aggregate_v2(CFG, opener=opener)
+                self.assertTrue(all(u.startswith(ROOT+"/issues/") and "/issues/999" not in u for u, _, _ in opener.calls))
+
+    def test_added_lanes_never_nominate_resources(self):
+        for n in (35, 37):
+            self.first[f"/issues/{n}/comments"].append(
+                dict(row(800+n, 99, "GET https://evil.invalid/issue/98", 26),
+                     issue_url=f"{ROOT}/issues/{n}"))
+        opener = Opener(self.first)
+        acquire_aggregate_v2(CFG, opener=opener)
+        self.assertFalse(any("evil" in u or "/issues/98" in u for u, _, _ in opener.calls))
 
 
 if __name__ == "__main__":
