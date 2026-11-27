@@ -1,0 +1,113 @@
+{
+  "schema": "vpng-command-aliases/1",
+  "matching": {
+    "full_input_only": true,
+    "trim_outer_whitespace": true,
+    "collapse_internal_whitespace": true,
+    "case_insensitive_keywords_and_units": true,
+    "unknown_text_is_not_ignored": true
+  },
+  "types": {
+    "duration": {
+      "number": "positive_integer",
+      "unit_optional": true,
+      "default_unit": "minute",
+      "allow_whitespace_before_unit": true,
+      "canonical_output": "seconds",
+      "units": {
+        "second": {
+          "seconds": 1,
+          "forms": [
+            "s",
+            "sec",
+            "secs",
+            "second",
+            "seconds",
+            "с",
+            "сек",
+            "секунда",
+            "секунды",
+            "секунд"
+          ]
+        },
+        "minute": {
+          "seconds": 60,
+          "forms": [
+            "m",
+            "min",
+            "mins",
+            "minute",
+            "minutes",
+            "м",
+            "мин",
+            "минута",
+            "минуты",
+            "минут"
+          ]
+        },
+        "hour": {
+          "seconds": 3600,
+          "forms": [
+            "h",
+            "hr",
+            "hrs",
+            "hour",
+            "hours",
+            "ч",
+            "час",
+            "часа",
+            "часов"
+          ]
+        },
+        "day": {
+          "seconds": 86400,
+          "forms": [
+            "d",
+            "day",
+            "days",
+            "д",
+            "день",
+            "дня",
+            "дней"
+          ]
+        },
+        "week": {
+          "seconds": 604800,
+          "forms": [
+            "w",
+            "wk",
+            "wks",
+            "week",
+            "weeks",
+            "нед",
+            "неделя",
+            "недели",
+            "недель"
+          ]
+        }
+      }
+    }
+  },
+  "aliases": [
+    {
+      "id": "start-cdc-with-collab",
+      "patterns": [
+        "коллаб {duration}",
+        "collab {duration}"
+      ],
+      "parameters": {
+        "duration": {
+          "type": "duration"
+        }
+      },
+      "canonical_intent": {
+        "action": "start_new_cdc",
+        "duration_seconds": "{duration}",
+        "overlays": [
+          "COLLAB"
+        ]
+      },
+      "equivalent_explicit_request": "Запусти новый CDC на {duration} с COLLAB."
+    }
+  ]
+}

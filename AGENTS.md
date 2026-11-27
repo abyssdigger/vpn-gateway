@@ -50,6 +50,42 @@ projectholder explicitly starts/resumes collaborative execution, when an active 
 collaboration overlay, or when the task edits/reviews collaboration process. Reading it must not
 activate collaboration, widen authority or assign work by itself.
 
+### Command alias normalization gate
+
+User shorthand/slang is normalized only through the root `COMMAND-ALIASES.json` registry on the
+governing active ref. The registry is an input-language layer; it does not own CDC/COLLAB/process
+semantics and it grants no authority by itself.
+
+Before evaluating whether a user utterance activates a loop/overlay or grants repository/tool
+authority:
+
+1. if the complete user utterance can match a registered alias shape, read and validate the exact
+   root `COMMAND-ALIASES.json`;
+2. apply only its declared full-input matching rules and typed parameter grammar; do not invent
+   unregistered synonyms, fuzzy matches, omitted words or free-form regular-expression behavior;
+3. normalize every successful match to its closed `canonical_intent`;
+4. if there are no successful matches, continue ordinary interpretation of the original utterance;
+5. if one or more patterns match and all produce the **same** canonical intent, evaluate that intent
+   exactly as the semantically equivalent explicit user request identified by the registry; and
+6. if matches produce more than one distinct canonical intent, fail closed: activate nothing,
+   widen no authority, and tell the user that the phrase is ambiguous, naming the competing
+   interpretations and asking for an explicit choice.
+
+A syntactically alias-like phrase with an invalid typed parameter is not partially accepted. Report
+the invalid shorthand when that is useful, and do not derive activation/authority from it.
+
+Typed duration values are parsed only by the reusable `duration` type in
+`COMMAND-ALIASES.json`. A missing duration unit uses the registry's default (currently minutes);
+registered unit forms are exact aliases of their canonical unit. Target process rules still
+validate whether the resulting duration is acceptable. Alias normalization must not bypass such
+validation.
+
+Canonicalization may reconstruct activation/authority semantics only because the resulting
+canonical intent is treated as if the projectholder had issued its registered equivalent explicit
+request directly. It grants **exactly** those semantics and no additional capability. All ordinary
+CDC/COLLAB identity, mutation, `main`, safety-reserve and other governing gates still apply after
+normalization.
+
 ### COLLAB identity binding gate
 
 Before consuming recovered/project-shared context as the current worker's own collaborative state,
