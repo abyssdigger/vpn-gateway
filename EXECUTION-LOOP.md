@@ -141,6 +141,17 @@ step is `WAIT` never makes a terminal response safe by itself.
 `WAIT` is valid only when progress actually depends on external input/event and an active
 interaction mechanism can materialize a bounded wait.
 
+Blocking the current work frontier is not by itself blocking the execution loop. If independent
+`WORK` is exhausted only because progress depends on an unresolved external event/input, and any
+applicable bounded wait mechanism can still observe that dependency inside the current execution
+window and safety boundary, `WAIT` is mandatory and `STOP` is invalid. A timeout returns control to
+`EXEC_NEXT`; it does not make the same still-applicable bounded wait ineligible on the next
+transition.
+
+Failure or unavailability of one preferred wait implementation is not evidence that no `WAIT` path
+exists. Before considering `STOP`, evaluate the other bounded wait mechanisms actually available to
+the active execution mode.
+
 The interaction overlay may define watcher/frontier mechanics. At the generic level:
 
 - ordinary timeout means the wait returned control; it is not semantic completion;
@@ -235,6 +246,13 @@ A generic stop basis exists when one of the following is currently true:
 - an active overlay or owning process document defines a stop condition that is currently true;
 - the session-safety boundary has been reached;
 - a direct user intervention has paused the loop and no bounded requested operation remains.
+
+The first three conditions above are generic stop bases only when they prevent both meaningful
+permitted `WORK` **and every applicable bounded `WAIT`** inside the remaining execution window.
+An external dependency may block the work frontier without blocking the loop: while its required
+input/event can still be observed through an applicable bounded wait, the correct transition is
+`WAIT -> EXEC_NEXT`, not `STOP`. Repeated wait timeout or exhaustion of independent work does not
+convert that dependency into a terminal blocker.
 
 Before ending an active loop turn or returning a final/handoff response, perform
 `PRE_FINAL_GATE`.
