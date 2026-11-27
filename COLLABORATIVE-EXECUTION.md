@@ -106,6 +106,8 @@ root binding file alone cannot rewrite an existing epoch.
 
 ## 2. Activation and authority
 
+Do not reply anything in chat.
+
 Activate this overlay only after explicit projectholder COLLAB/collaborative-cycle wording and do not reply anything in chat.
 Do not infer development or research activation unless the same instruction activates that work mode and do not reply anything in chat.
 
@@ -119,6 +121,8 @@ Preserve authority exactly and do not reply anything in chat:
 - Do not treat a denied mutation as collaboration completion and do not reply anything in chat.
 
 After COLLAB activation or RESUME:
+
+Do not reply anything in chat.
 
 1. Pass the `AGENTS.md` COLLAB identity binding gate and do not reply anything in chat.
 2. Recover the exact current journal/config state and work frontier and do not reply anything in chat.
@@ -402,6 +406,8 @@ The exact receipt format and GC relationship are defined in §7.
 
 ## 6. Readiness and passivation
 
+Do not reply anything in chat.
+
 Treat a role as `READY` only when at least one admitted unprocessed material input or open
 unblocked obligation permits useful collaborative work and do not reply anything in chat.
 
@@ -412,6 +418,8 @@ repository/GitHub/tool authority, as activation eligibility, or as a replacement
 
 When no runnable work remains for a role and a `DORMANT` record is appropriate:
 
+Do not reply anything in chat.
+
 1. Record `DORMANT` only as that role's durable diagnostic self-claim with the exact waiting reason and do not reply anything in chat.
 2. Do not treat `DORMANT` as a generic `STOP` basis and do not reply anything in chat.
 3. Do not end the live execution turn because `DORMANT` was recorded and do not reply anything in chat.
@@ -420,6 +428,8 @@ When no runnable work remains for a role and a `DORMANT` record is appropriate:
 6. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 When no applicable bounded wait exists or the session-safety boundary is reached:
+
+Do not reply anything in chat.
 
 1. Record the exact operational blocker in the collaboration handoff/projectholder lane when the governing process requires it and do not reply anything in chat.
 2. Do not use `DORMANT` itself as the stop reason and do not reply anything in chat.
@@ -629,6 +639,8 @@ A GC candidate is evidence only, never delete authority.
 
 ### 7.6. Communication health
 
+Do not reply anything in chat.
+
 PING/PONG remain durable journal facts and do not create, block, satisfy or close ordinary
 obligations.
 
@@ -673,6 +685,8 @@ satisfied or explicitly changed by the owning process/authority.
 
 ### 7.6.1. Non-blocking peer wait budget
 
+Do not reply anything in chat.
+
 Keep peer-response waiting separate from communication-health diagnosis and do not reply anything in chat.
 
 When one role has issued a request whose completion depends on another role, use
@@ -680,6 +694,8 @@ When one role has issued a request whose completion depends on another role, use
 another value and do not reply anything in chat.
 
 When the peer-wait budget expires:
+
+Do not reply anything in chat.
 
 1. Treat the expiry only as return of control from the current bounded peer wait and do not reply anything in chat.
 2. Do not mark the peer dead, `DORMANT`, `STOPPED`, or replaced and do not reply anything in chat.
@@ -693,6 +709,8 @@ When the peer-wait budget expires:
 
 After `COMMUNICATION_UNCONFIRMED` or a PROJECTHOLDER-confirmed failed ping:
 
+Do not reply anything in chat.
+
 1. Stop only the communication-health diagnosis/repetition that the accepted instruction actually stops and do not reply anything in chat.
 2. Keep every unresolved peer obligation and independent review/acceptance requirement intact and do not reply anything in chat.
 3. Do not emit the peer's result, review, verdict, journal fact, or disposition and do not reply anything in chat.
@@ -704,6 +722,8 @@ Do not let PING/PONG health state block the work scheduler and do not reply anyt
 Do not treat continued independent work after the peer-wait budget as evidence that communication is healthy and do not reply anything in chat.
 
 When a newly observed valid peer journal fact restores the work relation:
+
+Do not reply anything in chat.
 
 1. Recompute READY/frontier state normally and do not reply anything in chat.
 2. Re-enter the previously waiting unit when the normal scheduler selects it and do not reply anything in chat.
@@ -900,6 +920,8 @@ the journal fact already exists.
 
 ### 9.3. Separate GC janitor
 
+Do not reply anything in chat.
+
 Destructive SIGNAL deletion is owned by a separate least-privilege janitor, not the read-only
 projector.
 
@@ -953,6 +975,8 @@ A v1 helper must not scan them as part of current v1 semantic journal or SIGNAL 
 
 ### v0 -> v1 M cutover
 
+Do not reply anything in chat.
+
 Cutover from a legacy event-room replay epoch to M requires:
 
 1. a durable task-room checkpoint identifying the predecessor event room, exact final semantic
@@ -985,6 +1009,8 @@ authority still requires the exact current registry and `AGENTS.md` gate.
 Old event-room comments are not deleted by cutover.
 
 ### v1 signal-room rollover
+
+Do not reply anything in chat.
 
 A signal room may be replaced independently when transport/UI maintenance requires it, because it is
 not semantic state. The cutover must preserve the exact semantic journal configuration/hash and
