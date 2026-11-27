@@ -19,11 +19,12 @@ from v2_inputs import InputStore, MAX_INPUT_BYTES
 from v2_compact import (CompactV2, compact_v2, CompactAggregateV2, compact_aggregate_v2,
                         derive_task_compact)
 from v2_aggregate_gate import (gate_aggregate_candidate, gate_initial_open_aggregate,
-                               gate_task_state_aggregate)
+                               gate_task_state_aggregate, gate_creation_aggregate)
 from v2_runtime_state import RuntimeStateStore
 from v2_aux_preflight import preflight_aux_compact, preflight_signal_compact
 from v2_aux_reconcile import verify_aux, verify_signal
-from v2_create import preflight_create, acquire_creation, verify_creation
+from v2_create import (preflight_create, acquire_creation, verify_creation,
+                       acquire_aggregate_v2_for_creation)
 from v2_material import preflight_material, verify_material
 from v2_preflight import (preflight_control_compact, preflight_close_compact,
                           preflight_initial_open_compact)
@@ -31,7 +32,7 @@ from v2_reconcile import verify_control, verify_close, verify_initial_open
 
 AUX_OPERATIONS = {"aux_comment", "signal_comment"}
 TASK_STATE_OPERATIONS = {"material_comment", "issue_close"}
-AGGREGATE_CONTROL_OPERATIONS = {"control_comment", "aux_comment", "initial_open"} | TASK_STATE_OPERATIONS
+AGGREGATE_CONTROL_OPERATIONS = {"control_comment", "aux_comment", "initial_open", "issue_create"} | TASK_STATE_OPERATIONS
 OPERATIONS = {"material_comment", "control_comment", "initial_open", "issue_close", "issue_create"} | AUX_OPERATIONS
 FIELDS = {"operation", "cfg", "baseline", "actor", "role", "incarnation",
           "proof_sha256", "body", "task_key", "request", "extra_task", "previous"}
@@ -451,6 +452,16 @@ def _admit_control(data, proof, witness, checkpoint, read_token, read_opener):
         extra = coherent.extra_task
         require(gate["extra_observation_sha256"] == proof["extra_observation_sha256"],
                 "extra observation binding mismatch")
+    elif kind == "issue_create":
+        coherent = acquire_aggregate_v2_for_creation(cfg, token=read_token, opener=read_opener)
+        gate = gate_creation_aggregate(
+            cfg, coherent, data["actor"], data["request"], data["previous"], previous,
+            data["proof_sha256"], **_selection(data))
+        aggregate = compact_aggregate_v2(cfg, coherent.control, coherent.tasks,
+                                         coherent.holder_rows, coherent.signal_rows, previous)
+        require(gate["creation_inventory_sha256"] == digest(canonical(coherent.inventory))
+                and gate["effect_sha256"] == digest(canonical(proof["effect"])),
+                "creation inventory/effect binding mismatch")
     else:
         graph = acquire_aggregate_v2(cfg, token=read_token, opener=read_opener)
         aggregate = compact_aggregate_v2(cfg, *graph, previous)
@@ -468,7 +479,7 @@ def _admit_control(data, proof, witness, checkpoint, read_token, read_opener):
             and gate["aggregate_sha256"] == aggregate.sha256
             and gate["aggregate_inventory_sha256"] == aggregate.inventory_sha256,
             "aggregate gate binding mismatch")
-    if kind in ("control_comment", "initial_open") or kind in TASK_STATE_OPERATIONS:
+    if kind in ("control_comment", "initial_open", "issue_create") or kind in TASK_STATE_OPERATIONS:
         task = derive_task_compact(cfg, aggregate)
         require(task.sha256 == gate["task_compact_sha256"]
                 and task.inventory_sha256 == gate["task_inventory_sha256"]
@@ -539,8 +550,6 @@ def _actuate(store, original, retention, authorize, *, read_token=None, write_to
                      compact_v2(data["cfg"], control, tasks, data["previous"]))
             require(digest(canonical(_proof(data, fresh, extra))) == data["proof_sha256"],
                     "fresh preflight mismatch")
-            if action["operation"] == "issue_create":
-                acquire_creation(data["cfg"], effect, read_token, read_opener, expect_absent=True)
             witness = _witness(proof, fresh, extra)
             require(witness == _witness(proof, baseline, data["extra_task"]), "witness binding mismatch")
         if witness is None:

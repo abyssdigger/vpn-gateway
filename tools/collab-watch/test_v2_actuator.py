@@ -186,19 +186,26 @@ class ActuatorTests(unittest.TestCase):
         out = opening(extra, task="O2", mid="o2", cid=200, second=20)
         return initial_open_fixture(self, rows, task, extra, out)
 
-    def creation_case(self, request=REQ):
+    def creation_case(self, request=REQ, extra_control=()):
         rows, task = fixture()
-        baseline = compact_v2(CFG, {"34": rows}, {"42": task})
-        proof, payload = preflight_create(CFG, baseline, 13, request, **SPEC)
+        rows.extend(extra_control)
+        tasks = {"42": task}
+        previous = project_aux(CFG, {"34": rows}, tasks, [], [])[1]
+        baseline = compact_v2(CFG, {"34": rows}, tasks, previous["task"])
+        proof, payload = preflight_create(CFG, baseline, 13, request, previous["task"], **SPEC)
         original = freeze_inputs("issue_create", CFG, baseline, 13, **SPEC,
-                                 expected_proof_sha256=digest(canonical(proof)), request=request)
+                                 expected_proof_sha256=digest(canonical(proof)), request=request,
+                                 previous=previous["task"])
         before = snapshots(rows, [task])
         before["/issues"] = []
+        before["/issues/35/comments"] = []
+        before["/issues/37/comments"] = []
         after = copy.deepcopy(before)
         created = resource(payload)
         after["/issues"] = [created]
         after["/issues/43"] = created
         remote = Remote(before, after, 13, copy.deepcopy(created))
+        attach_checkpoint(self, remote, previous)
         return original, remote
 
     def test_creation_exact_send_refresh_and_recovery(self):

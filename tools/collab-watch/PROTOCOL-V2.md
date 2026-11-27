@@ -1155,3 +1155,19 @@ The detached conditional result binds aggregate/task digests, creation
 inventory digest, prior/projected state, proof/effect digests and selection.
 No raw request/payload, authority, acquisition, clock, persistence, actuator
 or STARTED. Exact observation type is not provenance authentication.
+
+
+### Unit 8e-C — aggregate-safe new creation send
+
+New issue_create uses the task-scoped retained checkpoint and existing
+owner -> attempt -> checkpoint ordering. The frozen witness remains
+not_applicable; stable effect/action/input/request/receipt identity is
+unchanged. After actor and authority checks and retained input validation,
+one coherent creation acquisition supplies the accepted pure gate. Bind
+aggregate/task digests and inventories, creation-inventory digest, exact
+proof/effect and prior checkpoint digest back to the same observation.
+No task-only or separate expect-absent pre-send read remains. Hold the
+checkpoint fence through durable STARTED, release before one POST, and
+never send on ambiguous STARTED or fence exit. Claimed effects bypass
+new admission and retain the existing unique-marker plus fixed-resource
+reconciliation without requiring a current checkpoint. No live activation.
