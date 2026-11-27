@@ -300,6 +300,27 @@ class GenerationFenceTests(unittest.TestCase):
         os.mkdir(self.root + '/foreign')
         self.assert_no_kill()
 
+    def test_observed_custody_loss_stays_quarantined(self):
+        os.mkdir(self.root + '/foreign')
+        with self.assertRaises(Unavailable): self.gen.open_placement()
+        self.assertTrue(self.gen.quarantined)
+        os.rmdir(self.root + '/foreign')
+        with patch.object(self.gen, '_open_write_control') as op:
+            with self.assertRaises(Unavailable): self.gen.kill_owned()
+            op.assert_not_called()
+
+    def test_observation_custody_loss_stays_quarantined(self):
+        os.mkdir(self.root + '/foreign')
+        with self.assertRaises(Unavailable): self.gen.empty()
+        os.rmdir(self.root + '/foreign')
+        self.assert_no_kill()
+
+    def test_placement_control_failure_stays_quarantined(self):
+        with patch.object(self.gen, '_open_write_control', side_effect=OSError('unavailable')):
+            with self.assertRaises(OSError): self.gen.open_placement()
+        self.assertTrue(self.gen.quarantined)
+        self.assert_no_kill()
+
     def test_unexpected_nested_generation(self):
         os.mkdir(self.root + '/owned/foreign')
         self.assert_no_kill()

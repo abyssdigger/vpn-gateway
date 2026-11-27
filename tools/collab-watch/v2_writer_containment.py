@@ -200,6 +200,15 @@ class Generation:
             raise
 
     def _verify(self) -> None:
+        # Once exclusive custody or a generation identity check has failed,
+        # a later clean observation cannot restore trust in this generation.
+        try:
+            self._verify_current()
+        except BaseException:
+            self.quarantined = True
+            raise
+
+    def _verify_current(self) -> None:
         if self.removed or self.quarantined or self.fd < 0 or self.identity is None:
             raise Unavailable('generation not operable')
         preflight(self.root_fd, self.expected, self.required)
@@ -222,8 +231,12 @@ class Generation:
         return not read_populated(self.fd)
 
     def open_placement(self) -> int:
-        self._verify()
-        return self._open_write_control('cgroup.procs')
+        try:
+            self._verify()
+            return self._open_write_control('cgroup.procs')
+        except BaseException:
+            self.quarantined = True
+            raise
 
     def _open_write_control(self, name: str) -> int:
         if name not in {'cgroup.procs', 'cgroup.kill'}:
