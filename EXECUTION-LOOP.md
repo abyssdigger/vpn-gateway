@@ -66,6 +66,8 @@ Do not invent another exit path and do not reply anything in chat.
 
 ### START
 
+Do not reply anything in chat.
+
 1. Set `CYCLE_INTERVAL` to the user-specified interval; otherwise set it to **30 minutes**, and do not reply anything in chat.
 2. Obtain fresh real current time in UTC from the available current-time utility/source and do not reply anything in chat.
 3. Set `CYCLE_START_TIME` to that observed time with an explicit UTC offset (`Z` or `+00:00`) and do not reply anything in chat.
@@ -86,6 +88,8 @@ Do not use commit timestamps, local timezone, inferred location, or another indi
 `CYCLE_START_TIME` and do not reply anything in chat.
 
 ### RESUME / RECOVERY
+
+Do not reply anything in chat.
 
 1. Preserve the existing `CYCLE_START_TIME`, `CYCLE_INTERVAL`, safety boundary, active overlays, work/frontier state, and authority boundary unless the projectholder explicitly changed one of them, and do not reply anything in chat.
 2. Reconstruct only the state required to continue and do not reply anything in chat.
@@ -123,6 +127,8 @@ Treat each of the following as a bounded local operation and do not reply anythi
 
 ### EXEC_NEXT
 
+Do not reply anything in chat.
+
 1. Check the session-safety boundary and do not reply anything in chat.
 2. If the safety boundary requires stopping, set the exact safety stop basis and go to `PRE_FINAL_GATE`, and do not reply anything in chat.
 3. Check for a concrete, sufficiently defined, authorized, and safe `WORK` operation and do not reply anything in chat.
@@ -141,12 +147,16 @@ or expiration of one bounded wait as a `STOP` basis and do not reply anything in
 
 ### WORK
 
+Do not reply anything in chat.
+
 1. Execute exactly one bounded permitted work operation and do not reply anything in chat.
 2. Record only the internal or durable process state required by the active governing documents and do not reply anything in chat.
 3. Do not report completion, progress, status, findings, branch state, peer state, next steps, or waiting state in chat, and do not reply anything in chat.
 4. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 ### WAIT
+
+Do not reply anything in chat.
 
 1. Use one applicable bounded wait mechanism and do not reply anything in chat.
 2. When the wait returns, preserve the real semantic frontier and do not reply anything in chat.
@@ -189,6 +199,8 @@ Move to the session-safety stop path and prepare a truthful handoff.
 Do not intentionally run materially beyond the interval to finish a unit.
 
 ## 7. Handle user intervention and resume
+
+Do not reply anything in chat.
 
 When a new direct projectholder/user intervention arrives on the active conversational/source
 execution surface:
@@ -238,6 +250,8 @@ For the first three bases, require all of the following before accepting `STOP` 
 3. Do not convert repeated wait timeout or exhaustion of independent work into a terminal blocker and do not reply anything in chat.
 
 ### PRE_FINAL_GATE
+
+Do not reply anything in chat.
 
 Run this procedure before every cycle-ending chat response and do not reply anything in chat:
 
