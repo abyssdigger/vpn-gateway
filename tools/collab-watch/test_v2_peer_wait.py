@@ -88,3 +88,31 @@ class PeerWaitTests(unittest.TestCase):
         intents[0]["peer"] = "other"
         self.assertEqual(s["descriptor"], self.d)
         self.assertEqual(self.d["peer"], "GUARD")
+
+    def test_prior_state_closed_and_consistent(self):
+        s, _ = self.advance(self.d, None, 10)
+        invalid = [[], {}, dict(s, extra=1), dict(s, descriptor={}),
+                   dict(s, baseline_ms=11), dict(s, expired=True),
+                   dict(s, last_now_ms=10+WAIT_MS)]
+        for field in s:
+            missing = dict(s)
+            del missing[field]
+            invalid.append(missing)
+        for field in ("baseline_ms", "last_now_ms"):
+            for value in (True, 10.0, -1, "10", None):
+                invalid.append(dict(s, **{field: value}))
+        for value in (0, 1, None, "false"):
+            invalid.append(dict(s, expired=value))
+        for state in invalid:
+            with self.subTest(state=state), self.assertRaises(Conflict):
+                self.advance(self.d, state, 10+WAIT_MS)
+        s["descriptor"]["peer"] = "SPEC"
+        with self.assertRaises(Conflict):
+            self.advance(self.d, s, 10+WAIT_MS)
+
+    def test_expired_prior_cannot_be_reset_or_forged_early(self):
+        s, _ = self.advance(self.d, None, 0)
+        s, _ = self.advance(self.d, s, WAIT_MS)
+        for state in (dict(s, expired=False), dict(s, last_now_ms=WAIT_MS-1)):
+            with self.assertRaises(Conflict):
+                self.advance(self.d, state, WAIT_MS)
