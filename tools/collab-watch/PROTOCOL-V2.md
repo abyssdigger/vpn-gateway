@@ -1171,3 +1171,51 @@ checkpoint fence through durable STARTED, release before one POST, and
 never send on ambiguous STARTED or fence exit. Claimed effects bypass
 new admission and retain the existing unique-marker plus fixed-resource
 reconciliation without requiring a current checkpoint. No live activation.
+
+
+### 9a — staged trusted writer data interface
+
+TrustedWriter is constructed by trusted bootstrap, not by the worker. Bootstrap
+validates and detaches the exact full canonical v2 configuration and root
+bindings, selects identity using the actual runtime model and explicit role
+when needed, and pins the repository/epoch, selected role/incarnation/actor,
+concrete owner store and capability, attempt store and paired retained-input
+store, authority callable, read/write credentials and read transport. The
+checkpoint store is concrete and scope-matched when available; explicit
+trusted None preserves claimed recovery after checkpoint loss. A missing
+write credential is also allowed at bootstrap. No bootstrap current-generation
+or claim lookup substitutes for the accepted owner and attempt fences.
+
+The closed data interface invoke(request) accepts exactly an ordinary dict
+with original (an exact str containing bounded canonical frozen JSON with the
+existing exact field set) and reconcile_only (an exact bool). Full canonical
+configuration including signal room, actor, selected role and incarnation must
+match the pin. The six new-send families are material_comment, control_comment,
+aux_comment, initial_open, issue_close and issue_create. SIGNAL is admitted only
+with reconcile_only true for historical recovery, never as a new send. Invalid
+ingress returns NO_ATTEMPT/TRUSTED_INGRESS_REJECTED with null action_key before
+delegation, I/O or preparation. Valid ingress delegates exactly once to
+actuate_fenced: full proof, authority, current ownership, checkpoint freshness,
+STARTED, transport and receipt semantics remain there. The wrapper never
+retries, rearms, bypasses authority or performs a speculative claim lookup.
+With missing trusted dependencies, no-claim reconcile and new PREPARED/no-send
+outcomes retain lower-layer semantics; claimed recovery requires neither a
+current checkpoint nor write credentials and never resends.
+
+Egress validates known state/code pairs, exact keys, nullable or required
+action hash as applicable, and VERIFIED receipt hash and operation-specific
+closed locator: creation issue_number/issue_id; material room/comment_id;
+control, initial-open, aux and historical signal room/physical_ref; close
+room/issue_id/event_id. Positive integers exclude booleans, and physical
+reference room must match locator room. An ordinary exception or malformed
+result after delegation is EFFECT_UNKNOWN/TRUSTED_RESULT_INVALID with null
+action_key, not evidence of no send. Process termination remains a
+lost-response recovery case. No arbitrary delegate exception/body/extra fields
+are returned.
+
+This is staged composition only. It does not establish isolation against
+arbitrary Python code in the writer process, bounded CPU/heap behavior,
+credential custody across processes, filesystem rollback resistance, removal of
+the existing connector/direct-write bypass, or live deployment. Those require
+separate 9b/9c contracts, implementation and evidence. Tests use synthetic
+transport and existing real local-store/fence fixtures, not GitHub mutation.
