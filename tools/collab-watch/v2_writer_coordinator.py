@@ -253,6 +253,13 @@ class Coordinator:
         with self._pair_lock():
             s = self._spool
             try:
+                pending = next((r for r in s.list_metadata()
+                                if r["state"] == MARKED or
+                                (r["state"] == RESULT and r["classification"] == RR)), None)
+                require(pending is not None and pending["request_id"] == request_id
+                        and type(expected_version) is int
+                        and pending["version"] == expected_version,
+                        "recovery priority changed")
                 row = s.load(request_id)
                 require(type(expected_version) is int and row["version"] == expected_version
                         and (row["state"] == MARKED or

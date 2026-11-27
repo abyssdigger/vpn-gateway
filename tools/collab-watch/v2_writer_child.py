@@ -46,16 +46,16 @@ def send(sock, data, deadline):
     sock.sendall(data)
 
 
-def receive(sock, deadline):
+def receive(sock, deadline, max_bytes=MAX_CONTROL, parse=json.loads):
     data = bytearray()
-    while len(data) <= MAX_CONTROL:
+    while len(data) <= max_bytes:
         sock.settimeout(remaining(deadline))
-        part = sock.recv(min(4096, MAX_CONTROL + 1 - len(data)))
+        part = sock.recv(min(65536, max_bytes + 1 - len(data)))
         if not part:
             break
         data.extend(part)
-    require(0 < len(data) <= MAX_CONTROL)
-    return json.loads(data.decode("utf-8"))
+    require(0 < len(data) <= max_bytes)
+    return parse(data.decode("utf-8"))
 
 
 def setup(uid, gid, isolated, fds, writer):
@@ -210,6 +210,68 @@ def writer(uid, gid, isolated, args):
         send(control, b"D" + canonical(diagnostic).encode(), deadline)
 
 
+def coordinated_writer(uid, gid, isolated, args, recovery):
+    """Synthetic-only actual 9a/C-B1 composition in the limited exec child."""
+    fd, control_fd = map(int, args[:2])
+    deadline = float(args[2])
+    limits = tuple(map(int, args[3:]))
+    require(len(limits) == 4 and (fd == -1 if recovery else fd >= 3))
+    for kind, limit in zip((resource.RLIMIT_AS, resource.RLIMIT_CPU, resource.RLIMIT_NOFILE,
+                            resource.RLIMIT_NPROC), limits):
+        resource.setrlimit(kind, (limit, limit))
+        require(resource.getrlimit(kind) == (limit, limit))
+    info = setup(uid, gid, isolated, (control_fd,) if recovery else (fd, control_fd), True)
+    info["limits"] = list(limits)
+    remaining(deadline)
+    ipc = imports()
+    from dataclasses import asdict
+    from core import canonical as trusted_canonical, strict_json
+    from v2_writer_scheduler import Bootstrap, MAX_BOOTSTRAP
+    from v2_writer_synthetic import composition
+
+    def parse(raw):
+        value = strict_json(raw)
+        require(trusted_canonical(value) == raw)
+        return value
+
+    with socket.socket(fileno=control_fd) as control:
+        bootstrap = Bootstrap.from_wire(receive(control, deadline, MAX_BOOTSTRAP, parse))
+        require(bootstrap.recovery is recovery)
+        route = bootstrap.route
+        expected, wall = route.policy.lane(recovery)
+        require(tuple(asdict(expected).values()) == limits and remaining(deadline) <= wall)
+        pin = hashlib.sha256(trusted_canonical(
+            [asdict(route.session), route.launch_spec(recovery).stores,
+             route.policy.identity().sha256, recovery]).encode()).hexdigest()
+        diagnostic = dict(setup=info, pin=pin, fault=None, validated=True, worker=None,
+                          dummy_ok=False, argv_clean=True)
+        with composition(route, recovery, deadline) as coordinator:
+            remaining(deadline)
+            send(control, b"R", deadline)
+            if recovery:
+                # No data endpoint exists and no worker frame is decoded.
+                send(control, b"E", deadline)
+                try:
+                    remaining(deadline)
+                    coordinator.recover(*bootstrap.selection)
+                    outcome = "RESULT"
+                except Exception:
+                    outcome = "HANDOFF_UNCERTAIN"
+            else:
+                def handler(request, binding):
+                    require(binding == route.session)
+                    send(control, b"E", deadline)
+                    remaining(deadline)
+                    return coordinator.ordinary(request).result
+                with socket.socket(fileno=fd) as endpoint:
+                    outcome = ipc.WriterInvocation(route.session, handler).serve(
+                        endpoint, deadline=deadline)["state"]
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        diagnostic.update(rss_kib=usage.ru_maxrss, cpu_seconds=usage.ru_utime+usage.ru_stime,
+                          outcome=outcome)
+        send(control, b"D" + canonical(diagnostic).encode(), deadline)
+
+
 def worker(uid, gid, isolated, args):
     fd, deadline, abrupt, path, pid, control_fd = int(args[0]), float(args[1]), int(args[2]), args[3], int(args[4]), int(args[5])
     report = setup(uid, gid, isolated, (fd,), False)
@@ -228,8 +290,11 @@ def worker(uid, gid, isolated, args):
 
 def main():
     kind, uid, gid, isolated = sys.argv[1:5]
-    require(kind in ("writer", "worker") and isolated in ("0", "1"))
-    (writer if kind == "writer" else worker)(int(uid), int(gid), isolated == "1", sys.argv[5:])
+    require(kind in ("writer", "worker", "coord_ordinary", "coord_recovery") and isolated in ("0", "1"))
+    if kind in ("coord_ordinary", "coord_recovery"):
+        coordinated_writer(int(uid), int(gid), isolated == "1", sys.argv[5:], kind == "coord_recovery")
+    else:
+        (writer if kind == "writer" else worker)(int(uid), int(gid), isolated == "1", sys.argv[5:])
 
 
 if __name__ == "__main__":

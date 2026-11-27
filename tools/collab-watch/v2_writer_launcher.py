@@ -115,11 +115,12 @@ class LaunchSpec:
 
 
 def _spawn(kind, spec, args, fds):
+    _require(kind in ("writer", "worker", "coord_ordinary", "coord_recovery"))
     isolated = spec.isolation is not None
     if isolated:
         _require(os.geteuid() == 0)
         ids = spec.isolation
-        uid, gid = ((ids.writer_uid, ids.writer_gid) if kind == "writer"
+        uid, gid = ((ids.writer_uid, ids.writer_gid) if kind != "worker"
                     else (ids.worker_uid, ids.worker_gid))
     else:
         uid, gid = os.geteuid(), os.getegid()
@@ -240,18 +241,26 @@ class Supervisor:
         _, invocation = self._start(True, worker_first, abrupt_worker)
         return invocation
 
-    def _start(self, paired, worker_first, abrupt):
+    def start_coordinated(self, bootstrap):
+        """Trusted staged synthetic-only launch; recovery returns no data endpoint."""
+        from v2_writer_scheduler import Bootstrap
+        _require(type(bootstrap) is Bootstrap and self._spec == bootstrap.route.launch_spec(bootstrap.recovery))
+        return self._start(False, False, False, coordinated=bootstrap)
+
+    def _start(self, paired, worker_first, abrupt, coordinated=None):
         spec = self._spec
+        recovery = coordinated is not None and coordinated.recovery
         deadline = time.monotonic() + spec.wall_seconds
         invocation = Invocation(deadline)
         endpoints, children = [], []
-        writer = worker = None
+        writer = worker = client = server = None
         handoff = threading.Event()
         watcher_owned = False
         self._reserve(invocation)
         try:
-            server, client = socket.socketpair()
-            endpoints.extend((server, client))
+            if not recovery:
+                server, client = socket.socketpair()
+                endpoints.extend((server, client))
             parent, control = socket.socketpair()
             endpoints.extend((parent, control))
             control_fd = control.fileno()
@@ -259,16 +268,24 @@ class Supervisor:
             def spawn_writer():
                 nonlocal writer
                 _remaining(deadline)
-                writer = _spawn("writer", spec, (server.fileno(), control_fd, deadline,
+                kind = ("writer" if coordinated is None else
+                        "coord_recovery" if recovery else "coord_ordinary")
+                server_fd = -1 if recovery else server.fileno()
+                fds = (control_fd,) if recovery else (server_fd, control_fd)
+                writer = _spawn(kind, spec, (server_fd, control_fd, deadline,
                                 spec.limits.address_bytes, spec.limits.cpu_seconds,
-                                spec.limits.files, spec.limits.processes), (server.fileno(), control_fd))
+                                spec.limits.files, spec.limits.processes), fds)
                 children.append(writer)
                 # Transfer, not retain, each data/control endpoint.
-                server.close()
+                if server is not None:
+                    server.close()
                 control.close()
-                bootstrap = _canonical(dict(session=asdict(spec.session), stores=spec.stores,
-                                  probe=spec.probe, dummy=asdict(spec.dummy) if spec.dummy else None)).encode()
-                _require(len(bootstrap) <= MAX_CONTROL)
+                if coordinated is None:
+                    bootstrap = _canonical(dict(session=asdict(spec.session), stores=spec.stores,
+                                      probe=spec.probe, dummy=asdict(spec.dummy) if spec.dummy else None)).encode()
+                    _require(len(bootstrap) <= MAX_CONTROL)
+                else:
+                    bootstrap = coordinated.wire()
                 parent.settimeout(_remaining(deadline))
                 parent.sendall(bootstrap)
                 parent.shutdown(socket.SHUT_WR)
@@ -300,14 +317,14 @@ class Supervisor:
             # this assignment the watcher cannot own cleanup, even if running.
             watcher_owned = True
             handoff.set()
-            return (None if paired else client), invocation
+            return (None if paired or recovery else client), invocation
         except BaseException:
             # Publish cancel or commit to any already-started watcher. Only the
             # selected owner may close control, reap children and release.
             handoff.set()
             if watcher_owned:
                 # No client endpoint was successfully returned to the caller.
-                if not paired:
+                if not paired and client is not None:
                     client.close()
             else:
                 try:

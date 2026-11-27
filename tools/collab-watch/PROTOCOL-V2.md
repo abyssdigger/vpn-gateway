@@ -1554,3 +1554,62 @@ pin mismatch; cross-role pending recovery; actual abrupt process exits after
 marker and after delegate result before spool persistence; full-quota
 recovery, stale/current owner capability, wrong policy/role/pair, no second
 send, and parked NC/RN. None of this is live GitHub or production evidence.
+
+
+### 9b-C-B2 — trusted staged launch and recovery scheduling
+
+The staged scheduler is constructed with a trusted spool view and a closed
+registry of exact role/incarnation routes. All routes must share the exact
+pinned spool, attempt, input and owner installation and configuration/quota
+identity. Each route binds a current session/capability and checkpoint pin.
+The immutable execution policy includes both numeric resource-limit sets
+(address space, CPU, open descriptors, processes) and wall deadlines; its
+canonical SHA-256 and ID are the durable ResourcePolicy identity. Neither
+policy nor route is derived from a worker frame.
+
+A single Scheduler instance has one pair-wide launch slot, across roles and
+lanes. It does not recycle that slot until the previous Supervisor has reaped
+its actual child and released its invocation. An ordinary launch requires
+no pending MARKED/RR record in the bounded metadata inventory. Recovery
+selects the first such row in request-ID order, requires the exact matching
+role/incarnation route and durable policy identity, and selects only its ID
+and version. Missing route/policy blocks; there is no fallback to another
+record or ordinary work. Child-side C-B1 recovery rechecks that deterministic
+first record and version while holding the actual pair lock. A stale
+selection cannot enter the delegate. Independent scheduler objects are not
+a global launch quota; the child-side pair lock is the effect serialization.
+
+The fixed exec child has two trusted bootstrap modes. The ordinary child
+receives exactly the existing one-shot worker data endpoint and a distinct
+private bootstrap/control endpoint. The recovery child receives only the
+private control endpoint; it has no worker socket, original or mode from a
+worker. It reconstructs the original from the spool via forced reconcile-only
+and consumes the existing reservation, even at ordinary quota exhaustion.
+The matching lane limits are installed and verified before parsing the closed
+bounded bootstrap, and the absolute wall deadline governs launch, invocation
+and reap. Only a committed C-B1 delegate result is returned on the ordinary
+data path. Recovery has a local completion diagnostic, not a substitute
+for the durable result. No READY resume, ordinary reconcile-only, RN retry
+or NC re-arm is supplied. A live child retains the actual flock after loss
+of its supervisor; recovery requires the lock, not proof of supervisor exit.
+
+This integrated entrypoint is deliberately synthetic-only and restricted to
+the test repository/epoch. Trusted fixtures are pinned local canonical
+before/after graphs with digest and separate durable synthetic send counter.
+Fixed local dummy tokens and the accepted real writer/stores exercise the
+same invocation and receipt verification path; write and read adapters are
+synthetic and network fallbacks denied. Controlled test-only crash modes
+terminate after marker or after the real writer returns but before spool
+result persistence; the independent synthetic counter distinguishes those
+cases. The same-identity staged child has descriptor separation, not hostile
+same-UID isolation. The previously accepted 9b-B separate-UID probe remains
+a separate test; no claim of production credential custody, actual GitHub
+effect, aggregate cgroup quotas, hostile process containment, external
+filesystem continuity or deployment is made here.
+
+Focused tests exercise ordinary/recovery exec, exact applied limits and FD
+sets, one pair slot, worker-mode rejection, full-quota recovery, both crash
+boundaries, missing route/policy, stale selection and physical pin rejection,
+deterministic cross-role priority, no duplicate send, and actual supervisor
+death while its surviving writer holds the pair lock. Recovery result truth
+comes from the durable spool, not process completion.
