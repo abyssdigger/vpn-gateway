@@ -159,7 +159,7 @@ machine-only wire records. In a mixed Issue, exact machine-framed records keep t
 wire format, while any surrounding human prose still follows the readable Markdown rule. A
 machine protocol never authorizes reformatting bytes that are required to remain exact.
 
-Canonical comment targets in human-facing COLLAB Markdown must identify the exact GitHub Issue comment. Use either the absolute form `https://github.com/abyssdigger/vpn-gateway/issues/<issue_id>#issuecomment-<comment_id>` or, where a repository-local Issue target is appropriate, `<issue_id>#issuecomment-<comment_id>` (for example, `[#34](34#issuecomment-7222871530)`). Do not use pseudo-links such as `#34/#7222871530`, and do not add tracking/query parameters when they are not required for the link target. The visible label may be `#34`, `comment`, or a short description; the target must identify the exact `issuecomment-<comment_id>`.
+Canonical comment targets in human-facing COLLAB Markdown must identify the exact GitHub Issue comment. Use either the absolute form `https://github.com/abyssdigger/vpn-gateway/issues/<issue_id>#issuecomment-<comment_id>` or, where a repository-local Issue target is appropriate, `<issue_id>/#issuecomment-<comment_id>`. For a link to one concrete Issue comment, the human-readable label must distinguish both the Issue and comment identity; for example, `[#34/7222871530](34/#issuecomment-7222871530)`. A label containing only the Issue identity (for example, `#34`) is insufficient for a concrete-comment link. Do not use pseudo-targets such as `#34/#7222871530`, and do not add tracking/query parameters when they are not required for the link target.
 
 ### Project-task Issue — work plane
 
