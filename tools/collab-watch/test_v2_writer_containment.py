@@ -534,5 +534,61 @@ finally:
         self.assertEqual(result.returncode,0,result.stderr)
 
 
+
+class SystemdVehicleTests(unittest.TestCase):
+    def test_bad_unit_or_commit_rejects_before_service_or_mutation(self):
+        import contextlib, io, json
+        from run_v2_containment_evidence import provision_systemd
+        for unit, sha in [('../system.slice', 'a'*40),
+                          ('vpng-b1-1-1Xservice', 'a'*40),
+                          ('vpng-b1-0-1.service', 'a'*40),
+                          ('vpng-b1-1-1.service', 'main')]:
+            with self.subTest(unit=unit, sha=sha), \
+                    patch('run_v2_containment_evidence._systemctl') as systemctl, \
+                    patch('run_v2_containment_evidence.os.mkdir') as mkdir, \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(provision_systemd(unit, sha), 2)
+                self.assertEqual(json.loads(output.getvalue())['phase'], 'service-identity')
+                systemctl.assert_not_called()
+                mkdir.assert_not_called()
+
+    def test_delegation_missing_or_internal_process_never_opens_write(self):
+        from run_v2_containment_evidence import _enable_required
+        for observations in [('cpu memory',), ('cpu memory pids', '123')]:
+            with self.subTest(observations=observations), \
+                    patch('run_v2_containment_evidence.read_control', side_effect=observations), \
+                    patch('run_v2_containment_evidence.os.open') as op:
+                with self.assertRaises(Unavailable):
+                    _enable_required(99)
+                op.assert_not_called()
+
+    def test_already_delegated_is_read_only(self):
+        from run_v2_containment_evidence import _enable_required
+        with patch('run_v2_containment_evidence.read_control',
+                   side_effect=['cpu memory pids', '', 'cpu memory pids', 'cpu memory pids']), \
+                patch('run_v2_containment_evidence.os.open') as op:
+            _enable_required(99)
+            op.assert_not_called()
+
+    def test_delegates_only_missing_required_controllers(self):
+        import stat
+        from types import SimpleNamespace
+        from run_v2_containment_evidence import _enable_required
+        with patch('run_v2_containment_evidence.read_control',
+                   side_effect=['cpu memory pids io', '', 'cpu io', 'cpu io memory pids']), \
+                patch('run_v2_containment_evidence.os.open', return_value=100) as op, \
+                patch('run_v2_containment_evidence.os.fstat',
+                      return_value=SimpleNamespace(st_uid=0, st_mode=stat.S_IFREG | 0o644)), \
+                patch('v2_writer_containment.pin', return_value=Pin(1, 2, 3)), \
+                patch('run_v2_containment_evidence.os.write', return_value=13) as write, \
+                patch('run_v2_containment_evidence.os.close') as close:
+            _enable_required(99)
+            op.assert_called_once_with('cgroup.subtree_control',
+                 os.O_WRONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=99)
+            write.assert_called_once_with(100, b'+memory +pids')
+            close.assert_called_once_with(100)
+
+
+
 if __name__ == '__main__':
     unittest.main()

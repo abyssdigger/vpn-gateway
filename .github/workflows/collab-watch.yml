@@ -58,3 +58,86 @@ jobs:
         env:
           COLLAB_GITHUB_TOKEN: ${{ github.token }}
         run: python live_compact_evidence.py
+
+  b1-containment-evidence:
+    if: github.ref == 'refs/heads/collab-issues-as-usual-v2-20261126'
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Strict disposable delegated-root B1 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ||
+                ! "$GITHUB_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ||
+                ! "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,9}$ ]]; then
+            echo 'UNAVAILABLE stage: fixed source/run identity'
+            exit 2
+          fi
+          head=$(git rev-parse HEAD)
+          status=$(git status --porcelain=v1 --untracked-files=all)
+          if [[ "$head" != "$GITHUB_SHA" || -n "$status" ]]; then
+            echo 'UNAVAILABLE stage: exact clean checkout'
+            exit 2
+          fi
+          root=$(realpath -e "$(git rev-parse --show-toplevel)")
+          source_dir=$(realpath -e "$root/tools/collab-watch")
+          if [[ "$root" != "$(realpath -e "$GITHUB_WORKSPACE")" ||
+                "$source_dir" != "$root/tools/collab-watch" ]]; then
+            echo 'UNAVAILABLE stage: fixed source location'
+            exit 2
+          fi
+          git ls-files --error-unmatch \
+            tools/collab-watch/run_v2_containment_evidence.py \
+            tools/collab-watch/v2_writer_containment.py \
+            tools/collab-watch/v2_containment_gate.py \
+            tools/collab-watch/test_v2_writer_containment.py >/dev/null
+          unit="vpng-b1-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.service"
+          slice=/sys/fs/cgroup/system.slice
+          group="$slice/$unit"
+          unit_absent() {
+            local load
+            load=$(timeout 3s /usr/bin/systemctl show --property=LoadState --value "$unit" 2>/dev/null || :)
+            [[ "$load" == not-found && -d "$slice" && ! -L "$slice" &&
+               -r "$slice" && -x "$slice" && ! -e "$group" && ! -L "$group" ]]
+          }
+          if ! unit_absent; then
+            echo 'UNAVAILABLE stage: fresh fixed transient unit'
+            exit 2
+          fi
+          rc=0
+          timeout --foreground 120s sudo -n /usr/bin/env -i \
+            PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C \
+            /usr/bin/systemd-run --quiet --wait --pipe --collect \
+            --unit="$unit" --slice=system.slice \
+            --property=Type=exec --property=User=root --property=Group=root \
+            --property='Delegate=cpu memory pids' --property=DelegateSubgroup=manager \
+            --property=RuntimeMaxSec=90s --property=TimeoutStartSec=15s \
+            --property=TimeoutStopSec=10s --property=KillMode=control-group \
+            --property=SendSIGKILL=yes --property=FinalKillSignal=SIGKILL \
+            -- /usr/bin/env -i PATH=/usr/bin:/bin LANG=C \
+            /usr/bin/python3 -I -S -B -c \
+            'import sys; sys.path.insert(0,sys.argv[1]); from run_v2_containment_evidence import provision_systemd; raise SystemExit(provision_systemd(sys.argv[2],sys.argv[3]))' \
+            "$source_dir" "$unit" "$GITHUB_SHA" </dev/null || rc=$?
+          # The disposable service manager is a safety fallback, not B1 proof.
+          # Even a successful strict run fails if the outer unit is not gone.
+          gone=0
+          for _ in $(seq 1 10); do
+            if unit_absent; then gone=1; break; fi
+            sleep 1
+          done
+          if [[ "$gone" != 1 ]]; then
+            echo 'FAIL stage: outer transient unit cleanup'
+            exit 1
+          fi
+          echo 'Outer transient unit cleanup: confirmed absent'
+          if [[ "$rc" != 0 ]]; then
+            echo "Strict B1 vehicle failed or unavailable (exit $rc)"
+            exit 2
+          fi

@@ -180,7 +180,11 @@ def provision_systemd(unit, source_commit):
             raise Unavailable('not the host systemd namespace')
         version = _systemctl('--version').splitlines()[0]
         match = re.match(r'systemd ([0-9]+)(?:\s|$)', version)
-        if not match or int(match[1]) < 254:
+        if not match or len(version) > 200:
+            raise Unavailable('invalid systemd version')
+        print(json.dumps({'vehicle': 'systemd-delegated-test', 'systemd_version': version}),
+              flush=True)
+        if int(match[1]) < 254:
             raise Unavailable('DelegateSubgroup unsupported')
         group = '/system.slice/' + unit
         fields = ('MainPID', 'ControlGroup', 'Delegate', 'User', 'Slice')
@@ -236,8 +240,6 @@ def provision_systemd(unit, source_commit):
         verify_empty_root(test_fd)
         if ns != tuple(os.stat(f'/proc/1/ns/{n}').st_ino for n in NAMESPACES):
             raise Unavailable('namespace drift')
-        print(json.dumps({'vehicle': 'systemd-delegated-test', 'systemd_version': int(match[1])}),
-              flush=True)
         # No ancestor/control directory FD is passed into the strict runner.
         for fd in (manager_fd, unit_fd, slice_fd, mount_fd):
             os.close(fd)
