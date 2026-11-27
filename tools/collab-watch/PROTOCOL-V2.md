@@ -787,3 +787,31 @@ externally pinned one-store continuity, sole write-credential custody and
 routing every role-attributed mutation through this wrapper. Direct
 credential bypass is not prevented by local fencing. No runtime/CLI,
 scheduler, deployment, config/epoch migration or main publication occurs.
+
+
+## Unit 7a — pure selected-role scheduler projection
+
+project_scheduler receives a validated staged config, accepted normalized
+four-part aggregate, exact previous composed state, parsed binding document,
+independent runtime model and optional explicit role. It invokes the
+accepted identity selector and exactly one project_aux replay. The returned
+composed state is exactly the accepted state; no second reducer or derived
+scheduler fields enter it.
+
+The closed selected-role view separates task readiness reasons and holder
+mailbox/input facts (work) from incoming/outgoing PING occurrence evidence
+(health), incoming/outgoing valid SIGNAL diagnostics, unconsumed physical
+refs and GC eligibility evidence addressed to the selected role. Valid
+outgoing SIGNAL attribution is derived only from its admitted target sender.
+Quarantined signals have no admitted semantic recipient: only physical
+selected-actor conflict refs are exposed as actor-scoped diagnostics
+(shared actor does not prove role); no malformed payload is interpreted to
+infer work. Unknown external rows are not role-addressed. GC evidence is
+not delete authority. Holder command classification is data, never executed.
+No health/delivery/GC observation can clear or change task/holder work.
+
+A WAITING role with an empty mailbox is not semantic STOP or dormancy proof.
+No clock, timer, failure verdict, persistence, network, model invocation,
+mutation, authority evaluation, legacy projector, CLI, live activation,
+root binding installation or epoch cutover occurs here. The external
+runtime must acquire the aggregate and persist the exact canonical state.
