@@ -228,6 +228,38 @@ class WriterIPCTests(unittest.TestCase):
                 server.shutdown(socket.SHUT_WR)
                 self.assertEqual(ipc.receive_response(client,time.monotonic()+1),UNKNOWN)
 
+    def test_invalid_response_deadline_never_hands_off(self):
+        for bad in (time.monotonic()-1, float('inf'), float('nan')):
+            with self.subTest(deadline=bad):
+                server, client = socket.socketpair()
+                with client:
+                    end = time.monotonic()+2
+                    ipc.send_request(client, dict(original='x', reconcile_only=False), end)
+                    outcome = ipc.WriterInvocation(SESSION,self.handler).serve(
+                        server, deadline=end, response_deadline=bad)
+                    self.assertEqual(outcome, REJECT)
+                    self.assertEqual(ipc.receive_response(client,time.monotonic()+1), UNKNOWN)
+        self.assertFalse(self.seen)
+
+    def test_request_consumes_response_deadline_before_handoff(self):
+        server, client = socket.socketpair()
+        with client:
+            now = time.monotonic()
+            end, response_end = now+2, now+.15
+            client.sendall(header(1)+b'x')
+            def complete():
+                time.sleep(.25)
+                client.shutdown(socket.SHUT_WR)
+            thread = threading.Thread(target=complete)
+            thread.start()
+            outcome = ipc.WriterInvocation(SESSION,self.handler).serve(
+                server, deadline=end, response_deadline=response_end)
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(outcome, REJECT)
+            self.assertEqual(ipc.receive_response(client,time.monotonic()+1), UNKNOWN)
+            self.assertFalse(self.seen)
+
     def test_handler_overrun_not_no_attempt(self):
         server, client = socket.socketpair()
         with client:

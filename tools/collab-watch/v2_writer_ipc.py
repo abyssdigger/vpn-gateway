@@ -211,8 +211,10 @@ class WriterInvocation:
         response_deadline = deadline if response_deadline is None else response_deadline
         try:
             try:
+                _remaining(response_deadline)
                 request = read_request(sock, deadline)
                 _remaining(deadline)
+                _remaining(response_deadline)
             except Exception:
                 outcome = _outcome("INGRESS_REJECTED")
             else:

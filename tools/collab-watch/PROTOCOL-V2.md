@@ -1251,6 +1251,10 @@ including the two wrapper diagnostics, without taking operation identity
 from worker JSON. The actual operation/result association remains the trusted
 handler's responsibility. No exception text in wire results. Response send
 has the same absolute deadline or a separately supplied absolute deadline.
+The trusted response deadline must be finite/current before request reception
+and rechecked immediately before handoff after the complete frame and EOF.
+If no bounded response window exists before handler entry, reject locally
+as INGRESS_REJECTED without calling the handler.
 Set the local handoff boundary before handler entry; handler exception,
 malformed result, deadline overrun or failed response write after that
 boundary is uncertain, not no-attempt. Server's returned outcome is local
