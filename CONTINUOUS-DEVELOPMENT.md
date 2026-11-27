@@ -22,6 +22,8 @@ A generic loop, ID/IDC or research-loop instruction does not activate developmen
 
 ### New CDC: pre-loop clock observation
 
+Do not reply anything in chat.
+
 For a new CD/CDC cycle:
 
 1. Run the generic `START` procedure from `EXECUTION-LOOP.md` and do not reply anything in chat.
@@ -35,6 +37,8 @@ Do not repeat it as a startup/status report on RESUME, recovery, peer-wait retur
 branch movement, or any other transition inside the same cycle and do not reply anything in chat.
 
 ### Development setup and resume
+
+Do not reply anything in chat.
 
 Before performing development work:
 
@@ -100,6 +104,8 @@ If a later phase exposes an earlier insufficiency, return to the earliest insuff
 instead of inventing semantics locally.
 
 After every bounded development operation:
+
+Do not reply anything in chat.
 
 1. Preserve the actual development state and required evidence/review state and do not reply anything in chat.
 2. Do not emit a completion, progress, status, branch-state, finding, or next-step report in chat and do not reply anything in chat.
@@ -243,6 +249,8 @@ Do not reset `CYCLE_START_TIME` because a development block completes, the branc
 snapshot is published.
 
 ## 10. Continuation across development blocks
+
+Do not reply anything in chat.
 
 When a development block completes:
 
