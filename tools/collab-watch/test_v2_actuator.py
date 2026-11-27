@@ -209,6 +209,149 @@ class ActuatorTests(unittest.TestCase):
         self.assertEqual(self.run_case(original,remote)["state"],"UNRESOLVED")
         self.assertEqual(len(remote.sent),1)
 
+    def test_creation_crash_before_and_after_hint(self):
+        for mode in ("before","after"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                self.path = Path(directory)/"attempts.db"
+                self.input_path = Path(directory)/"inputs.db"
+                self.store = initialize(self.path,"creation-crash")
+                self.retention = initialize_inputs(self.input_path,"creation-input","creation-crash")
+                original, remote = self.creation_case()
+                if mode == "before":
+                    remote.crash = True
+                    with self.assertRaises(Crash):
+                        self.run_case(original,remote)
+                else:
+                    with patch.object(self.store,"mark_verified",side_effect=Crash):
+                        with self.assertRaises(Crash):
+                            self.run_case(original,remote)
+                claimed = self.store.claimed(_bound(original)[3])
+                expected = None if mode == "before" else {"issue_number":43,"issue_id":4003}
+                self.assertEqual(claimed["state"],"STARTED")
+                self.assertEqual(claimed["response_hint"],expected)
+                self.retention.close()
+                self.store = open_store(self.path,"creation-crash")
+                self.retention = open_inputs(self.input_path,"creation-input","creation-crash")
+                result = self.run_case(original,remote,reconcile_only=True)
+                self.assertEqual(result["state"],"VERIFIED",result)
+                self.assertEqual(result["locator"],{"issue_number":43,"issue_id":4003})
+                self.assertEqual(len(remote.sent),1)
+                self.retention.close()
+
+    def test_creation_provider_loss_during_inventory_or_fixed_get(self):
+        for mode in ("delete","replace","corrupt"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                self.path = Path(directory)/"attempts.db"
+                self.input_path = Path(directory)/"inputs.db"
+                self.store = initialize(self.path,"creation-loss")
+                self.retention = initialize_inputs(self.input_path,"creation-input","creation-loss")
+                original, remote = self.creation_case()
+                read = remote.read
+                changed = []
+                def mutate_read(req, timeout):
+                    response = read(req,timeout)
+                    trigger = ("/issues?state=all" in req.full_url if mode == "delete"
+                               else req.full_url.endswith("/issues/43"))
+                    if remote.applied and trigger and not changed:
+                        claimed = self.store.claimed(_bound(original)[3])
+                        key = claimed["action_key"]
+                        if mode == "corrupt":
+                            with sqlite3.connect(self.input_path) as conn:
+                                conn.execute("UPDATE originals SET original_sha256=? WHERE action_key=?",
+                                             ("0"*64,key))
+                        else:
+                            self.input_path.unlink()
+                            if mode == "replace":
+                                replacement = initialize_inputs(self.input_path,"creation-input","creation-loss")
+                                try:
+                                    replacement.save(key,original)
+                                finally:
+                                    replacement.close()
+                        changed.append(key)
+                    return response
+                remote.read = mutate_read
+                result = self.run_case(original,remote)
+                self.assertEqual(result["state"],"EFFECT_UNKNOWN",result)
+                self.assertEqual(changed,[result["action_key"]])
+                record = self.store.status(result["action_key"])
+                self.assertEqual(record["state"],"STARTED")
+                self.assertIsNone(record["receipt_sha256"])
+                self.assertEqual(self.run_case(original,remote,reconcile_only=True)["state"],"EFFECT_UNKNOWN")
+                self.assertEqual(len(remote.sent),1)
+                self.retention.close()
+
+    def test_creation_ownership_contention(self):
+        original, a = self.creation_case()
+        _, b = self.creation_case()
+        entered, release = Event(), Event()
+        def check():
+            entered.set()
+            self.assertTrue(release.wait(5))
+        a.store_check = check
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(self.run_case,original,a)
+            try:
+                self.assertTrue(entered.wait(5))
+                contender = pool.submit(self.run_case,original,b,reconcile_only=True).result(5)
+                self.assertEqual(contender["code"],"ACTUATOR_BUSY")
+                self.assertEqual(b.read_calls,[])
+                self.assertEqual(b.user_reads,[])
+                self.assertEqual(b.sent,[])
+                self.assertEqual(self.store.claimed(_bound(original)[3])["state"],"STARTED")
+            finally:
+                release.set()
+            result = first.result(5)
+        self.assertEqual(result["state"],"VERIFIED",result)
+        self.assertEqual(len(a.sent)+len(b.sent),1)
+
+    def test_creation_production_redirect_not_followed(self):
+        original, remote = self.creation_case()
+        calls = []
+        def https_open(handler, req):
+            calls.append((req.get_method(),req.full_url))
+            headers = Message()
+            if req.get_method() == "GET":
+                status,payload = 200,{"id":13}
+            else:
+                self.assertEqual(self.store.claimed(_bound(original)[3])["state"],"STARTED")
+                status,payload = 302,{}
+                headers["Location"] = "https://evil.invalid/redirected"
+            raw = json.dumps(payload).encode()
+            headers["Content-Length"] = str(len(raw))
+            response = addinfourl(BytesIO(raw),headers,req.full_url,status)
+            response.msg = "synthetic"
+            return response
+        with patch.object(HTTPSHandler,"https_open",https_open):
+            result = self.run_case(original,remote,real_transport=True)
+        self.assertEqual(result["state"],"UNRESOLVED")
+        self.assertEqual(calls,[("GET","https://api.github.com/user"),("POST",ROOT+"/issues")])
+        self.assertEqual(self.run_case(original,remote,reconcile_only=True)["state"],"UNRESOLVED")
+        self.assertFalse(remote.sent)
+
+    def test_creation_malformed_response_then_separate_open(self):
+        original, remote = self.creation_case()
+        remote.response = ["malformed"]
+        result = self.run_case(original,remote)
+        self.assertEqual(result["state"],"VERIFIED",result)
+        self.assertIsNone(self.store.status(result["action_key"])["response_hint"])
+        rows, task = fixture()
+        created = remote.after["/issues"][0]
+        extra = issue(created["number"],created["id"],created["body"])
+        extra["created_at"] = created["created_at"]
+        out = opening(extra,task="O2",mid="o2",cid=200,second=20)
+        baseline = compact_v2(CFG,{"34":rows},{"42":task})
+        proof = preflight_initial_open_compact(CFG,baseline,extra,13,out["body"],**SPEC)
+        original_open = freeze_inputs("initial_open",CFG,baseline,13,**SPEC,
+                                      expected_proof_sha256=digest(canonical(proof)),
+                                      body=out["body"],extra_task=extra)
+        op = Remote(snapshots(rows,[task,extra]),snapshots(rows+[out],[task,extra]),13,
+                    dict(out,issue_url=ROOT+"/issues/34"))
+        registered = self.run_case(original_open,op)
+        self.assertEqual(registered["state"],"VERIFIED",registered)
+        self.assertNotEqual(registered["action_key"],result["action_key"])
+        self.assertEqual(len(remote.sent),1)
+        self.assertEqual(len(op.sent),1)
+
     def close_case(self):
         rows, task = fixture()
         rows = rows+[row(800, 99, "ordinary witness", 12)]
