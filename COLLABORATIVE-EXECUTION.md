@@ -148,9 +148,9 @@ This applies to project-task Issues, shared collaboration/research rooms, projec
 other mixed human-facing Issues. Do not collapse substantial human communication into one
 unbroken text block merely because the transport accepts it.
 
-For every **non-service Issue**, format worker-authored human-facing replies as readable Markdown
-with the structure needed for the content, including headings, paragraphs, lists and code blocks
-where appropriate. **Issue #34 is explicitly governed by this rule** even when it also carries
+For every **non-service Issue**, worker-authored human-facing replies must be structurally organized
+and formatted as readable Markdown, using headings, paragraphs, lists and code blocks where appropriate
+to make the content easy to scan and understand. **Issue #34 is explicitly governed by this rule** even when it also carries
 COLLAB coordination traffic. Do not post a dense unformatted paragraph to a non-service Issue or
 to Issue #34 when the same content can be expressed as structured Markdown.
 
