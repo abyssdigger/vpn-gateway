@@ -59,43 +59,43 @@ Loop or overlay activation never grants repository/GitHub authority. The only es
 authorization shortcut remains explicit CD/CDC activation as defined by `AGENTS.md`; all other
 loop modes use the ordinary authorization rules.
 
-## 3. Activating and resuming a loop
+## 3. Start and resume the loop
 
-Initial activation has a **pre-loop setup** phase. It is not yet active loop execution.
+Follow this procedure exactly. Do not invent another exit path.
 
-For a new continuous-execution cycle, before the loop becomes active:
+### START
 
-1. choose `CYCLE_INTERVAL`: the user-specified interval, otherwise **30 minutes**;
-2. obtain/observe fresh real current time in UTC using the available current-time utility/source
-   and record it as `CYCLE_START_TIME` with an explicit UTC offset (`Z` or `+00:00`);
-3. read this document if it has not already been read unchanged in the active context;
-4. apply the `AGENTS.md` reading gate and read the active overlay documents;
-5. establish the initial work frontier and any external-input processed frontier;
-6. preserve the authorization boundary exactly as established by `AGENTS.md`;
-7. activate the loop and enter `EXEC_NEXT`.
+1. Set `CYCLE_INTERVAL` to the user-specified interval; otherwise set it to **30 minutes**.
+2. Obtain fresh real current time in UTC from the available current-time utility/source.
+3. Set `CYCLE_START_TIME` to that observed time with an explicit UTC offset (`Z` or `+00:00`).
+4. Read this document when it has not already been read unchanged in the current context.
+5. Apply the `AGENTS.md` reading gate and read every active overlay document required by the task.
+6. Establish the initial work frontier and every required external-input processed frontier.
+7. Preserve the authority boundary exactly as established by `AGENTS.md`.
+8. Do not reply anything in chat.
+9. Enter `EXEC_NEXT`.
 
-The pre-loop setup itself emits **no conversational assistant report**. In particular, do not
-translate the clock observation into a startup/status message. If the execution surface visibly
-renders the time-utility/tool result, that is merely an execution artifact and does not return
-lifecycle control to the projectholder.
+Do not convert the clock observation, setup work, branch state, role state, frontier state, or any
+other startup fact into chat output.
 
-If fresh real UTC time cannot be obtained, do not activate autonomous continuous execution.
+If fresh real UTC time cannot be obtained, do not start autonomous continuous execution.
 
-The cycle clock starts before mandatory reading or preparation. Commit timestamps, local timezone
-and inferred location are not substitutes for `CYCLE_START_TIME`.
+Start the cycle clock before mandatory reading or preparation. Do not use commit timestamps, local
+timezone, inferred location, or another indirect time source as `CYCLE_START_TIME`.
 
-A **RESUME/recovery** of an existing cycle is not a second activation and does not create a new
-entry timestamp or startup report. Preserve the existing `CYCLE_START_TIME`,
-`CYCLE_INTERVAL`, safety boundary, active overlays and authority boundary unless the
-projectholder explicitly changed them. Reconstruct the current work/frontier state, obtain fresh
-UTC only when needed as an ordinary clock/safety checkpoint, and return directly to
-`EXEC_NEXT`.
+### RESUME / RECOVERY
 
-The generic loop emits no user-visible entry, resume, progress, status, heartbeat, waiting or
-liveness reports. Such output is not part of loop state and is never required to prove that
-execution is alive.
+1. Preserve the existing `CYCLE_START_TIME`, `CYCLE_INTERVAL`, safety boundary, active overlays,
+   work/frontier state, and authority boundary unless the projectholder explicitly changed one of
+   them.
+2. Reconstruct only the state required to continue.
+3. Obtain fresh UTC only when an ordinary clock/safety checkpoint requires it.
+4. Do not emit a startup, resume, status, progress, waiting, heartbeat, liveness, or recovery report
+   in chat.
+5. Do not reply anything in chat.
+6. Return to `EXEC_NEXT`.
 
-Maintain a compact control marker in active execution context:
+Maintain this compact control marker in active execution context:
 
 ```text
 LOOP_STATE: WORK | WAIT | STOPPING
@@ -106,14 +106,15 @@ PROCESSED_FRONTIER: <last processed external-input frontier, when applicable>
 STOP_BASIS: <empty unless STOPPING>
 ```
 
-The marker is control state, not a repository artifact and not a source of authorization.
+Treat this marker as control state only. Do not treat it as a repository artifact or authorization
+source.
 
-## 4. Mandatory execution transition gate
+## 4. Execute the loop
 
-After every bounded local operation that returns execution control to the agent, perform
-`EXEC_NEXT` before deciding whether to continue or finish the active turn.
+After every bounded local operation that returns execution control, run `EXEC_NEXT` before doing
+anything else.
 
-A bounded local operation includes, for example:
+Treat each of the following as a bounded local operation:
 
 - a tool/read/write batch;
 - a mutation/publication and its verification;
@@ -122,69 +123,56 @@ A bounded local operation includes, for example:
 - completion of an overlay-specific unit/block;
 - return from a bounded external-event wait.
 
-`EXEC_NEXT` must choose exactly one transition:
+### EXEC_NEXT
 
-- `WORK` — a concrete, sufficiently defined, authorized and safe next step exists; execute it;
-- `WAIT` — progress depends on an external event/input and the active execution mode provides an
-  applicable bounded wait mechanism; enter that wait, then return to `EXEC_NEXT`;
-- `STOP` — continuation is not permitted/appropriate under a currently true generic or
-  overlay-specific stop basis; enter `PRE_FINAL_GATE` before ending the turn.
+1. Do not reply anything in chat.
+2. Check the session-safety boundary.
+3. If the safety boundary requires stopping, set the exact safety stop basis and go to
+   `PRE_FINAL_GATE`.
+4. Check for a concrete, sufficiently defined, authorized, and safe `WORK` operation.
+5. If such `WORK` exists, go to `WORK`.
+6. Check for an applicable bounded `WAIT` mechanism that can observe the unresolved dependency
+   inside the remaining execution window.
+7. If such `WAIT` exists, go to `WAIT`.
+8. Identify one exact currently true generic or overlay-specific `STOP` basis.
+9. If no exact `STOP` basis exists, clear `STOP_BASIS`.
+10. If no exact `STOP` basis exists, do not reply anything in chat.
+11. If no exact `STOP` basis exists, return to `EXEC_NEXT`.
+12. If an exact `STOP` basis exists, store it in `STOP_BASIS`.
+13. If an exact `STOP` basis exists, go to `PRE_FINAL_GATE`.
 
-Completion of a local operation, one work unit, one peer response, the originally mentioned
-subsystem or a bounded wait timeout is not by itself a `STOP` basis.
+Do not treat completion of a local operation, completion of one work unit, receipt of one peer
+response, exhaustion of the originally mentioned subsystem, refusal of one unauthorized mutation,
+or expiration of one bounded wait as a `STOP` basis.
 
-A refused unauthorized mutation is likewise not a `STOP` basis. Return to `EXEC_NEXT` and
-continue authorized/read-only work or `WAIT` when appropriate.
+### WORK
 
-While the loop is active, returning a terminal/final assistant response is itself an
-**execution-ending lifecycle action**. It is permitted only through the `STOP -> PRE_FINAL_GATE`
-path. A completed local unit, a clear frontier, an intermediate result, or the fact that the next
-step is `WAIT` never makes a terminal response safe by itself.
+1. Do not reply anything in chat.
+2. Execute exactly one bounded permitted work operation.
+3. Record only the internal or durable process state required by the active governing documents.
+4. Do not report completion, progress, status, findings, branch state, peer state, next steps, or
+   waiting state in chat.
+5. Do not reply anything in chat.
+6. Return to `EXEC_NEXT`.
 
-## 5. WAIT semantics
+### WAIT
 
-`WAIT` is valid only when progress actually depends on external input/event and an active
-interaction mechanism can materialize a bounded wait.
+1. Do not reply anything in chat.
+2. Use one applicable bounded wait mechanism.
+3. When the wait returns, preserve the real semantic frontier.
+4. Do not treat timeout, silence, a blocked marker, a passivation marker, `DORMANT`, or a missing
+   peer response as completion or as a `STOP` basis.
+5. Do not treat failure of one preferred wait implementation as proof that no other applicable
+   bounded wait exists.
+6. Evaluate every other applicable bounded wait mechanism before considering `STOP`.
+7. Do not reply anything in chat.
+8. Return to `EXEC_NEXT`.
 
-Blocking the current work frontier is not by itself blocking the execution loop. If independent
-`WORK` is exhausted only because progress depends on an unresolved external event/input, and any
-applicable bounded wait mechanism can still observe that dependency inside the current execution
-window and safety boundary, `WAIT` is mandatory and `STOP` is invalid. A timeout returns control to
-`EXEC_NEXT`; it does not make the same still-applicable bounded wait ineligible on the next
-transition.
+Do not use an unbounded wait that can bypass the session-safety boundary.
 
-Failure or unavailability of one preferred wait implementation is not evidence that no `WAIT` path
-exists. Before considering `STOP`, evaluate the other bounded wait mechanisms actually available to
-the active execution mode.
-
-The interaction overlay may define watcher/frontier mechanics. At the generic level:
-
-- ordinary timeout means the wait returned control; it is not semantic completion;
-- recoverable wait/tool failure returns to `EXEC_NEXT` after bounded recovery;
-- timeout or failure must not silently advance a processed semantic frontier;
-- an overlay-local blocked/passivated/dormant marker describes work state only and is not by itself
-  a `STOP` basis; when the loop is still active and an applicable bounded wait exists, return to
-  `WAIT` and then `EXEC_NEXT` rather than ending the turn;
-- do not use an unbounded wait that can bypass the session-safety boundary.
-
-`WAIT` does not return control to the user and does not complete the active turn:
-
-```text
-WAIT != return-to-user
-WAIT != turn completion
-WAIT != STOP
-
-WAIT = bounded in-turn suspension followed by EXEC_NEXT
-```
-
-The active loop itself does not emit progress/status/heartbeat reports. User-visible reporting is
-not a `WAIT` primitive and must not be used as a liveness mechanism.
-
-Scheduled tasks, reminders, automations, cron-like jobs and detached/background runs are outside
-the loop lifecycle. Do not create or use them as wake-up, re-entry, continuation, liveness or
-recovery machinery for an active loop. A separately authorized experiment may test such a
-mechanism, but the experiment is outside normal loop semantics and must not be treated as proof of
-same-turn continuation unless that property is actually demonstrated.
+Do not use scheduled tasks, reminders, automations, cron-like jobs, or detached/background runs as
+wake-up, continuation, liveness, or recovery machinery for this loop. Treat a separately authorized
+experiment with such a mechanism as outside normal loop semantics.
 
 ## 6. Clock and session-safety boundary
 
