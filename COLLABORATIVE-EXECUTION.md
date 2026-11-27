@@ -106,31 +106,26 @@ root binding file alone cannot rewrite an existing epoch.
 
 ## 2. Activation and authority
 
-Activate this overlay only after explicit projectholder COLLAB/collaborative-cycle wording.
-Do not infer development or research activation unless the same instruction activates that work
-mode.
+Activate this overlay only after explicit projectholder COLLAB/collaborative-cycle wording and do not reply anything in chat.
+Do not infer development or research activation unless the same instruction activates that work mode and do not reply anything in chat.
 
-Preserve authority exactly:
+Preserve authority exactly and do not reply anything in chat:
 
-- Do not treat a peer task, READY state, review, consensus, lease, ACK, or technical need as
-  authorization.
-- Do not treat a projectholder product decision as execution-authority grant unless `AGENTS.md`
-  says that exact instruction grants the required capability.
-- Pass every repository/GitHub mutation through `AGENTS.md PRE_MUTATION_GATE`.
-- Do not infer authorization from free text in a helper or scheduler.
-- After a denied mutation, continue authorized/read-only work when available.
-- Do not treat a denied mutation as collaboration completion.
+- Do not treat a peer task, READY state, review, consensus, lease, ACK, or technical need as authorization and do not reply anything in chat.
+- Do not treat a projectholder product decision as execution-authority grant unless `AGENTS.md` says that exact instruction grants the required capability and do not reply anything in chat.
+- Pass every repository/GitHub mutation through `AGENTS.md PRE_MUTATION_GATE` and do not reply anything in chat.
+- Do not infer authorization from free text in a helper or scheduler and do not reply anything in chat.
+- After a denied mutation, continue authorized/read-only work when available and do not reply anything in chat.
+- Do not treat a denied mutation as collaboration completion and do not reply anything in chat.
 
 After COLLAB activation or RESUME:
 
-1. Pass the `AGENTS.md` COLLAB identity binding gate.
-2. Recover the exact current journal/config state and work frontier.
-3. Read every external collaboration lane required by this overlay.
-4. Route newly admitted material input according to this document.
-5. Do not emit an activation, resume, role, lease, frontier, status, progress, waiting, or liveness
-   report in chat.
-6. Do not reply anything in chat.
-7. Return to `EXEC_NEXT`.
+1. Pass the `AGENTS.md` COLLAB identity binding gate and do not reply anything in chat.
+2. Recover the exact current journal/config state and work frontier and do not reply anything in chat.
+3. Read every external collaboration lane required by this overlay and do not reply anything in chat.
+4. Route newly admitted material input according to this document and do not reply anything in chat.
+5. Do not emit an activation, resume, role, lease, frontier, status, progress, waiting, or liveness report in chat and do not reply anything in chat.
+6. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 ## 3. Collaboration surfaces
 
@@ -408,39 +403,36 @@ The exact receipt format and GC relationship are defined in §7.
 ## 6. Readiness and passivation
 
 Treat a role as `READY` only when at least one admitted unprocessed material input or open
-unblocked obligation permits useful collaborative work.
+unblocked obligation permits useful collaborative work and do not reply anything in chat.
 
-Use `READY` only as work-state evidence. Do not use it as proof that a chat/session is terminal or
-awake, as authentication, as repository/GitHub/tool authority, as activation eligibility, or as a
-replacement for generic `EXEC_NEXT`, `WAIT`, clock, stop, or final gates.
+Use `READY` only as work-state evidence and do not reply anything in chat.
+Do not use it as proof that a chat/session is terminal or awake, as authentication, as
+repository/GitHub/tool authority, as activation eligibility, or as a replacement for generic
+`EXEC_NEXT`, `WAIT`, clock, stop, or final gates and do not reply anything in chat.
 
 When no runnable work remains for a role and a `DORMANT` record is appropriate:
 
-1. Record `DORMANT` only as that role's durable diagnostic self-claim with the exact waiting reason.
-2. Do not treat `DORMANT` as a generic `STOP` basis.
-3. Do not end the live execution turn because `DORMANT` was recorded.
-4. If an applicable bounded wait can observe the unresolved dependency, enter bounded `WAIT`.
-5. After bounded `WAIT` returns, do not treat timeout as successful passivation or semantic
-   completion.
-6. Do not reply anything in chat.
-7. Return to `EXEC_NEXT`.
+1. Record `DORMANT` only as that role's durable diagnostic self-claim with the exact waiting reason and do not reply anything in chat.
+2. Do not treat `DORMANT` as a generic `STOP` basis and do not reply anything in chat.
+3. Do not end the live execution turn because `DORMANT` was recorded and do not reply anything in chat.
+4. If an applicable bounded wait can observe the unresolved dependency, enter bounded `WAIT` and do not reply anything in chat.
+5. After bounded `WAIT` returns, do not treat timeout as successful passivation or semantic completion and do not reply anything in chat.
+6. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 When no applicable bounded wait exists or the session-safety boundary is reached:
 
-1. Record the exact operational blocker in the collaboration handoff/projectholder lane when the
-   governing process requires it.
-2. Do not use `DORMANT` itself as the stop reason.
-3. Apply the generic `STOP -> PRE_FINAL_GATE` procedure.
-4. If `PRE_FINAL_GATE` fails, do not reply anything in chat.
-5. If `PRE_FINAL_GATE` fails, return to `EXEC_NEXT`.
+1. Record the exact operational blocker in the collaboration handoff/projectholder lane when the governing process requires it and do not reply anything in chat.
+2. Do not use `DORMANT` itself as the stop reason and do not reply anything in chat.
+3. Apply the generic `STOP -> PRE_FINAL_GATE` procedure and do not reply anything in chat.
+4. If `PRE_FINAL_GATE` fails, return to `EXEC_NEXT` and do not reply anything in chat.
 
 Do not define terminal passivation semantics until a concrete post-turn wake mechanism has been
-separately demonstrated and a governing overlay explicitly defines that mechanism.
+separately demonstrated and a governing overlay explicitly defines that mechanism and do not reply anything in chat.
 
 Treat a terminal exit immediately after a correct `DORMANT` record as a process failure unless the
-generic `PRE_FINAL_GATE -> FINAL` path actually passed.
+generic `PRE_FINAL_GATE -> FINAL` path actually passed and do not reply anything in chat.
 
-Use level-triggered readiness:
+Use level-triggered readiness and do not reply anything in chat:
 - keep readiness true until relevant material input is handled or the blocking obligation is
   dispositioned/blocked;
 - coalesce bursts into one readiness state/reason set;
@@ -681,50 +673,42 @@ satisfied or explicitly changed by the owning process/authority.
 
 ### 7.6.1. Non-blocking peer wait budget
 
-Keep peer-response waiting separate from communication-health diagnosis.
+Keep peer-response waiting separate from communication-health diagnosis and do not reply anything in chat.
 
 When one role has issued a request whose completion depends on another role, use
 `PEER_WAIT_BUDGET = 2 minutes` of live-session time unless the governing configuration defines
-another value.
+another value and do not reply anything in chat.
 
 When the peer-wait budget expires:
 
-1. Treat the expiry only as return of control from the current bounded peer wait.
-2. Do not mark the peer dead, `DORMANT`, `STOPPED`, or replaced.
-3. Do not satisfy, cancel, close, waive, or reassign the awaited journal relation.
-4. Check for independent authorized `WORK`.
-5. If independent authorized `WORK` exists, select it.
-6. If the current unit alone depends on the peer, mark that unit
-   `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit.
-7. If no independent `WORK` exists and an applicable bounded wait can still observe the unresolved
-   dependency, enter `WAIT`.
-8. After each bounded `WAIT`, preserve the unresolved relation and do not convert repeated timeout
-   into semantic closure.
-9. Do not reply anything in chat.
-10. Return to `EXEC_NEXT`.
+1. Treat the expiry only as return of control from the current bounded peer wait and do not reply anything in chat.
+2. Do not mark the peer dead, `DORMANT`, `STOPPED`, or replaced and do not reply anything in chat.
+3. Do not satisfy, cancel, close, waive, or reassign the awaited journal relation and do not reply anything in chat.
+4. Check for independent authorized `WORK` and do not reply anything in chat.
+5. If independent authorized `WORK` exists, select it and do not reply anything in chat.
+6. If the current unit alone depends on the peer, mark that unit `WAITING_ON_PEER(<role>, <exact awaited event/request>)` and select another READY unit and do not reply anything in chat.
+7. If no independent `WORK` exists and an applicable bounded wait can still observe the unresolved dependency, enter `WAIT` and do not reply anything in chat.
+8. After each bounded `WAIT`, preserve the unresolved relation and do not convert repeated timeout into semantic closure and do not reply anything in chat.
+9. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 After `COMMUNICATION_UNCONFIRMED` or a PROJECTHOLDER-confirmed failed ping:
 
-1. Stop only the communication-health diagnosis/repetition that the accepted instruction actually
-   stops.
-2. Keep every unresolved peer obligation and independent review/acceptance requirement intact.
-3. Do not emit the peer's result, review, verdict, journal fact, or disposition.
-4. Check for independent authorized `WORK`.
-5. If no independent `WORK` exists and an applicable bounded wait can still observe the required
-   peer/review/input relation, enter `WAIT`.
-6. Do not reply anything in chat.
-7. Return to `EXEC_NEXT`.
+1. Stop only the communication-health diagnosis/repetition that the accepted instruction actually stops and do not reply anything in chat.
+2. Keep every unresolved peer obligation and independent review/acceptance requirement intact and do not reply anything in chat.
+3. Do not emit the peer's result, review, verdict, journal fact, or disposition and do not reply anything in chat.
+4. Check for independent authorized `WORK` and do not reply anything in chat.
+5. If no independent `WORK` exists and an applicable bounded wait can still observe the required peer/review/input relation, enter `WAIT` and do not reply anything in chat.
+6. Return to `EXEC_NEXT` and do not reply anything in chat.
 
-Do not let PING/PONG health state block the work scheduler. Do not treat continued independent work
-after the peer-wait budget as evidence that communication is healthy.
+Do not let PING/PONG health state block the work scheduler and do not reply anything in chat.
+Do not treat continued independent work after the peer-wait budget as evidence that communication is healthy and do not reply anything in chat.
 
 When a newly observed valid peer journal fact restores the work relation:
 
-1. Recompute READY/frontier state normally.
-2. Re-enter the previously waiting unit when the normal scheduler selects it.
-3. Do not emit a special resume-from-timeout report in chat.
-4. Do not reply anything in chat.
-5. Return to `EXEC_NEXT`.
+1. Recompute READY/frontier state normally and do not reply anything in chat.
+2. Re-enter the previously waiting unit when the normal scheduler selects it and do not reply anything in chat.
+3. Do not emit a special resume-from-timeout report in chat and do not reply anything in chat.
+4. Return to `EXEC_NEXT` and do not reply anything in chat.
 
 ### 7.7. Relation semantics
 
