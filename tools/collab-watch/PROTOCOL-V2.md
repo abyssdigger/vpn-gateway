@@ -754,3 +754,36 @@ reconciliation. Generation is not part of semantic effect identity.
 live activation change. A future trusted writer must exclusively control
 role-attributed credentials; direct agent writers otherwise bypass the
 fence. No credential custody or deployment claim is established.
+
+
+## Unit 6b-B — owner-fenced actuator composition
+
+The staged actuate_fenced wrapper purely recomputes the exact frozen action
+using the accepted binder. It requires its normalized repository, epoch,
+selected role and incarnation to equal the concrete capability scope.
+Malformed input and owner rejection stop before attempt/input/credential
+or remote access. OwnerStore.fence verifies store identity, generation and
+token; the wrapper retains it across the unchanged accepted actuator,
+including the attempt-store flock, fresh proof, authority, STARTED, send,
+hint, readback and reconcile-only paths. Lock ordering is owner then
+attempt. Owner BUSY and accepted actuator BUSY are distinct; accepted
+results are otherwise passed through unchanged. Unexpected exceptions
+after fence entry are conservatively EFFECT_UNKNOWN; BaseException
+unwinds both locks without converting a possible send into no-attempt.
+
+Ownership is a runtime prerequisite, not semantic action/effect identity:
+generation, token and token digest never enter frozen originals,
+authority descriptors, attempt/input stores, receipts or GitHub wire.
+Replacement with the same role/incarnation can reconcile a prior STARTED
+or UNRESOLVED effect, never resend. The stale capability cannot invoke even
+reconciliation. The wrapper does not claim or replace an owner.
+
+Tests use accepted task/aux actuator paths with synthetic transport,
+including takeover exclusion during real send/readback logic, stale owner,
+authority denial, attempt-store contention and crash/recovery. This does
+not convert the staged task-only path into an aggregate-safe runtime
+contract. A live writer still requires mandatory aggregate admission,
+externally pinned one-store continuity, sole write-credential custody and
+routing every role-attributed mutation through this wrapper. Direct
+credential bypass is not prevented by local fencing. No runtime/CLI,
+scheduler, deployment, config/epoch migration or main publication occurs.
