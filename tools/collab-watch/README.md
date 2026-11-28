@@ -5,6 +5,13 @@ A read-only, one-shot collaboration projection. Python 3 (stdlib; Linux local
 selection or authority evaluation. The process and acceptance rules are in
 `COLLABORATIVE-EXECUTION.md` and `AGENTS.md`.
 
+This helper projects the configured legacy collaboration protocol, not the
+ordinary project-task Issue work plane. The cooperative ordinary-Issue pilot
+uses ordinary GitHub task/specification/review records; it does not require a
+legacy OPEN for each Issue. An empty legacy obligation inventory or WAITING
+result does not establish that ordinary task work is exhausted. See
+`COLLABORATIVE-EXECUTION.md` for the work-plane and authority boundaries.
+
 ## Run the legacy v0 offline fixture
 
 ```sh
@@ -21,7 +28,12 @@ is READY for the two holder inputs; BUILDER is READY for the open obligation
 and the STOP command. STOP is reported, not executed. Never reuse fixture state
 for a live room or production state for a fixture.
 
-## Read legacy v0 live rooms once
+## Legacy v0 live invocation (predecessor-specific)
+
+The following invocation is retained as historical v0 usage, not an instruction
+to acquire the current M v1 pilot. Use a separately applicable v0 configuration
+and observation only; do not replay the old config against the current mixed
+journal/task room as if it were the predecessor snapshot.
 
 ```sh
 cd tools/collab-watch
@@ -31,10 +43,10 @@ python3 collab_watch.py --once --config "$HOME/collab-config.json" \
   --state "$HOME/.local/state/collab-watch/pilot.json"
 ```
 
-Review the example config against the active cycle before running. It identifies
-this pilot's current event-room epoch #36, task room #34 and projectholder room #35
-with the cooperative role incarnations. Failed predecessor event room #33 is historical
-audit evidence and is not acquired by the current config. The #32 research room is not acquired. Optional `COLLAB_GITHUB_TOKEN` must come from a read-only
+The example config records the predecessor v0 event-room epoch #36, task room
+#34 and projectholder room #35 with the cooperative role incarnations. Both #33
+and #36 are frozen predecessor evidence, not acquisition inputs for the current
+M v1 projection. The #32 research room is not acquired. Optional `COLLAB_GITHUB_TOKEN` must come from a read-only
 credential source in the process environment, never a command or event payload.
 For public rooms unauthenticated reading may be possible within rate limits.
 The helper neither stores the token nor forwards it to a redirect. No live HTTP
@@ -64,8 +76,9 @@ old ledger. A missing ledger permits fresh-current reconstruction only, not
 historical integrity claims. A failure during state persistence may have occurred
 after atomic replacement; re-observe before acting on the result.
 
-Exit 0 means the observation was projected; READY/WAITING is derived work state,
-not process liveness, activation eligibility, or permission. For canonical CONFLICT no role recommendation is emitted. In M v1, a
+Exit 0 means the observation was projected; READY/WAITING is derived work state
+for the configured protocol and rooms, not overall ordinary-Issue readiness,
+process liveness, activation eligibility, or permission. For canonical CONFLICT no role recommendation is emitted. In M v1, a
 signal-only conflict is diagnostic, not canonical CONFLICT. Physical actor admission does not authenticate
 the cooperative roles when they share the same GitHub account. Review and mutation
 gates remain independent of all helper output.
@@ -97,7 +110,16 @@ fresh-current reconstruction, not a historical integrity assertion.
 
 Run `python3 -m unittest -v test_preflight` for the offline acceptance tests.
 
-## M v1: journal and signals (offline acceptance; cutover pending)
+## M v1: journal and signals (configured legacy pilot; offline fixtures)
+
+The M v1 pilot configuration is published in `pilot-config-m1.json`:
+`collab-m1-20261126`, durable journal #34, holder #35, signal #37. See the
+[cutover configuration record](https://github.com/abyssdigger/vpn-gateway/issues/34#issuecomment-7189923895)
+and [journal-only live replay evidence](https://github.com/abyssdigger/vpn-gateway/issues/34#issuecomment-7190003592).
+That evidence establishes actual journal-only readiness via connector acquisition
+and exact replay, not direct CLI HTTP or autonomous agent wake. The legacy v0
+rooms #33/#36 are not current v1 acquisition inputs. Revalidate the applicable
+config before any live use; never transplant a v0 retained ledger into M.
 
 The M path is selected only by the explicit configuration field
 `"protocol": "vpng-collab/1"`. The v0 format has no protocol field and is
@@ -153,7 +175,9 @@ Do not preview a signal against a synthetic not-yet-published journal fact.
 Repeat preflight if relevant bindings change. This is not atomic remote
 publication or authorization. No API acquires, persists, sends, wakes, or
 deletes anything. GC candidates are evidence only; actual GitHub deletion is
-not authorized by the M process decision. No live M cutover is claimed here.
+not authorized by the M process decision. The offline API tests alone do not
+establish live transport or autonomous agent wake; the separately recorded
+connector replay evidence has the narrower scope described above.
 
 ### Standalone M publisher preflight
 
