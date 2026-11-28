@@ -136,8 +136,8 @@ recovery remains governed by R7.R3.R3 and safe dependency release; ordinary
 membership of the same Device in another Profile must still be considered.
 
 **Implementation state:** normalized configuration, helper/model boundaries and normal
-lifecycle call sites exist in the #41 development candidate; integrated baseline verification
-is recorded in EV-00310, independent acceptance remains pending. An unconfirmed managed
+lifecycle call sites are implemented in the accepted #41 development result; integrated
+baseline verification and exact-candidate independent acceptance are recorded in EV-00310. An unconfirmed managed
 same-name link does not count as lifecycle capacity or withdraw required reserve.
 The canonical semantics do not imply released support.
 

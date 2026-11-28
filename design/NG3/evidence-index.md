@@ -676,13 +676,14 @@ release decision or projectholder acceptance of the implementation.
 
 ## EV-00310 — normal managed Device reclaim activation and exact reserve admission
 
-**Status:** verified development candidate; independent terminal review pending.  
+**Status:** verified development result; independent terminal review ACCEPT for #41.  
 **Scope:** A.002/A.004/A.008/A.012/A.013/D.001–D.003 composition; careful/strict,
 exact lifecycle reserve obligation, bounded exact retirement and non-recursive F2.  
 **Requirements:** `VPNG-U001-R1.R3.R7.R4`, R1/R2; preserve R7.R3 reserve behavior.  
 **Task/review:** [#41](https://github.com/abyssdigger/vpn-gateway/issues/41),
 [exact-capacity disposition](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239014269),
-[kernel/status review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239034859).  
+[kernel/status review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239034859),
+[independent terminal ACCEPT #41/7239133255](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255).  
 **Verified implementation/test baseline:** `a5472336c89e54b8b20a2042cc9e7171da43b317`.  
 **Executable evidence:** [NG3 Python 46143230434](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434)
 — 25/25 jobs PASS; [unit 140973642680](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434/job/140973642680)
@@ -705,6 +706,12 @@ evidence separate from exact-capacity A.013 lifecycle demand. The foreign-link r
 confirms preserved reserve and truthful DEGRADED status. No accepted pure A.013, A.004
 or reclaim selection contract changed.
 
-Evidence does not itself close R7.R4/R1/R2, authorize main publication or claim released
-0.1.0 support. Final independent review must bind documentation and architecture/trace
-reconciliation to its exact candidate.
+**Independently accepted task candidate:** [`52c2da248269b42ac1be757981a3a8fbfe488dc7`](https://github.com/abyssdigger/vpn-gateway/commit/52c2da248269b42ac1be757981a3a8fbfe488dc7).
+The terminal review binds the documentation and architecture/trace reconciliation to this exact
+candidate. Exact-candidate [NG3 Python 46143677980](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143677980)
+— 25/25 jobs PASS; unit 1061/1061 PASS; affected linux-managed-device-runtime PASS;
+[actual-main lineage 46143678005](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143678005) — PASS.
+The implementation/test baseline and limitations above are unchanged.
+
+Neither evidence nor task acceptance closes R7.R4/R1/R2, authorizes main publication or
+claims released 0.1.0 support.

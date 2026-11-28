@@ -2,7 +2,7 @@
 
 [Русская версия](../../ru/operations/managed-device-reclaim.md) · [Documentation home](../README.md)
 
-**Applicability:** current NG3 development, exact revision containing this page. **Development candidate — not accepted for release.** Configuration parsing, helper/model code and the startup/periodic reclaim call sites are implemented in this revision; integrated baseline verification is recorded in [EV-00310](../../../design/NG3/evidence-index.md#ev-00310--normal-managed-device-reclaim-activation-and-exact-reserve-admission). Independent acceptance of [#41](https://github.com/abyssdigger/vpn-gateway/issues/41) remains pending. It is not an operator instruction for version 0.1.0.
+**Applicability:** current NG3 development, exact revision containing this page. **Accepted development task — not released support.** Configuration parsing, helper/model code and the startup/periodic reclaim call sites are implemented in this revision; integrated baseline verification is recorded in [EV-00310](../../../design/NG3/evidence-index.md#ev-00310--normal-managed-device-reclaim-activation-and-exact-reserve-admission). Independent [acceptance of #41/7239133255](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255) is recorded at the exact candidate named in EV-00310. It is not an operator instruction for version 0.1.0.
 
 ## Purpose and configuration
 
@@ -59,4 +59,4 @@ Suppose two eligible ordinary managed VPNs are already present and the Profile n
 
 ## Limitations and verification state
 
-The implementation/test baseline passed the full NG3 Python workflow, including Linux cold-start reserve, foreign same-name ordinary link, reserve withdrawal, careful retention and strict partial/remaining batch. Careful and strict batch tests use injected positive technical peer replies with real kernel operations; they are not remote end-to-end reachability tests. The configuration illustration remains an unexecuted standalone fragment. Independent acceptance of the exact final candidate and release support are separate; wider documentation coverage remains incomplete.
+The implementation/test baseline passed the full NG3 Python workflow, including Linux cold-start reserve, foreign same-name ordinary link, reserve withdrawal, careful retention and strict partial/remaining batch. Careful and strict batch tests use injected positive technical peer replies with real kernel operations; they are not remote end-to-end reachability tests. The configuration illustration remains an unexecuted standalone fragment. The exact development candidate has independent task acceptance; this does not establish released support. Wider documentation coverage remains incomplete.

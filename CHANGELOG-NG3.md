@@ -14,9 +14,9 @@ and replaces legacy ordinary-GC authorization with dependency-confirmed exact re
 and non-recursive F2 recovery. Current operator status and paired EN/RU documentation
 describe this distinction.
 
-The implementation/test baseline passed integrated verification (EV-00310). Independent
-terminal acceptance and R7.R4/R1/R2 closure remain pending; no released 0.1.0 capability
-or main publication is implied.
+The implementation/test baseline passed integrated verification (EV-00310); [independent
+terminal acceptance of #41](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255) is recorded at `52c2da248269b42ac1be757981a3a8fbfe488dc7`.
+R7.R4/R1/R2 closure remains pending; no released 0.1.0 capability or main publication is implied.
 
 
 ## 2026-11-25 — Generalized managed-WireGuard recovery requirement family closed

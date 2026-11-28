@@ -84,7 +84,7 @@ A current executable reference unit without a normal requirement path may appear
 The #41 runtime composition applies the existing A.013 calculator to independently
 admitted exact lifecycle capacity for obligations and current status, preserving raw
 pre-prune contribution evidence. This does not add another calculator or lifecycle owner.
-Candidate evidence is recorded under EV-00310.
+Implementation evidence and exact-candidate independent acceptance are recorded under EV-00310.
 
 ## Trace: `A.012`
 
