@@ -2290,9 +2290,9 @@ Implementation
 
     design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
     design/NG3/code/python/rou/managed_reclaim_projection.py — pure A.012 reclaim projection over caller-admitted structural/use/realization facts; exact survivor/candidate/deferred decisions, no actuation.
-    design/NG3/code/python/rou/managed_reclaim_runtime.py — #41 WIP: immutable plan composition, exact eligibility/retention intent, scoped fresh guard and bounded retirement batch. Не включен в startup/periodic reconcile; не заменяет legacy release до целостной runtime activation и приемки.
+    design/NG3/code/python/rou/managed_reclaim_runtime.py — #41 WIP: immutable plan composition, exact eligibility/retention intent, scoped fresh guard and bounded retirement batch. В кандидате #41 включен в startup/periodic reconcile; комплексная проверка и приемка еще не завершены.
     design/NG3/code/python/rou/accepted_effective_state.py — read-only pre-reclaim evidence: all-interface structural contribution facts, exact non-mutating D.001 confirmation and scoped A.004 use; not a retirement decision.
-    design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, selective dependency release при снятии demand, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
+    design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, reclaim-aware replacement policy, bounded exact retirement and F2 recovery, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
 
@@ -2341,7 +2341,7 @@ Architectural decisions
 15. `Раздельные truthful projections`
    *A.012 не изображает GC-retained surplus как structural demand или waiting_for_dependencies. Отдельно публикуются accepted survivor intent, exact confirmed realization, confirmed current-use protection, retirement candidate/reason и unknown/problem; A.013 per-Profile target/presence/deficit остается отдельным owner projection. При нескольких равноценных structural covers не утверждается уникальный per-Device structural owner.*
 
-**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. A.012 contributions R7.R4/R1/R2 остаются partial. Runtime admission/invalidation и read-only pre-reclaim evidence теперь материализованы отдельно: полный C.004 inventory до normal policy exclusion передается A.013 без eligibility pruning; exact D.001 presence/generation подтверждается через Manager без converge/start/restart, несовпадающие C.004/D.001 facts остаются unresolved. A.004 use берется из exact intersection captured accepted и fresh bindings. Эти факты пока не потребляются pure project_reclaim в active lifecycle, не меняют legacy release. Retention-aware policy exclusion, fresh retirement revalidation и применение exact D.001 retirement еще не связаны с этой проекцией. Все три требования остаются pending_closure. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
+**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. A.012 contributions R7.R4/R1/R2 остаются partial. Runtime admission/invalidation и read-only pre-reclaim evidence теперь материализованы отдельно: полный C.004 inventory до normal policy exclusion передается A.013 без eligibility pruning; exact D.001 presence/generation подтверждается через Manager без converge/start/restart, несовпадающие C.004/D.001 facts остаются unresolved. A.004 use берется из exact intersection captured accepted и fresh bindings. В кандидате #41 эти факты потребляются единым startup/periodic prepare → replacement → exact retirement → F2 контуром. Runtime call sites материализованы; комплексное evidence и независимая приемка еще не завершены. Все три требования остаются pending_closure. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
 
 **Evidence:** `EV-00080`, `EV-00090`, `EV-00300`.
 
@@ -2369,16 +2369,17 @@ A.013 ordinary-demand projection → bounded ordinary A.012/D.001 convergence с
 существующего reserve → fresh C.004 observation → A.013 final reserve-exception
 projection → bounded reserve A.012/D.001 convergence → еще одно fresh C.004 observation и
 обычная binding projection. Каждому managed candidate предоставляется не более одной
-попытки за trigger; ошибка не прерывает попытки независимых candidates. В normal binding
-принимается exact interface identity подтвержденной D.001 present realization для
-demanded managed Device; external endpoints сохраняют прежний contract.
+попытки за trigger; ошибка не прерывает попытки независимых candidates. В normal binding кандидата #41 принимается точная идентичность управляемого пути по
+structural demand, подтвержденному reclaim survivor либо независимо сохраненному exact
+предыдущему участию deferred path, за исключением retirement candidates; external endpoints
+сохраняют прежний contract.
 
 При selective release normal C.001 payload/probe policy и D.002 reconciliation сначала
 исключают retiring Device. D.003 затем подтверждает отсутствие dynamic payload ownership
-при сохранении permanent peer-probe /32. Перед разрешением D.001 stop свежо сверяются
-desired set и exact binding generations, для которых подтверждена replacement policy.
-Отказ любого из этих release prerequisites оставляет Device поднятым. После попытки stop
-normal binding/policy/probe convergence снова получают fresh observation. Managed lifecycle
+при сохранении permanent peer-probe /32. Перед разрешением D.001 exact retirement свежо сверяются исходный неизменный план,
+точные поколения, затронутые floors, mandatory support и replacement policy/D.003. Отказ
+останавливает дальнейший batch; после ошибки либо изменения нижнего состояния выполняется
+один нерекурсивный F2. Текущая проекция статуса строится отдельно по final accepted generation. Managed lifecycle
 problem публикуется отдельно и не отменяет подтвержденную unrelated policy.
 
 При общей остановке

@@ -2,7 +2,7 @@
 
 [Русская версия](../../ru/operations/managed-device-reclaim.md) · [Documentation home](../README.md)
 
-**Applicability:** current NG3 development, exact revision containing this page. **Draft — not yet active in the normal runtime.** Configuration parsing and reclaim helper/model code exist; startup/periodic activation, integrated evidence and acceptance of [#41](https://github.com/abyssdigger/vpn-gateway/issues/41) are pending. The behavior below is the accepted target contract, not a claim of completed runtime support. It is not an operator instruction for version 0.1.0.
+**Applicability:** current NG3 development, exact revision containing this page. **Development candidate — not accepted for release.** Configuration parsing, helper/model code and the startup/periodic reclaim call sites are implemented in this revision; integrated evidence and acceptance of [#41](https://github.com/abyssdigger/vpn-gateway/issues/41) remain pending. The behavior below states the accepted target contract, not a claim that the integrated runtime has passed verification. It is not an operator instruction for version 0.1.0.
 
 ## Purpose and configuration
 
@@ -59,4 +59,4 @@ Suppose two eligible ordinary managed VPNs are already present and the Profile n
 
 ## Limitations and verification state
 
-The normal runtime entrypoints are not yet wired to the new reclaim path in this draft. The staged helpers and test scenarios do not alone establish runtime acceptance or release support. The final page must be reconciled with the exact integrated implementation, status rendering and Linux evidence before the #41 candidate is accepted. Wider NG3 documentation coverage remains incomplete.
+The normal runtime entrypoints now use the new reclaim path in this development candidate. Staged helper tests do not establish integrated runtime acceptance or release support. The final page must be reconciled with the exact integrated implementation, status rendering and Linux evidence before the #41 candidate is accepted. Wider NG3 documentation coverage remains incomplete.

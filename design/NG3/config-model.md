@@ -135,9 +135,10 @@ presence remain governed separately. Withdrawal of reserve demand after ordinary
 recovery remains governed by R7.R3.R3 and safe dependency release; ordinary
 membership of the same Device in another Profile must still be considered.
 
-**Implementation state:** normalized configuration and helper/model boundaries exist;
-normal lifecycle activation and integrated acceptance in #41 are pending. The field's
-canonical semantics here are normative, not a claim of completed runtime support.
+**Implementation state:** normalized configuration, helper/model boundaries and normal
+lifecycle call sites exist in the #41 development candidate; integrated verification and
+acceptance are pending. The canonical semantics are normative, not a claim of verified
+runtime support.
 
 **Requirements:**
 - `VPNG-U001-R1.R3.R7.R4`;
