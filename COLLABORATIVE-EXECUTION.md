@@ -804,32 +804,35 @@ When the development overlay is also active, the default project-task lifecycle 
 
 ```text
 accepted product/project intent
-  -> SPEC creates/curates project-task Issue
-  -> SPEC declares specification READY
-  -> short control-plane notice: Issue #N ready for BUILDER
-  -> BUILDER analysis / implementation / exact-SHA evidence in Issue #N
-  -> BUILDER: READY FOR REVIEW
-  -> GUARD adversarial terminal review
-  -> findings -> BUILDER rework -> GUARD re-review
-  -> GUARD ACCEPT
-  -> final Issue comment links exact accepted commit SHA
+  -> create/curate one ordinary project-task Issue
+  -> task specification becomes executable and falsifiable
+  -> control plane routes the Issue to an implementer
+  -> analysis / implementation / exact-SHA evidence in the Issue
+  -> implementation result / review request
+  -> independent adversarial terminal review
+  -> findings -> rework -> independent re-review
+  -> terminal review result accepts one exact source SHA
   -> Issue CLOSED
   -> eligible for the additional AGENTS.md pre-main acceptance gate
 ```
 
-The named roles are configurable; the invariant is separation of implementation and independent
-verification where the task requires it.
+The named collaboration roles are configurable implementation details. The project-task Issue records
+the task and its technical/review history; role identity, routing and readiness remain control-plane
+state. The invariant is separation of implementation and independent verification where the task
+requires it.
 
-### 8.1. SPEC contract
+### 8.1. Specification contract
 
-SPEC owns specification quality, not product authority. Before declaring a project-task Issue READY,
-SPEC checks that the Issue has enough normative basis, scope, acceptance criteria and evidence
-requirements to make implementation and later acceptance falsifiable.
+The specification function owns specification quality, not product authority. Before routing a
+project-task Issue for implementation, verify that the Issue has enough normative basis, scope,
+acceptance criteria and evidence requirements to make implementation and later acceptance
+falsifiable. No reserved `READY` phrase is required in the task Issue.
 
 A projectholder decision is requested when the residual ambiguity is genuinely product/project
-semantic. SPEC must not hide that ambiguity by picking the technically convenient interpretation.
+semantic. The specification function must not hide that ambiguity by picking the technically
+convenient interpretation.
 
-### 8.2. Builder completion is not acceptance
+### 8.2. Implementation completion is not acceptance
 
 The process deliberately distinguishes:
 
@@ -837,19 +840,19 @@ The process deliberately distinguishes:
 implementation success != task acceptance != Issue closure
 ```
 
-BUILDER may report `IMPLEMENTATION COMPLETE` or `READY FOR REVIEW`, but never turns that fact into
-a GUARD acceptance.
+The implementer may report completion or request review in ordinary task language. That report never
+turns itself into independent acceptance, and no reserved role/readiness phrase is required.
 
 Compilation, successful startup, unit tests, integration tests, green CI and local/manual checks are
 evidence. They establish only the properties they actually test.
 
-### 8.3. GUARD terminal review and acceptance
+### 8.3. Independent terminal review and acceptance
 
-GUARD reviews the proposed final result adversarially: the goal is to find a way the result fails the
-accepted task contract despite apparently successful implementation/evidence, not to rationalize a
-green build.
+The selected independent reviewer reviews the proposed final result adversarially: the goal is to
+find a way the result fails the accepted task contract despite apparently successful
+implementation/evidence, not to rationalize a green build.
 
-Before `GUARD ACCEPT`, GUARD independently verifies at least the applicable parts of:
+Before terminal acceptance, independently verify at least the applicable parts of:
 
 - the **current accepted Issue specification**, including every accepted clarification/amendment;
 - relevant Requirements/Constraints, architecture/component contracts and prior accepted decisions;
@@ -863,23 +866,26 @@ Before `GUARD ACCEPT`, GUARD independently verifies at least the applicable part
   incompatible with acceptance;
 - compatibility/regression evidence materially affected by the change.
 
-A GUARD finding returns the Issue to BUILDER rework. A corrected result invalidates the affected
-evidence/review scope and must be reverified.
+A review finding returns the Issue to implementation/rework. A corrected result invalidates the
+affected evidence/review scope and must be reverified.
 
-`GUARD ACCEPT` names the exact accepted source commit SHA. Any later task-affecting commit creates
-a new candidate and invalidates the old acceptance until GUARD reviews the delta/new result.
+The terminal review comment records an ordinary semantic result such as
+`Review result — accepted at <exact SHA>`; it need not expose the collaboration-role name. The
+governing service/control state establishes which selected independent reviewer produced that
+acceptance when independent verification is required. Any later task-affecting commit creates a new
+candidate and invalidates the old acceptance until the delta/new result is independently reviewed.
 
 ### 8.4. Honest Issue closure
 
-A project-task Issue is closed only after explicit GUARD acceptance.
+A project-task Issue is closed only after explicit terminal review acceptance.
 
 The final pre-close comment must contain:
-- the explicit acceptance verdict/ref;
+- an unambiguous acceptance result against the current task specification;
 - a direct exact commit SHA/link for the accepted final result;
 - concise final evidence identity when useful.
 
-Only after that comment is published and verified is the Issue moved to `closed`. BUILDER completion,
-green CI, consensus or inactivity never closes the Issue by itself.
+Only after that comment is published and verified is the Issue moved to `closed`. Implementation
+completion, green CI, consensus or inactivity never closes the Issue by itself.
 
 A newly discovered separate defect/requirement after honest closure normally creates a new linked
 Issue instead of silently extending the accepted old task. Reopen only when the original acceptance
