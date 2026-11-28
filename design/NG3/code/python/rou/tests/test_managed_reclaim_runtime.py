@@ -12,10 +12,12 @@ from rou.managed_reclaim_runtime import (
     previously_admitted_deferred_bindings, replacement_managed_interfaces,
     recovery_eligibility_seed, recovery_managed_interfaces,
     structural_retirement_precondition, execute_reclaim_batch,
+    replacement_peer_ownership_exact, cleanup_ownership_desired,
 )
 from rou.release1_config import ManagedReclaimPolicy
 from rou.managed_reclaim_projection import ReclaimReason
 from rou.managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
+from rou.wireguard_peer_ownership import WireGuardPeerOwnershipObservation
 
 from test_accepted_effective_state import A, EXT, CONFIG, PRESENT, peer, request
 
@@ -184,5 +186,28 @@ class RuntimeReclaimPlanTests(TestCase):
         self.assertTrue(out.requires_recovery)
         self.assertEqual(cleanup.call_count, 2)
         self.assertEqual(retire.call_count, 2)
-        self.assertEqual(verify.call_args_list[-1].args, (candidates[1], frozenset({"a"})))
+        self.assertEqual(verify.call_args_list[-1].args, (candidates[1], frozenset({"a"}), True))
         self.assertIn("b:", out.problem)
+
+    def test_peer_guard_rechecks_actual_ownership_and_original_careful_proof(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        observe = Mock(side_effect=lambda desired: WireGuardPeerOwnershipObservation(
+            desired.device_id, desired.interface, desired.peers))
+        replacement = frozenset({A, EXT})
+        self.assertTrue(replacement_peer_ownership_exact(
+            plan, self.evidence(), replacement, (peer(),), observe))
+        self.assertFalse(replacement_peer_ownership_exact(
+            plan, self.evidence(), replacement,
+            (replace(peer(), generation="different"),), observe))
+        observe.side_effect = lambda desired: WireGuardPeerOwnershipObservation(
+            desired.device_id, desired.interface, ())
+        self.assertFalse(replacement_peer_ownership_exact(
+            plan, self.evidence(), replacement, (peer(),), observe))
+
+    def test_cleanup_keeps_only_permanent_probe_prefix(self):
+        plan = self.strict_plan()
+        desired = cleanup_ownership_desired(plan.config, plan.projection.retirement_candidates[0])
+        self.assertEqual(desired.device_id, "a")
+        self.assertEqual(desired.interface, A.endpoint)
+        self.assertEqual(tuple(str(n) for n in desired.peers[0].allowed_ips),
+                         ("10.201.0.1/32",))

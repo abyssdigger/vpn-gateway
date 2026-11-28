@@ -6,14 +6,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+from ipaddress import IPv4Network
 
 from .accepted_effective_state import AcceptedEffectiveState, PreReclaimEvidence
 from .binding import PathBinding
+from .confirmed_current_use import CurrentUseState
 from .interface_identity import InterfaceIdentity
 from .managed_device_demand import project_final
 from .managed_reclaim_projection import ReclaimDecision, ReclaimProfile, ReclaimProjection, project_reclaim
 from .managed_wireguard_adapter import ManagedWireGuardState
-from .release1_config import CurrentConfig
+from .release1_config import CurrentConfig, ManagedReclaimPolicy
+from .wireguard_peer_manager import WireGuardPeerRealization
+from .wireguard_peer_ownership import (
+    WireGuardPeerAllowedIPs, WireGuardPeerOwnershipDesired, WireGuardPeerOwnershipObservation,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,7 +282,7 @@ class ReclaimBatchOutcome:
 def execute_reclaim_batch(
     plan: RuntimeReclaimPlan,
     *,
-    verify: Callable[[ReclaimDecision, frozenset[str]], bool],
+    verify: Callable[[ReclaimDecision, frozenset[str], bool], bool],
     cleanup: Callable[[ReclaimDecision], bool],
     retire: Callable[[ReclaimDecision], None],
 ) -> ReclaimBatchOutcome:
@@ -293,12 +299,12 @@ def execute_reclaim_batch(
         try:
             if candidate.interface is None or not candidate.generation:
                 raise RuntimeError("retirement decision lacks exact identity")
-            if not verify(candidate, frozenset(retired)):
+            if not verify(candidate, frozenset(retired), False):
                 raise RuntimeError("pre-cleanup retirement guard failed")
             touched = True
             if not cleanup(candidate):
                 raise RuntimeError("dependency cleanup unconfirmed")
-            if not verify(candidate, frozenset(retired)):
+            if not verify(candidate, frozenset(retired), True):
                 raise RuntimeError("post-cleanup retirement guard failed")
             attempted = True
             retire(candidate)
@@ -307,3 +313,104 @@ def execute_reclaim_batch(
             problem = f"{candidate.device_id}: {type(exc).__name__}: {exc}"
             break
     return ReclaimBatchOutcome(frozenset(retired), touched, attempted, problem)
+
+
+def _ownership_for(
+    config: CurrentConfig,
+    device_id: str,
+    identity: InterfaceIdentity,
+    group_owners: dict[str, str | None],
+) -> WireGuardPeerOwnershipDesired:
+    """Reconstruct the accepted D.002 realization's D.003 expected state."""
+    base = config.managed_vpns[device_id]
+    groups = {pid: group for (pid, did), group in config.wireguard_groups.items()
+              if did == device_id}
+    if groups.keys() != group_owners.keys():
+        raise ValueError("peer realization does not cover exactly the configured groups")
+    allowed = {p.peer_id: {IPv4Network(f"{p.probe_target}/32")} for p in base.peers}
+    for pid, group in groups.items():
+        owner = group_owners[pid]
+        if owner is not None:
+            if owner not in {m.peer_id for m in group.peer_memberships}:
+                raise ValueError("peer owner is outside its configured group")
+            allowed[owner].update(group.prefixes)
+    return WireGuardPeerOwnershipDesired(
+        device_id, identity, tuple(sorted(
+            WireGuardPeerAllowedIPs(p.public_key, tuple(sorted(allowed[p.peer_id])))
+            for p in base.peers
+        )),
+    )
+
+
+def cleanup_ownership_desired(
+    config: CurrentConfig, candidate: ReclaimDecision,
+) -> WireGuardPeerOwnershipDesired:
+    """Only permanent probe addresses remain on a retiring base."""
+    if candidate.interface is None or not candidate.generation:
+        raise ValueError("exact retirement identity required")
+    return _ownership_for(config, candidate.device_id, candidate.interface, {
+        pid: None for pid, did in config.wireguard_groups if did == candidate.device_id
+    })
+
+
+def _ownership_exact(
+    desired: WireGuardPeerOwnershipDesired,
+    observe: Callable[[WireGuardPeerOwnershipDesired], WireGuardPeerOwnershipObservation],
+) -> bool:
+    return observe(desired) == WireGuardPeerOwnershipObservation(
+        desired.device_id, desired.interface, desired.peers)
+
+
+def replacement_peer_ownership_exact(
+    plan: RuntimeReclaimPlan,
+    fresh: PreReclaimEvidence,
+    replacement_bindings: frozenset[PathBinding],
+    realizations: tuple[WireGuardPeerRealization, ...],
+    observe: Callable[[WireGuardPeerOwnershipDesired], WireGuardPeerOwnershipObservation],
+) -> bool:
+    """Fresh read-only D.003 confirmation of accepted replacement peer owners.
+
+    Preserve original careful use independently of the pruned current-use
+    projection. The caller still must check C.001 policy and D.001 facts.
+    """
+    config = plan.config
+    groups = {did for _, did in config.wireguard_groups}
+    expected = {b.path_id.device_id: b for b in replacement_bindings
+                if b.path_id.device_id in groups}
+    peers = {row.device_id: row for row in realizations}
+    if len(peers) != len(realizations) or peers.keys() != expected.keys():
+        return False
+    exact = _exact_bindings(fresh)
+    try:
+        for did, binding in expected.items():
+            row = peers[did]
+            if (row.problem is not None or not row.generation
+                    or row.interface_ifname != binding.endpoint.ifname
+                    or row.interface_ifindex != binding.endpoint.ifindex
+                    or ExactEligibility(binding, row.base_generation) not in exact):
+                return False
+            desired = _ownership_for(config, did, binding.endpoint, {
+                item.profile_id: item.owner_peer_id for item in row.group_owners
+            })
+            if not _ownership_exact(desired, observe):
+                return False
+        if config.managed_reclaim is ManagedReclaimPolicy.CAREFUL:
+            # Any admitted managed current-use proof in the original snapshot
+            # must retain its exact identity, peer owner and generation.
+            for profile in plan.profiles:
+                use = profile.current_use
+                if (use is None or use.state is not CurrentUseState.CONFIRMED
+                        or use.path_id is None
+                        or use.path_id.device_id not in config.managed_vpns):
+                    continue
+                did = use.path_id.device_id
+                row = peers.get(did)
+                if (row is None or PathBinding(use.path_id, use.endpoint)
+                        not in replacement_bindings
+                        or row.base_generation != use.managed_base_generation
+                        or row.generation != use.wireguard_generation
+                        or row.owner_for(profile.profile_id) != use.wireguard_owner_peer_id):
+                    return False
+        return True
+    except Exception:
+        return False
