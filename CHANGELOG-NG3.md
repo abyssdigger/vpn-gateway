@@ -15,8 +15,9 @@ and non-recursive F2 recovery. Current operator status and paired EN/RU document
 describe this distinction.
 
 The implementation/test baseline passed integrated verification (EV-00310); [independent
-terminal acceptance of #41](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255) is recorded at `52c2da248269b42ac1be757981a3a8fbfe488dc7`.
-R7.R4/R1/R2 closure remains pending; no released 0.1.0 capability or main publication is implied.
+terminal acceptance of #41](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255) is recorded at `52c2da248269b42ac1be757981a3a8fbfe488dc7`, with final documentation-only closure at
+`28e92477b1b9b6ec4746de52d3ad2e4d021601ba`. A separate [R7.R4 closure review #48/7239178657](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239178657)
+accepts R7.R4/R1/R2 as closed for the current scope. No released 0.1.0 capability or main publication is implied.
 
 
 ## 2026-11-25 — Generalized managed-WireGuard recovery requirement family closed

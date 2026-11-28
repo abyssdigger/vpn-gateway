@@ -684,6 +684,7 @@ exact lifecycle reserve obligation, bounded exact retirement and non-recursive F
 [exact-capacity disposition](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239014269),
 [kernel/status review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239034859),
 [independent terminal ACCEPT #41/7239133255](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255).  
+**Closure review:** [#48/7239178657](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239178657) — R7.R4/R1/R2 accepted as [`closed`] for the current scope.  
 **Verified implementation/test baseline:** `a5472336c89e54b8b20a2042cc9e7171da43b317`.  
 **Executable evidence:** [NG3 Python 46143230434](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434)
 — 25/25 jobs PASS; [unit 140973642680](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434/job/140973642680)
@@ -713,5 +714,4 @@ candidate. Exact-candidate [NG3 Python 46143677980](https://github.com/abyssdigg
 [actual-main lineage 46143678005](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143678005) — PASS.
 The implementation/test baseline and limitations above are unchanged.
 
-Neither evidence nor task acceptance closes R7.R4/R1/R2, authorizes main publication or
-claims released 0.1.0 support.
+Task acceptance alone did not close R7.R4/R1/R2; the separate closure review above establishes their current [`closed`] status. The final #41 documentation-only closure head is [`28e92477b1b9b6ec4746de52d3ad2e4d021601ba`](https://github.com/abyssdigger/vpn-gateway/commit/28e92477b1b9b6ec4746de52d3ad2e4d021601ba), with [final closure record #41/7239352023](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239352023) and exact-head NG3 Python run `46145226957` at 25/25 PASS. Neither closure authorizes main publication or claims released 0.1.0 support.
