@@ -9,7 +9,7 @@ from rou.accepted_effective_state import AcceptedEffectiveState, observe_pre_rec
 from rou.alpha_runtime import (
     AlphaPreparedPolicy, AlphaReconcileResult, AlphaReconcileStatus,
     capture_reclaim_replacement_evidence, reclaim_replacement_policy_exact,
-    release_alpha_reclaim_batch,
+    release_alpha_reclaim_batch, _managed_device_problem,
 )
 from rou.forwarding_gate import ForwardingGateState
 from rou.interface_identity import InterfaceIdentity
@@ -266,6 +266,45 @@ class RuntimeReclaimPlanTests(TestCase):
         self.assertFalse(result.payload_eligible)
         self.assertFalse(result.waiting_for_dependencies)
         self.assertIsNone(result.problem)
+
+    def test_reclaim_hold_and_pre_touch_retirement_are_not_failed_absence(self):
+        deferred = build_runtime_reclaim_plan(self.cfg, self.evidence(previous=False), None)
+        held, = project_managed_reclaim_realizations(
+            self.cfg, deferred.evidence, (), replacement_managed_interfaces(deferred))
+        strict = self.strict_plan()
+        retiring, = project_managed_reclaim_realizations(
+            strict.config, strict.evidence, (), replacement_managed_interfaces(strict),
+            frozenset({"a"}))
+        self.assertIs(retiring.intent_basis, ManagedDeviceIntentBasis.RECLAIM_RETIREMENT)
+        self.assertTrue(retiring.waiting_for_dependencies)
+        for row in (held, retiring):
+            with self.subTest(basis=row.intent_basis):
+                self.assertIsNone(_managed_device_problem((row,)))
+                self.assertIsNotNone(_managed_device_problem((row,), require_absent=True))
+                self.assertIsNotNone(_managed_device_problem((
+                    replace(row, waiting_for_dependencies=False, problem="drift"),)))
+                self.assertIsNotNone(_managed_device_problem((
+                    replace(row, confirmed_interface=None),)))
+                self.assertIsNotNone(_managed_device_problem((
+                    replace(row, confirmed_generation=None),)))
+                self.assertIsNotNone(_managed_device_problem((
+                    replace(row, confirmed_state=None, waiting_for_dependencies=False),)))
+        self.assertIsNotNone(_managed_device_problem((
+            replace(held, intent_basis=None),)))
+        absent = replace(held, intent_basis=None, confirmed_state=ManagedWireGuardState.ABSENT,
+                         confirmed_interface=None, confirmed_generation=None)
+        self.assertIsNone(_managed_device_problem((absent,), require_absent=True))
+
+    def test_structural_presence_health_still_requires_confirmed_generation(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        retained, = project_managed_reclaim_realizations(
+            self.cfg, plan.evidence, (), replacement_managed_interfaces(plan))
+        row = replace(retained, intent_basis=ManagedDeviceIntentBasis.STRUCTURAL)
+        self.assertIsNone(_managed_device_problem((row,)))
+        self.assertIsNotNone(_managed_device_problem((replace(row, confirmed_state=None),)))
+        self.assertIsNotNone(_managed_device_problem((
+            replace(row, confirmed_generation="different"),)))
+        self.assertIsNotNone(_managed_device_problem((replace(row, confirmed_interface=None),)))
 
     def test_replacement_capture_requires_confirmed_final_result_and_reobserves_policy(self):
         prepared = AlphaPreparedPolicy.from_text(

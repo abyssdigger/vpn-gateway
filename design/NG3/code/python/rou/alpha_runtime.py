@@ -107,6 +107,7 @@ from .managed_device_manager import (
     ManagedDeviceConvergence,
     converge_managed_device_presence,
     ManagedDeviceDesiredState,
+    ManagedDeviceIntentBasis,
     ManagedDeviceManager,
     ManagedDeviceRealization,
 )
@@ -537,17 +538,49 @@ def _managed_device_problem(
     for item in realizations:
         if item.problem is not None:
             return f"managed Device {item.device_id!r}: {item.problem}"
-        if item.waiting_for_dependencies:
-            return f"managed Device {item.device_id!r} is still waiting for dependencies"
         if require_absent:
+            if item.waiting_for_dependencies:
+                return f"managed Device {item.device_id!r} is still waiting for dependencies"
             if item.confirmed_state is not ManagedWireGuardState.ABSENT:
                 return f"managed Device {item.device_id!r} absence is not confirmed"
             continue
+        # A.012 may intentionally hold an exact present surplus base without
+        # structural demand, or exclude a retirement candidate before its
+        # bounded cleanup. Neither is a terminal absence request.
         if (
-            item.desired_state is ManagedDeviceDesiredState.PRESENT
-            and item.confirmed_state is not ManagedWireGuardState.PRESENT
+            item.desired_state is ManagedDeviceDesiredState.ABSENT
+            and item.confirmed_state is ManagedWireGuardState.PRESENT
+            and item.intent_basis in (
+                ManagedDeviceIntentBasis.RECLAIM_DEFERRED_HOLD,
+                ManagedDeviceIntentBasis.RECLAIM_RETIREMENT,
+            )
         ):
-            return f"managed Device {item.device_id!r} presence is not confirmed"
+            if (
+                item.confirmed_interface is None
+                or not item.confirmed_generation
+                or item.payload_eligible is not False
+            ):
+                return f"managed Device {item.device_id!r} reclaim realization is not exact"
+            if (
+                item.waiting_for_dependencies
+                and item.intent_basis is not ManagedDeviceIntentBasis.RECLAIM_RETIREMENT
+            ):
+                return f"managed Device {item.device_id!r} is still waiting for dependencies"
+            continue
+        if item.waiting_for_dependencies:
+            return f"managed Device {item.device_id!r} is still waiting for dependencies"
+        if item.desired_state is ManagedDeviceDesiredState.PRESENT:
+            if item.confirmed_state is not ManagedWireGuardState.PRESENT:
+                return f"managed Device {item.device_id!r} presence is not confirmed"
+            if (
+                not item.confirmed_generation
+                or item.confirmed_generation != item.desired_generation
+                or (
+                    item.intent_basis is not None
+                    and item.confirmed_interface is None
+                )
+            ):
+                return f"managed Device {item.device_id!r} presence identity/generation is not confirmed"
         if (
             item.desired_state is ManagedDeviceDesiredState.ABSENT
             and item.confirmed_state is not ManagedWireGuardState.ABSENT
