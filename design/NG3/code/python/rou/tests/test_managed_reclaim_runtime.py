@@ -10,6 +10,7 @@ from rou.alpha_runtime import (
     AlphaPreparedPolicy, AlphaReconcileResult, AlphaReconcileStatus,
     capture_reclaim_replacement_evidence, reclaim_replacement_policy_exact,
     release_alpha_reclaim_batch, _managed_device_problem,
+    refresh_alpha_managed_reclaim_status,
 )
 from rou.forwarding_gate import ForwardingGateState
 from rou.interface_identity import InterfaceIdentity
@@ -305,6 +306,48 @@ class RuntimeReclaimPlanTests(TestCase):
         self.assertIsNotNone(_managed_device_problem((
             replace(row, confirmed_generation="different"),)))
         self.assertIsNotNone(_managed_device_problem((replace(row, confirmed_interface=None),)))
+
+    def test_final_reclaim_status_does_not_reuse_no_candidate_plan(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG, local_address=IPv4Address("198.19.255.2"))
+        prepared.accepted_effective_state = self.previous
+        initial = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        self.assertEqual(initial.projection.retirement_candidates, ())
+        self.assertEqual([row.device_id for row in initial.projection.survivors], ["a"])
+        prepared.pre_reclaim_evidence = initial.evidence
+        self.adapter.observe.return_value = ManagedWireGuardObservation(
+            "a", ManagedWireGuardState.ABSENT)
+        agent = Mock()
+        with patch("rou.alpha_runtime._observe_presence_bindings", return_value=(EXT,)):
+            refresh_alpha_managed_reclaim_status(
+                prepared, Mock(), Mock(), self.manager, agent)
+        projection = agent.confirm_managed_reclaim.call_args.args[0]
+        self.assertIsNotNone(projection)
+        self.assertFalse(projection.survivors)
+        self.assertFalse(projection.retirement_candidates)
+        self.assertIsNotNone(agent.confirm_managed_demand.call_args.args[0])
+        self.assertIs(prepared.pre_reclaim_evidence, initial.evidence)
+        self.adapter.retire_exact.assert_not_called()
+        self.adapter.converge_present.assert_not_called()
+        self.adapter.converge_absent.assert_not_called()
+
+    def test_final_reclaim_status_clears_unconfirmed_generation_or_inventory(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG, local_address=IPv4Address("198.19.255.2"))
+        agent = Mock()
+        with patch("rou.alpha_runtime._observe_presence_bindings") as observe:
+            refresh_alpha_managed_reclaim_status(
+                prepared, Mock(), Mock(), self.manager, agent)
+            observe.assert_not_called()
+        agent.confirm_managed_reclaim.assert_called_once_with(None)
+        agent.confirm_managed_demand.assert_called_once_with(None)
+        prepared.accepted_effective_state = self.previous
+        agent.reset_mock()
+        with patch("rou.alpha_runtime._observe_presence_bindings", side_effect=RuntimeError("drift")):
+            refresh_alpha_managed_reclaim_status(
+                prepared, Mock(), Mock(), self.manager, agent)
+        agent.confirm_managed_reclaim.assert_called_once_with(None)
+        agent.confirm_managed_demand.assert_called_once_with(None)
 
     def test_replacement_capture_requires_confirmed_final_result_and_reobserves_policy(self):
         prepared = AlphaPreparedPolicy.from_text(

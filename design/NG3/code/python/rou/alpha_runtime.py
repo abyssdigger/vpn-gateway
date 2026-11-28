@@ -963,7 +963,10 @@ def refresh_alpha_managed_reclaim_status(
     agent.confirm_managed_reclaim(None)
     config = prepared.current_config
     accepted = prepared.accepted_effective_state
-    if accepted is None or not config.managed_vpns:
+    if not config.managed_vpns:
+        return
+    agent.confirm_managed_demand(None)
+    if accepted is None:
         return
     try:
         evidence = observe_alpha_pre_reclaim(
