@@ -194,6 +194,27 @@ Do not silently replace the original contract through off-thread chat or control
 
 The project-task Issue is a work record, not repository/tool authority.
 
+#### GitHub-native trace invariant
+
+For non-service development work, COLLAB must preserve ordinary GitHub development semantics rather
+than expose collaboration machinery as the project model:
+
+- one durable task/topic is represented by one ordinary Issue whose body states the problem/task and
+  whose comments form the substantive trace of that same task;
+- task comments contain task-specific specification/clarification, technical discussion, findings,
+  implementation reports, exact commit/test/CI evidence, review/rework and terminal task result;
+- routine inter-agent synchronization (role identity, leases, heartbeats, wake/wait, scheduler/frontier
+  state, transport ACKs and similar control traffic) belongs only in explicit service/control surfaces
+  and must not be copied into the task Issue merely because COLLAB uses it internally;
+- commits and tests should reference the relevant Issue/comment when that backlink materially helps
+  traceability, and task comments should link the exact commits/tests they discuss;
+- when Pull Requests become the chosen integration mechanism, use ordinary PR linkage/review/merge
+  semantics for updating `main` rather than recreating those semantics in a bespoke COLLAB protocol.
+
+Agent roles, incarnations, queue state and control-protocol records are collaboration implementation
+details, not project-domain entities. The intended user-visible result is a normal GitHub
+development/test trace with COLLAB acting as an invisible coordination aid around it.
+
 ### Coordination/journal room — control plane
 
 Configured shared pseudo-Issue(s) carry collaboration **control-plane** traffic:
