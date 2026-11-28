@@ -37,7 +37,7 @@ from rou.wireguard_peer_ownership import WireGuardPeerOwnershipObservation
 from rou.wireguard_peer_runtime import WireGuardPeerRuntimeResult
 from rou.runtime_status import RuntimeReadiness, RuntimeStatusAgent, build_configured_intent_status
 
-from test_accepted_effective_state import A, EXT, CONFIG, PRESENT, peer, request, availability
+from test_accepted_effective_state import A, EXT, CONFIG, PRESENT, binding, peer, request, availability
 
 
 class RuntimeReclaimPlanTests(TestCase):
@@ -69,6 +69,66 @@ class RuntimeReclaimPlanTests(TestCase):
         self.assertEqual({p.profile_id for p in plan.profiles}, {"corp", "other", "z"})
         self.adapter.converge_absent.assert_not_called()
         self.adapter.converge_present.assert_not_called()
+        self.adapter.retire_exact.assert_not_called()
+
+    def test_careful_retirement_overrides_structural_baseline_cover(self):
+        # Two exact present ordinary Devices; A.013 picks baseline a, but
+        # the admitted effective generation uses b. A.012 must keep b and
+        # exclude a from replacement even though a is structurally selected.
+        a_config = CONFIG[CONFIG.index("[device.a]"):CONFIG.index("[profile.corp]")]
+        b_config = (a_config.replace("device.a", "device.b")
+                    .replace("wg1", "wg2").replace("/secret/a.key", "/secret/b.key")
+                    .replace("10.200.0.1", "10.200.0.2")
+                    .replace("10.201.0.1", "10.201.0.2")
+                    .replace("198.51.100.1", "198.51.100.2"))
+        cfg = AlphaPreparedPolicy.from_text(
+            a_config + b_config + """
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.77.0.0/24"]
+device_order = ["a", "b"]
+warm_paths = 1
+""", local_address=IPv4Address("198.19.255.2")).current_config
+        b = binding("b", "wg2", 12)
+        b_present = ManagedWireGuardObservation(
+            "b", ManagedWireGuardState.PRESENT, b.endpoint, "base-b")
+        observed = {"a": PRESENT, "b": b_present}
+        self.adapter.observe.side_effect = lambda did: replace(
+            observed[did], confirmed_generation=None)
+        self.adapter.desired_generation.side_effect = lambda did, _: "base-" + did
+        self.adapter.confirm_present.side_effect = lambda did, _: observed[did]
+        b_peer = replace(peer(), device_id="b", base_generation="base-b",
+                         interface_ifname="wg2", interface_ifindex=12,
+                         group_owners=(peer().group_owners[0],), generation="wg-b")
+        previous = AcceptedEffectiveState(
+            (request(cfg, "corp", b, A),), (A, b), (b_peer,))
+        evidence = observe_pre_reclaim(cfg, previous, self.manager, lambda: (A, b))
+        plan = build_runtime_reclaim_plan(cfg, evidence, previous)
+
+        self.assertEqual(evidence.demand.desired_device_ids, frozenset({"a"}))
+        self.assertEqual([r.device_id for r in plan.projection.retirement_candidates], ["a"])
+        self.assertEqual([r.device_id for r in plan.projection.survivors], ["b"])
+        self.assertEqual(dict(plan.projection.floors), {"corp": 1})
+        self.assertEqual(replacement_managed_interfaces(plan), frozenset({b.endpoint}))
+        self.assertTrue(structural_retirement_precondition(
+            plan, cfg, evidence, candidate_id="a", already_retired=frozenset(),
+            replacement_bindings=frozenset({b})))
+        rows = {r.device_id: r for r in project_managed_reclaim_realizations(
+            cfg, evidence, (), replacement_managed_interfaces(plan), frozenset({"a"}))}
+        self.assertIs(rows["a"].intent_basis, ManagedDeviceIntentBasis.RECLAIM_RETIREMENT)
+        self.assertFalse(rows["a"].payload_eligible)
+        self.assertIs(rows["b"].intent_basis, ManagedDeviceIntentBasis.RECLAIM_RETENTION)
+        self.assertTrue(rows["b"].payload_eligible)
+        seed = recovery_eligibility_seed(plan)
+        self.assertEqual({x.binding for x in seed}, {b})
+        # After exact retirement, the surviving b is still confirmed. F2
+        # consumes the preserved seed; no retirement plan is recomputed.
+        observed["a"] = ManagedWireGuardObservation("a", ManagedWireGuardState.ABSENT)
+        fresh = observe_pre_reclaim(cfg, None, self.manager, lambda: (b,))
+        self.assertEqual(recovery_managed_interfaces(cfg, fresh, seed), frozenset({b.endpoint}))
+        self.adapter.converge_present.assert_not_called()
+        self.adapter.converge_absent.assert_not_called()
         self.adapter.retire_exact.assert_not_called()
 
     def test_strict_surplus_excluded_from_survivor_set(self):
