@@ -2262,8 +2262,8 @@ Manager текущей базовой VPN-реализации только дл
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R1` — [`none`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
 
 API
 
@@ -2276,6 +2276,7 @@ API
 Implementation
 
     design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
+    design/NG3/code/python/rou/managed_reclaim_projection.py — pure A.012 reclaim projection over caller-admitted structural/use/realization facts; exact survivor/candidate/deferred decisions, no actuation.
     design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, selective dependency release при снятии demand, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
@@ -2325,7 +2326,7 @@ Architectural decisions
 15. `Раздельные truthful projections`
    *A.012 не изображает GC-retained surplus как structural demand или waiting_for_dependencies. Отдельно публикуются accepted survivor intent, exact confirmed realization, confirmed current-use protection, retirement candidate/reason и unknown/problem; A.013 per-Profile target/presence/deficit остается отдельным owner projection. При нескольких равноценных structural covers не утверждается уникальный per-Device structural owner.*
 
-**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы; поэтому parent R7.R4 contribution A.012 partial. Нормализованная careful/strict policy, shared present-survivor selection, generation-qualified current-use protection, non-mutating retention confirmation и exact retirement guard пока отсутствуют; R7.R4.R1/R2 contributions none. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
+**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. A.012 contributions R7.R4/R1/R2 остаются partial: runtime admission/invalidation, retention confirmation in composition, normal-policy exclusion, fresh retirement revalidation и применение exact D.001 operations еще не связаны с этой проекцией. Все три требования остаются pending_closure. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
 
 **Evidence:** `EV-00080`, `EV-00090`, `EV-00300`.
 
