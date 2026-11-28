@@ -141,6 +141,61 @@ class ReclaimProjectionTests(unittest.TestCase):
         p = replace(profile("p", 0, {"a": 1}), current_use=None)
         self.assertEqual(ids(project(STRICT, [p, q], "ac").deferred), {"a"})
 
+    def test_external_claim_colliding_with_managed_endpoint_is_not_unrelated(self):
+        # p has no managed ordinary members; its use claim nevertheless
+        # conflicts with the physical identity of a managed Device in q.
+        for endpoint in (obs("a").interface,
+                         InterfaceIdentity("a", 999),
+                         InterfaceIdentity("external0", obs("a").interface.ifindex)):
+            external = ConfirmedCurrentUse(
+                "p", CurrentUseState.CONFIRMED, LogicalPathId("external", 0, 0),
+                endpoint,
+            )
+            p = profile("p", 1, {}, external=1, current=external)
+            q = profile("q", 0, {"a": 1})
+            t = profile("t", 0, {"b": 1})
+            r = project(STRICT, [p, q, t], "ab")
+            self.assertEqual(ids(r.deferred), {"a"})
+            self.assertEqual(ids(r.retirement_candidates), {"b"})
+
+    def test_device_wide_use_generation_and_logical_binding_consistency(self):
+        p = profile("p", 0, {"a": 1, "b": 1}, current=use("p", "a"))
+        t = profile("t", 0, {"d": 1})
+        for conflicting in (
+            replace(use("q", "a"), wireguard_generation="another-generation"),
+            replace(use("q", "a"), path_id=LogicalPathId("a", 0, 1)),
+        ):
+            q = profile("q", 0, {"a": 1, "c": 1}, current=conflicting)
+            for policy in (CAREFUL, STRICT):
+                r = project(policy, [p, q, t], "abcd")
+                self.assertEqual(ids(r.deferred), {"a", "b", "c"})
+                self.assertEqual(ids(r.retirement_candidates), {"d"})
+        # Different Profile-local owners of the same Device-wide generation
+        # are legitimate, not a contradiction.
+        q = profile("q", 0, {"a": 1},
+                    current=replace(use("q", "a"), wireguard_owner_peer_id="other"))
+        r = project(CAREFUL, [p, q, t], "abd")
+        self.assertEqual(ids(r.survivors), {"a"})
+        self.assertEqual(r.deferred, ())
+        self.assertEqual(ids(r.retirement_candidates), {"b", "d"})
+
+    def test_nonmember_positive_use_claim_defers_claimed_managed_device(self):
+        p = profile("p", 0, {"b": 1}, current=use("p", "a"))
+        q = profile("q", 0, {"a": 1})
+        t = profile("t", 0, {"c": 1})
+        r = project(STRICT, [p, q, t], "abc")
+        self.assertEqual(ids(r.deferred), {"a", "b"})
+        self.assertEqual(ids(r.retirement_candidates), {"c"})
+
+    def test_use_only_reason_cannot_hide_structural_conflict(self):
+        p = profile("p", 0, {"a": 1},
+                    current=ConfirmedCurrentUse("p", CurrentUseState.UNKNOWN))
+        q = replace(profile("q", 0, {"a": 1}), ordinary_present=4)
+        r = project(STRICT, [p, q], "a", mandatory={"a"})
+        self.assertEqual(r.survivors, ())
+        self.assertEqual(ids(r.deferred), {"a"})
+        self.assertEqual(r.deferred[0].reason, ReclaimReason.STRUCTURE)
+
     def test_unknown_use_still_has_independently_confirmed_capacity(self):
         ps = [profile("p", 0, {"a": 1},
                       current=ConfirmedCurrentUse("p", CurrentUseState.UNKNOWN)),
