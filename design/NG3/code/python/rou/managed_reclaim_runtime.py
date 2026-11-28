@@ -38,8 +38,12 @@ def _validate_inventory(config: CurrentConfig, evidence: PreReclaimEvidence) -> 
     if evidence.observation_problem is not None or evidence.demand is None:
         raise ValueError("unconfirmed pre-reclaim inventory")
     paths = tuple(b.path_id for b in evidence.bindings)
-    if len(set(paths)) != len(paths):
-        raise ValueError("duplicate pre-reclaim path identity")
+    if (len(set(paths)) != len(paths)
+            or len({b.endpoint.ifname for b in evidence.bindings}) != len(paths)
+            or len({b.endpoint.ifindex for b in evidence.bindings}) != len(paths)
+            or any(b.path_id.device_id not in config.structural.active_device_ids
+                   for b in evidence.bindings)):
+        raise ValueError("ambiguous pre-reclaim path identity")
     if evidence.demand != project_final(config, evidence.bindings):
         raise ValueError("pre-reclaim demand does not match its bindings")
     if len(dict(evidence.expected_base_generations)) != len(evidence.expected_base_generations):
@@ -82,7 +86,8 @@ def build_runtime_reclaim_plan(
     expected = dict(evidence.expected_base_generations)
     observations = tuple(
         o for o in evidence.managed_base_observations
-        if o.device_id not in evidence.unconfirmed_devices
+        if sum(other.device_id == o.device_id for other in evidence.managed_base_observations) == 1
+        and o.device_id not in evidence.unconfirmed_devices
         and (o.state is ManagedWireGuardState.ABSENT or (
             o.confirmed_generation is not None
             and expected.get(o.device_id) == o.confirmed_generation
@@ -200,19 +205,41 @@ def recovery_managed_interfaces(
     )
 
 
+def affected_profiles(plan: RuntimeReclaimPlan, candidate_id: str) -> frozenset[str]:
+    return frozenset(
+        p.profile_id for p in plan.profiles
+        if any(c.device_id == candidate_id and c.fresh_path_count > 0
+               for c in p.contributions)
+    )
+
+
+def affected_support_ids(plan: RuntimeReclaimPlan, candidate_id: str) -> frozenset[str]:
+    affected = affected_profiles(plan, candidate_id)
+    demand = plan.evidence.demand
+    assert demand is not None
+    result = {candidate_id}
+    for p in plan.profiles:
+        if p.profile_id in affected:
+            result.update(p.managed_ordinary_ids | p.external_ordinary_ids)
+    for p in demand.profiles:
+        if p.profile_id in affected:
+            result.update(p.reserve_device_ids)
+    return frozenset(result)
+
+
 def structural_retirement_precondition(
     plan: RuntimeReclaimPlan,
     config: CurrentConfig,
     fresh: PreReclaimEvidence,
     *,
+    candidate_id: str,
     already_retired: frozenset[str],
     replacement_bindings: frozenset[PathBinding],
 ) -> bool:
-    """Check the preserved original inventory and eligible retained capacity.
+    """Candidate-scoped C.004/D.001 half of the v1.4 guard.
 
-    This is only the C.004/D.001/structural half of the guard. The caller must
-    independently verify current replacement policy, dependencies and protected
-    peer-owner evidence before and after D.003 cleanup.
+    The caller independently verifies replacement policy and peer dependencies.
+    Fixed floors come from the original plan, never from a pruned observation.
     """
     try:
         _validate_inventory(config, fresh)
@@ -221,45 +248,59 @@ def structural_retirement_precondition(
     if config is not plan.config:
         return False
     retired = {row.device_id for row in plan.projection.retirement_candidates}
-    if not already_retired <= retired:
+    if (candidate_id not in retired or candidate_id in already_retired
+            or not already_retired <= retired or candidate_id in plan.mandatory_device_ids):
+        return False
+    assert fresh.demand is not None
+    if candidate_id in fresh.demand.reserve_device_ids:
         return False
     if any(b.path_id.device_id in retired for b in replacement_bindings):
         return False
-    # Only the deletion of already-confirmed retired identities is expected.
-    original = frozenset(plan.evidence.bindings)
-    expected = frozenset(b for b in original if b.path_id.device_id not in already_retired)
-    if frozenset(fresh.bindings) != expected:
+    affected = affected_profiles(plan, candidate_id)
+    scope = affected_support_ids(plan, candidate_id)
+    expected = frozenset(b for b in plan.evidence.bindings
+                         if b.path_id.device_id in scope - already_retired)
+    if frozenset(b for b in fresh.bindings if b.path_id.device_id in scope) != expected:
         return False
-    if fresh.unconfirmed_devices != plan.evidence.unconfirmed_devices:
+    if set(fresh.unconfirmed_devices) & scope != set(plan.evidence.unconfirmed_devices) & scope:
         return False
     old = plan.evidence.managed_base_observations
     new = fresh.managed_base_observations
-    if frozenset(o for o in old if o.device_id not in already_retired) != frozenset(
-        o for o in new if o.device_id not in already_retired
+    remaining = scope - already_retired
+    if frozenset(o for o in old if o.device_id in remaining) != frozenset(
+        o for o in new if o.device_id in remaining
     ):
         return False
-    for device_id in already_retired:
+    for device_id in already_retired & scope:
         observations = [o for o in new if o.device_id == device_id]
         if (len(observations) != 1 or observations[0].state is not ManagedWireGuardState.ABSENT
                 or observations[0].interface is not None
                 or observations[0].confirmed_generation is not None):
             return False
-    if dict(fresh.expected_base_generations) != {
-        d: generation for d, generation in plan.evidence.expected_base_generations
-        if d not in already_retired
+    if {d: g for d, g in fresh.expected_base_generations if d in scope} != {
+        d: g for d, g in plan.evidence.expected_base_generations if d in remaining
     }:
         return False
-    assert fresh.demand is not None
-    if fresh.demand.reserve_device_ids != plan.mandatory_device_ids:
+    candidate = next(r for r in plan.projection.retirement_candidates if r.device_id == candidate_id)
+    matches = [o for o in new if o.device_id == candidate_id]
+    if (len(matches) != 1 or matches[0].state is not ManagedWireGuardState.PRESENT
+            or matches[0].interface != candidate.interface
+            or matches[0].confirmed_generation != candidate.generation
+            or candidate_id in fresh.unconfirmed_devices):
         return False
-    # Every retained managed contribution counted toward the floor must have
-    # an exact confirmed identity and be present in the replacement policy.
-    # A physical hold by itself supplies no policy capacity.
+    # Check relevant independent reserve support and fixed ordinary floors.
+    old_demand = {p.profile_id: p for p in plan.evidence.demand.profiles}
+    fresh_demand = {p.profile_id: p for p in fresh.demand.profiles}
     exact = {row.binding for row in _exact_bindings(fresh)}
     eligible = {b for b in replacement_bindings & expected
                 if b.path_id.device_id not in config.managed_vpns or b in exact}
     floors = dict(plan.projection.floors)
     for profile in plan.profiles:
+        if profile.profile_id not in affected:
+            continue
+        old_reserve = old_demand[profile.profile_id].reserve_device_ids
+        if fresh_demand[profile.profile_id].reserve_device_ids != old_reserve:
+            return False
         members = profile.managed_ordinary_ids | profile.external_ordinary_ids
         paths = {b.path_id for b in eligible if b.path_id.device_id in members}
         if len(paths) < floors[profile.profile_id]:
@@ -365,6 +406,7 @@ def replacement_peer_ownership_exact(
     plan: RuntimeReclaimPlan,
     fresh: PreReclaimEvidence,
     replacement_bindings: frozenset[PathBinding],
+    candidate_id: str,
     realizations: tuple[WireGuardPeerRealization, ...],
     observe: Callable[[WireGuardPeerOwnershipDesired], WireGuardPeerOwnershipObservation],
 ) -> bool:
@@ -375,10 +417,12 @@ def replacement_peer_ownership_exact(
     """
     config = plan.config
     groups = {did for _, did in config.wireguard_groups}
+    scope = affected_support_ids(plan, candidate_id) - {candidate_id}
     expected = {b.path_id.device_id: b for b in replacement_bindings
-                if b.path_id.device_id in groups}
-    peers = {row.device_id: row for row in realizations}
-    if len(peers) != len(realizations) or peers.keys() != expected.keys():
+                if b.path_id.device_id in groups & scope}
+    relevant = tuple(row for row in realizations if row.device_id in scope)
+    peers = {row.device_id: row for row in relevant}
+    if len(peers) != len(relevant) or peers.keys() != expected.keys():
         return False
     exact = _exact_bindings(fresh)
     try:
@@ -401,7 +445,8 @@ def replacement_peer_ownership_exact(
                 use = profile.current_use
                 if (use is None or use.state is not CurrentUseState.CONFIRMED
                         or use.path_id is None
-                        or use.path_id.device_id not in config.managed_vpns):
+                        or use.path_id.device_id not in config.managed_vpns
+                        or use.path_id.device_id not in scope):
                     continue
                 did = use.path_id.device_id
                 row = peers.get(did)

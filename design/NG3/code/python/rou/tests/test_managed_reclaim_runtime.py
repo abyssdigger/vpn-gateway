@@ -16,6 +16,7 @@ from rou.managed_reclaim_runtime import (
 )
 from rou.release1_config import ManagedReclaimPolicy
 from rou.managed_reclaim_projection import ReclaimReason
+from rou.managed_device_demand import ManagedOrdinaryContribution
 from rou.managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
 from rou.wireguard_peer_ownership import WireGuardPeerOwnershipObservation
 
@@ -123,12 +124,12 @@ class RuntimeReclaimPlanTests(TestCase):
         cfg = replace(self.cfg, managed_reclaim=ManagedReclaimPolicy.STRICT)
         e = self.evidence(cfg)
         plan = build_runtime_reclaim_plan(cfg, e, self.previous)
-        kwargs = dict(already_retired=frozenset(), replacement_bindings=frozenset({EXT}))
+        kwargs = dict(candidate_id="a", already_retired=frozenset(), replacement_bindings=frozenset({EXT}))
         self.assertTrue(structural_retirement_precondition(plan, cfg, e, **kwargs))
         self.assertFalse(structural_retirement_precondition(
             plan, cfg, self.evidence(cfg, bindings=(A,)), **kwargs))
         self.assertFalse(structural_retirement_precondition(
-            plan, cfg, e, already_retired=frozenset(), replacement_bindings=frozenset()))
+            plan, cfg, e, candidate_id="a", already_retired=frozenset(), replacement_bindings=frozenset()))
         self.assertFalse(structural_retirement_precondition(
             plan, replace(cfg), e, **kwargs))
 
@@ -191,18 +192,22 @@ class RuntimeReclaimPlanTests(TestCase):
 
     def test_peer_guard_rechecks_actual_ownership_and_original_careful_proof(self):
         plan = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        # Synthetic candidate b contributes to corp; A is its retained shared support.
+        plan = replace(plan, profiles=tuple(
+            replace(p, contributions=p.contributions + (ManagedOrdinaryContribution("b", 1),))
+            if p.profile_id == "corp" else p for p in plan.profiles))
         observe = Mock(side_effect=lambda desired: WireGuardPeerOwnershipObservation(
             desired.device_id, desired.interface, desired.peers))
         replacement = frozenset({A, EXT})
         self.assertTrue(replacement_peer_ownership_exact(
-            plan, self.evidence(), replacement, (peer(),), observe))
+            plan, self.evidence(), replacement, "b", (peer(),), observe))
         self.assertFalse(replacement_peer_ownership_exact(
-            plan, self.evidence(), replacement,
+            plan, self.evidence(), replacement, "b",
             (replace(peer(), generation="different"),), observe))
         observe.side_effect = lambda desired: WireGuardPeerOwnershipObservation(
             desired.device_id, desired.interface, ())
         self.assertFalse(replacement_peer_ownership_exact(
-            plan, self.evidence(), replacement, (peer(),), observe))
+            plan, self.evidence(), replacement, "b", (peer(),), observe))
 
     def test_cleanup_keeps_only_permanent_probe_prefix(self):
         plan = self.strict_plan()
