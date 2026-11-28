@@ -164,7 +164,7 @@ machine-only wire records. In a mixed Issue, exact machine-framed records keep t
 wire format, while any surrounding human prose still follows the readable Markdown rule. A
 machine protocol never authorizes reformatting bytes that are required to remain exact.
 
-Canonical comment targets in human-facing COLLAB Markdown must identify the exact GitHub Issue comment. Use either the absolute form \`https://github.com/abyssdigger/vpn-gateway/issues/<issue_id>#issuecomment-<comment_id>\` or, where a repository-local Issue target is appropriate, \`<issue_id>#issuecomment-<comment_id>\` (for example, \`[#34](34#issuecomment-7222871530)\`). Do not use pseudo-links such as \`#34/#7222871530\`, and do not add tracking/query parameters when they are not required for the link target. The visible label may be \`#34\`, \`comment\`, or a short description; the target must identify the exact \`issuecomment-<comment_id>\`.
+Canonical comment targets in human-facing COLLAB Markdown must identify the exact GitHub Issue comment. Use either the absolute form `https://github.com/abyssdigger/vpn-gateway/issues/<issue_id>#issuecomment-<comment_id>` or, where a repository-local Issue target is appropriate, `<issue_id>/#issuecomment-<comment_id>`. For a link to one concrete Issue comment, the human-readable label must distinguish both the Issue and comment identity; for example, `[#34/7222871530](34/#issuecomment-7222871530)`. A label containing only the Issue identity (for example, `#34`) is insufficient for a concrete-comment link. Do not use pseudo-targets such as `#34/#7222871530`, and do not add tracking/query parameters when they are not required for the link target.
 
 ### Project-task Issue — work plane
 
@@ -232,17 +232,23 @@ They do not become the ordinary discussion thread for a project task once a dedi
 Issue exists. Do not duplicate long task specifications, implementation reports or GUARD reviews
 there merely for transport.
 
+The projectholder-approved ordinary-Issue pilot uses the work-plane split now as a cooperative
+working agreement, without creating a legacy v1 OPEN or changing the active protocol/config.
+An ordinary project-task Issue is not itself a typed journal obligation. Use ordinary task and
+review prose there, with service coordination kept separate. Cooperative role claims do not
+constitute independent authentication; repository authority, independent review and the applicable
+`main` acceptance gates remain unchanged.
+
 Under control protocol v1 the current durable typed collaboration journal still has same-room
-`payload_ref`/`closure_ref` constraints. Therefore this new work-plane split is a **prospective
-protocol target** for new project tasks: current already-open v1 obligations may finish under their
-existing task/journal-room contract. Before admitting the first new project-task obligation under
-the split model, the helper/protocol must be adapted and reviewed so control-plane facts can bind the
-project Issue without copying its substantive content back into the pseudo-Issue. Do not fake
-compatibility by duplicating payloads.
+`payload_ref`/`closure_ref` constraints. Current already-open v1 obligations may finish under their
+existing task/journal-room contract. **Machine-bound cross-room project-task obligations** remain a
+prospective protocol target: before admitting one, the helper/protocol must be adapted and reviewed
+so control-plane facts can bind the project Issue without copying its substantive content back into
+the pseudo-Issue. Do not fake compatibility by fabricating a legacy OPEN or duplicating payloads.
 
 Journal facts use the exact reserved first-line framing defined in §7. The journal remains canonical
-for collaboration control semantics; the project-task Issue is canonical for the human-readable task
-specification, implementation/review record and acceptance history.
+for its admitted v1 control facts; the ordinary project-task Issue is canonical for the human-readable
+task specification, implementation/review record and acceptance history.
 
 ### Signal room
 
