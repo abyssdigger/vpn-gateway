@@ -107,6 +107,41 @@ Exact log line punctuation and journald metadata are not configuration semantics
 - `VPNG-M001-R2.R3.R1`
 - `VPNG-M001-R2.R3.R2`
 
+## 1.3. Managed Device reclaim policy
+
+The top-level TOML field `managed_reclaim` selects one domain-wide release policy:
+
+```toml
+managed_reclaim = "careful"
+```
+
+Accepted values are exactly `"careful"` and `"strict"`; omission means `"careful"`.
+This is a release policy for already-present surplus managed ordinary VPN Devices,
+not a Profile-local knob, not a new presence obligation, and not a modification of
+`warm_paths` or its ordinary/reserve calculation.
+
+Careful protects an exact already-present ordinary realization confirmed as currently
+used by at least one enabled Profile. Unknown/stale evidence does not authorize
+retirement. Strict considers the joint contribution of each physical Device to all
+enabled Profiles and preserves for each affected Profile the smaller of its resolved
+ordinary target and fresh pre-release eligible ordinary capacity. Among equally valid
+choices, retaining current use is preferred; it is not an independent obligation in
+strict mode. Successful strict reconciliation is single-removal irreducible, not
+necessarily a globally minimum set.
+
+Neither policy starts or restarts an absent Device for reclaim optimization. Explicit
+disable/remove, product stop, stronger safety obligations and mandatory reserve
+presence remain governed separately.
+
+**Implementation state:** normalized configuration and helper/model boundaries exist;
+normal lifecycle activation and integrated acceptance in #41 are pending. The field's
+canonical semantics here are normative, not a claim of completed runtime support.
+
+**Requirements:**
+- `VPNG-U001-R1.R3.R7.R4`;
+- `VPNG-U001-R1.R3.R7.R4.R1`;
+- `VPNG-U001-R1.R3.R7.R4.R2`.
+
 # 2. Current human-facing representation
 
 The human-facing surface uses TOML root policy plus named Device/Profile tables. The optional
@@ -1059,9 +1094,10 @@ Already-present reserve paths may satisfy the temporary reserve-support amount, 
 reduce `regular_deficit`. This is what guarantees natural recovery: bringing reserve up does
 not make the missing ordinary Device cease to be demanded.
 
-A Device shared by multiple Profiles is present when at least one Profile demands it. The same
-Device may be ordinary in one Profile and reserve in another; membership role remains
-Profile-local.
+A Device shared by multiple Profiles is structurally demanded when at least one Profile demands it.
+The same Device may be ordinary in one Profile and reserve in another; membership role remains
+Profile-local. Structural demand alone does not determine exact physical presence or authorize
+retirement: see the separate domain-wide reclaim policy in §1.3.
 
 Payload activity, first packet, idle time and availability outcome do not participate in
 `warm_paths` demand. Availability retains its separate role as an effective-order modifier
