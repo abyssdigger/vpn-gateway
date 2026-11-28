@@ -30,6 +30,13 @@ class ManagedDeviceDesiredState(str, Enum):
     ABSENT = "absent"
 
 
+class ManagedDeviceIntentBasis(str, Enum):
+    STRUCTURAL = "structural"
+    RECLAIM_RETENTION = "reclaim_retention"
+    RECLAIM_DEFERRED_HOLD = "reclaim_deferred_hold"
+    RECLAIM_RETIREMENT = "reclaim_retirement"
+
+
 @dataclass(frozen=True, slots=True)
 class ManagedDeviceRealization:
     device_id: str
@@ -40,6 +47,8 @@ class ManagedDeviceRealization:
     waiting_for_dependencies: bool = False
     problem: str | None = None
     confirmed_interface: InterfaceIdentity | None = None
+    intent_basis: ManagedDeviceIntentBasis | None = None
+    payload_eligible: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.device_id, str) or not self.device_id:

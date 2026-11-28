@@ -6,13 +6,16 @@ from unittest.mock import Mock
 
 from rou.accepted_effective_state import AcceptedEffectiveState, observe_pre_reclaim
 from rou.alpha_runtime import AlphaPreparedPolicy
-from rou.managed_device_manager import ManagedDeviceManager
+from rou.managed_device_manager import (
+    ManagedDeviceManager, ManagedDeviceDesiredState, ManagedDeviceIntentBasis,
+)
 from rou.managed_reclaim_runtime import (
     build_runtime_reclaim_plan, exact_survivor_bindings,
     previously_admitted_deferred_bindings, replacement_managed_interfaces,
     recovery_eligibility_seed, recovery_managed_interfaces,
     structural_retirement_precondition, execute_reclaim_batch,
     replacement_peer_ownership_exact, cleanup_ownership_desired,
+    project_managed_reclaim_realizations,
 )
 from rou.release1_config import ManagedReclaimPolicy
 from rou.managed_reclaim_projection import ReclaimReason
@@ -216,3 +219,27 @@ class RuntimeReclaimPlanTests(TestCase):
         self.assertEqual(desired.interface, A.endpoint)
         self.assertEqual(tuple(str(n) for n in desired.peers[0].allowed_ips),
                          ("10.201.0.1/32",))
+
+    def test_exact_retained_lifecycle_present_is_not_structural_demand(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        result, = project_managed_reclaim_realizations(
+            self.cfg, plan.evidence, (), replacement_managed_interfaces(plan))
+        self.assertNotIn("a", plan.evidence.demand.desired_device_ids)
+        self.assertIs(result.desired_state, ManagedDeviceDesiredState.PRESENT)
+        self.assertEqual(result.desired_generation, result.confirmed_generation)
+        self.assertIs(result.intent_basis, ManagedDeviceIntentBasis.RECLAIM_RETENTION)
+        self.assertTrue(result.payload_eligible)
+        self.assertFalse(result.waiting_for_dependencies)
+        self.assertIsNone(result.problem)
+        self.adapter.converge_present.assert_not_called()
+
+    def test_deferred_physical_hold_has_no_eligibility_or_dependency_wait(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(previous=False), None)
+        result, = project_managed_reclaim_realizations(
+            self.cfg, plan.evidence, (), replacement_managed_interfaces(plan))
+        self.assertIs(result.confirmed_state, ManagedWireGuardState.PRESENT)
+        self.assertIs(result.desired_state, ManagedDeviceDesiredState.ABSENT)
+        self.assertIs(result.intent_basis, ManagedDeviceIntentBasis.RECLAIM_DEFERRED_HOLD)
+        self.assertFalse(result.payload_eligible)
+        self.assertFalse(result.waiting_for_dependencies)
+        self.assertIsNone(result.problem)

@@ -13,6 +13,9 @@ from .binding import PathBinding
 from .confirmed_current_use import CurrentUseState
 from .interface_identity import InterfaceIdentity
 from .managed_device_demand import project_final
+from .managed_device_manager import (
+    ManagedDeviceDesiredState, ManagedDeviceIntentBasis, ManagedDeviceRealization,
+)
 from .managed_reclaim_projection import ReclaimDecision, ReclaimProfile, ReclaimProjection, project_reclaim
 from .managed_wireguard_adapter import ManagedWireGuardState
 from .release1_config import CurrentConfig, ManagedReclaimPolicy
@@ -459,3 +462,81 @@ def replacement_peer_ownership_exact(
         return True
     except Exception:
         return False
+
+
+def project_managed_reclaim_realizations(
+    config: CurrentConfig,
+    evidence: PreReclaimEvidence,
+    previous_realizations: tuple[ManagedDeviceRealization, ...],
+    eligible_interfaces: frozenset[InterfaceIdentity],
+    retirement_ids: frozenset[str] = frozenset(),
+) -> tuple[ManagedDeviceRealization, ...]:
+    """Non-mutating A.012 lifecycle intent for D.002 and status (v1.4).
+
+    Structural demand remains in A.013; a PRESENT retention intent never
+    causes a D.001 converge_present call. Explicit inactive/removed Device
+    lifecycle rows are left with their original semantics.
+    """
+    _validate_inventory(config, evidence)
+    assert evidence.demand is not None
+    active = frozenset(config.managed_vpns) & config.structural.active_device_ids
+    demanded = evidence.demand.desired_device_ids
+    if not retirement_ids <= active or retirement_ids & evidence.demand.reserve_device_ids:
+        raise ValueError("retirement outside ordinary reclaim scope")
+    result = {row.device_id: row for row in previous_realizations}
+    if len(result) != len(previous_realizations):
+        raise ValueError("duplicate lifecycle realization")
+    exact = {item.binding.path_id.device_id: item for item in _exact_bindings(evidence)}
+    expected = dict(evidence.expected_base_generations)
+    for device_id in sorted(active):
+        old = result.get(device_id)
+        rows = [o for o in evidence.managed_base_observations if o.device_id == device_id]
+        observed = rows[0] if len(rows) == 1 and device_id not in evidence.unconfirmed_devices else None
+        if (observed is not None and observed.state is ManagedWireGuardState.PRESENT
+                and (not observed.confirmed_generation
+                     or observed.confirmed_generation != expected.get(device_id))):
+            observed = None
+        path = exact.get(device_id)
+        eligible = (
+            device_id not in retirement_ids and path is not None
+            and path.binding.endpoint in eligible_interfaces
+        )
+        if eligible:
+            assert path is not None
+            result[device_id] = ManagedDeviceRealization(
+                device_id, ManagedDeviceDesiredState.PRESENT, path.generation,
+                ManagedWireGuardState.PRESENT, path.generation,
+                confirmed_interface=path.binding.endpoint,
+                intent_basis=(ManagedDeviceIntentBasis.STRUCTURAL if device_id in demanded
+                              else ManagedDeviceIntentBasis.RECLAIM_RETENTION),
+                payload_eligible=True,
+            )
+            continue
+        # Independent structural demand without exact eligible presence is
+        # still structural, not a healthy reclaim hold or a new permission.
+        if device_id in demanded and device_id not in retirement_ids:
+            generation = expected.get(device_id)
+            result[device_id] = ManagedDeviceRealization(
+                device_id, ManagedDeviceDesiredState.PRESENT, generation,
+                None if observed is None else observed.state,
+                None if observed is None else observed.confirmed_generation,
+                problem=(old.problem if old is not None and old.problem
+                         else "structural presence not independently eligible"),
+                confirmed_interface=None if observed is None else observed.interface,
+                intent_basis=ManagedDeviceIntentBasis.STRUCTURAL,
+                payload_eligible=False,
+            )
+            continue
+        basis = (ManagedDeviceIntentBasis.RECLAIM_RETIREMENT if device_id in retirement_ids
+                 else ManagedDeviceIntentBasis.RECLAIM_DEFERRED_HOLD)
+        result[device_id] = ManagedDeviceRealization(
+            device_id, ManagedDeviceDesiredState.ABSENT, None,
+            None if observed is None else observed.state,
+            None if observed is None else observed.confirmed_generation,
+            waiting_for_dependencies=(device_id in retirement_ids and observed is not None
+                                      and observed.state is ManagedWireGuardState.PRESENT),
+            problem="exact managed realization unconfirmed" if observed is None else None,
+            confirmed_interface=None if observed is None else observed.interface,
+            intent_basis=basis, payload_eligible=False,
+        )
+    return tuple(result[d] for d in sorted(result))
