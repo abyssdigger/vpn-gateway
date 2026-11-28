@@ -1890,8 +1890,9 @@ Architectural decisions
 он получает уже current A.007 availability projection после D.002-generation synchronization
 и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` вклад теперь [`partial`]:
 текущий Manager умеет сохранять structural membership и участвовать в dependency release,
-но новая конфигурационная проекция требуемого присутствия Devices ему не принадлежит и пока
-не материализована отдельной границей.
+но отдельная конфигурационная проекция требуемого присутствия Devices принадлежит A.013,
+материализована его Calculator и используется в normal lifecycle A.012. A.004 поставляет
+отдельные подтвержденные факты current-use для reclaim и не владеет structural demand.
 
 По `VPNG-U001-R1.R3.R7.R4.R1` и `VPNG-U001-R1.R3.R7.R4.R2` вклад A.004 остается [`partial`]:
 pure confirmed-current-use projector дополнен runtime admission. В начале normal trigger
