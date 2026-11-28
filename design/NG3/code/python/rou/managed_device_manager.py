@@ -72,6 +72,13 @@ class ManagedDeviceLifecycleAdapter(Protocol):
     def observe(self, device_id: str) -> ManagedWireGuardObservation:
         """Fresh-observe current owned base realization."""
 
+    def confirm_present(
+        self,
+        device_id: str,
+        desired_base: ManagedWireGuardConfig,
+    ) -> ManagedWireGuardObservation:
+        """Confirm an existing exact base without mutation."""
+
     def converge_present(
         self,
         device_id: str,
@@ -122,6 +129,28 @@ class ManagedDeviceManager:
             dependency_free_device_ids=dependency_free_device_ids,
         )
         return tuple(sorted(present + absent, key=lambda item: item.device_id))
+
+    def observe_exact_base(
+        self, config: CurrentConfig, device_id: str
+    ) -> tuple[str | None, ManagedWireGuardObservation]:
+        """Read-only present confirmation; no demand or ownership-state change."""
+        self._validate_desired(config, frozenset({device_id}))
+        observed = self.lifecycle.observe(device_id)
+        if observed.device_id != device_id:
+            raise RuntimeError("D.001 returned another Device")
+        if observed.state is ManagedWireGuardState.ABSENT:
+            return None, observed
+        if observed.state is not ManagedWireGuardState.PRESENT or observed.interface is None:
+            raise RuntimeError("D.001 presence is unconfirmed")
+        desired = config.managed_vpns[device_id]
+        expected = self.lifecycle.desired_generation(device_id, desired)
+        confirmed = self.lifecycle.confirm_present(device_id, desired)
+        if (not expected or confirmed.device_id != device_id
+                or confirmed.state is not ManagedWireGuardState.PRESENT
+                or confirmed.interface != observed.interface
+                or confirmed.confirmed_generation != expected):
+            raise RuntimeError("D.001 exact base confirmation changed or mismatched")
+        return expected, confirmed
 
     def converge_present(
         self, config: CurrentConfig, device_id: str

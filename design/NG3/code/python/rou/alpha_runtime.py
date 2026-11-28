@@ -34,6 +34,9 @@ import sys
 import threading
 from typing import Iterable, Mapping
 
+from .accepted_effective_state import (
+    AcceptedEffectiveState, PreReclaimEvidence, observe_pre_reclaim,
+)
 from .composite_nft_policy import CompositeNftDesiredState
 from .availability_description import resolve_availability_probe_intents
 from .availability_manager import (
@@ -237,6 +240,10 @@ class AlphaPreparedPolicy:
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_path_routes: tuple[RoutePriorityPathRoute, ...] = ()
     last_probe_assembly: ProbePlaneDesiredAssembly | None = None
+    accepted_effective_state: AcceptedEffectiveState | None = None
+    # Trigger-local diagnostic result, never consumed by the legacy release path.
+    pre_reclaim_evidence: PreReclaimEvidence | None = None
+
     availability_runtime: AvailabilityProbeRuntime = field(
         default_factory=AvailabilityProbeRuntime
     )
@@ -252,6 +259,12 @@ class AlphaPreparedPolicy:
         ProbePolicyOwner,
         ProbeOwnershipDependency,
     ] = field(default_factory=dict)
+
+    def begin_effective_transition(self) -> AcceptedEffectiveState | None:
+        previous = self.accepted_effective_state
+        self.accepted_effective_state = None
+        self.pre_reclaim_evidence = None
+        return previous
 
     @classmethod
     def from_text(
@@ -552,6 +565,42 @@ def _observe_presence_bindings(
         prepared.binding_state,
         interfaces,
     ).bindings
+
+
+def observe_alpha_pre_reclaim(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    previous_accepted: AcceptedEffectiveState | None,
+) -> PreReclaimEvidence:
+    """Read the full inventory without committing bindings or changing eligibility."""
+    return observe_pre_reclaim(
+        prepared.current_config, previous_accepted, manager,
+        lambda: _observe_presence_bindings(prepared, domain_spec, runner),
+    )
+
+
+def publish_alpha_accepted_effective(
+    prepared: AlphaPreparedPolicy,
+    *,
+    payload_confirmed: bool,
+    availability: LinuxAvailabilityCycleResult | None,
+    wireguard: WireGuardPeerRuntimeResult | None,
+    wireguard_error: str | None,
+) -> None:
+    """Publish only the final fully confirmed generation of a normal trigger."""
+    prepared.accepted_effective_state = None
+    if (not payload_confirmed or availability is None or not availability.confirmed
+            or availability.observation is None or availability.priority is None
+            or not availability.priority.confirmed or wireguard_error is not None
+            or (prepared.current_config.wireguard_groups and wireguard is None)):
+        return
+    prepared.accepted_effective_state = AcceptedEffectiveState(
+        availability.observation.projection.effective_profiles,
+        prepared.last_bindings,
+        () if wireguard is None else wireguard.realizations,
+    )
 
 
 def converge_alpha_managed_device_presence(
@@ -1473,8 +1522,12 @@ def run_alpha_runtime(
             )
         if current_domain_spec.namespace != domain_spec.namespace:
             raise AlphaRuntimeError("managed Device preparation namespace mismatch")
+        previous_accepted = prepared.begin_effective_transition()
         convergence = converge_alpha_managed_device_presence(
             prepared, current_domain_spec, runner, managed_device_manager
+        )
+        prepared.pre_reclaim_evidence = observe_alpha_pre_reclaim(
+            prepared, current_domain_spec, runner, managed_device_manager, previous_accepted,
         )
         managed_realizations_holder["current"] = convergence.realizations
         managed_convergence_holder["current"] = convergence
@@ -1535,6 +1588,7 @@ def run_alpha_runtime(
         status_publisher.publish(status_agent.snapshot())
 
         def stop_owned_runtime():
+            prepared.begin_effective_transition()
             host_cleanup = HostPublicationAdapter(
                 LinuxHostPublicationDriver(runner)
             ).cleanup()
@@ -1678,6 +1732,7 @@ def run_alpha_runtime(
             )
 
         def reconcile_normal_once_unlocked():
+            previous_accepted = prepared.begin_effective_transition()
             try:
                 convergence = converge_alpha_managed_device_presence(
                     prepared, domain_spec, runner, managed_device_manager
@@ -1706,6 +1761,9 @@ def run_alpha_runtime(
             for problem in convergence.attempt_problems:
                 log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
                     device_id=problem.device_id, diagnostic=problem.problem)
+            prepared.pre_reclaim_evidence = observe_alpha_pre_reclaim(
+                prepared, domain_spec, runner, managed_device_manager, previous_accepted,
+            )
             result = reconcile_alpha_payload_once(
                 prepared,
                 domain_spec,
@@ -1760,6 +1818,11 @@ def run_alpha_runtime(
                 ()
                 if wireguard_result is None
                 else wireguard_result.realizations
+            )
+            publish_alpha_accepted_effective(
+                prepared, payload_confirmed=result.ready,
+                availability=availability_result, wireguard=wireguard_result,
+                wireguard_error=wireguard_error,
             )
             return (
                 result,
@@ -1840,6 +1903,10 @@ def run_alpha_runtime(
                 else 2
             )
 
+        publish_alpha_accepted_effective(
+            prepared, payload_confirmed=True, availability=availability_start,
+            wireguard=wireguard_start, wireguard_error=wireguard_start_error,
+        )
         status_agent.confirm_effective(
             prepared.last_profiles,
             prepared.last_bindings,

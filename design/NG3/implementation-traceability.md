@@ -77,6 +77,10 @@ A current executable reference unit without a normal requirement path may appear
 
 - `design/NG3/code/python/rou/runtime_status.py`
 
+## Trace: `A.004`, `A.012`
+
+- `design/NG3/code/python/rou/accepted_effective_state.py`
+
 ## Trace: `A.012`
 
 - `design/NG3/code/python/rou/managed_device_manager.py`
