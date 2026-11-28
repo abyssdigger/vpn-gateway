@@ -547,6 +547,35 @@ Do not repeatedly rescan the same unchanged documentation frontier inside one pr
 after such a conclusion. Re-run only after a relevant task/commit/documentation source changes or a
 new ordinary work item becomes available.
 
+### 6.2. Idle documentation pass without an existing WAIT relation
+
+The same documentation-reconciliation rules also apply when COLLAB is otherwise idle **without** an
+already-applicable WAIT relation.
+
+This does not create a new loop state. It defines one overlay-specific bounded `WORK` candidate for
+the generic `EXEC_NEXT` gate. Admit that candidate only when fresh observations establish all of:
+
+1. no ordinary READY, assigned, holder-directed, peer-delivered or otherwise runnable work exists;
+2. no applicable bounded `WAIT` can observe an unresolved dependency inside the remaining execution
+   window;
+3. the current documentation frontier has not already been reconciled since the latest relevant
+   task/commit/documentation-source change;
+4. a bounded documentation-reconciliation operation fits the remaining session-safety window.
+
+The operation first performs the documentation-reconciliation pass above. If it finds a mechanically
+actionable documentation delta, it may produce at most one bounded candidate under the same
+authorization and independent-review rules. If it finds no actionable delta, record only the
+minimal checked-frontier state needed to avoid selecting the same idle pass again.
+
+After that one operation, return to `EXEC_NEXT`. On an unchanged frontier the idle documentation
+candidate is no longer runnable; if no other `WORK` or `WAIT` exists, the generic
+`no sufficiently defined unblocked work remains` stop basis applies normally. Do not chain empty
+documentation scans, invent documentation tasks, or use this rule to defeat the generic stop/final
+gates.
+
+Ordinary work or an applicable bounded wait always wins over this no-WAIT idle pass. A newly changed
+task/commit/documentation source reopens the documentation frontier for a later bounded pass.
+
 Before creating a narrow maintenance task, check the current ordinary task inventory for existing compatible work. Identify the gap by Requirement ID, affected object and gap class as coordination metadata, not authority. Reuse compatible work and ordinary branch/lease coordination. An inventory check is not an atomic reservation; revalidate before implementation if overlapping tasks were discovered concurrently. On a later slice revalidate the accepted Requirement and source baseline; preserve partial state only within the still-applicable scope.
 
 Discovery/task creation is separate from implementation. Before taking a mechanically determined task into implementation without prior SPEC task specification, establish an independent terminal-review/acceptance path under the current role/process contract. A producer of the candidate may not terminally accept it. In the current pilot GUARD may discover/scope and route to BUILDER but may not implement a candidate it would then terminally accept. Discovery/specification alone does not preclude independent review of a separately produced candidate. A reviewer who performs a substantive correction of a candidate is a producer of the corrected candidate and may not terminally self-accept it. A different chat/session of the same transport role does not establish independence by itself. If the permitted independent acceptance path is unavailable, preserve or route the gap without self-implementation.
