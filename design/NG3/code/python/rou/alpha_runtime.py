@@ -1,7 +1,7 @@
 """First executable NG3 alpha runtime assembly.
 
 Architecture: structured Annex A A.001 ProductLifecycleControl,
-A.011 ProtectiveModeManager, A.012 ManagedDeviceManager, and Annex E
+A.004 PayloadTrafficManager, A.011 ProtectiveModeManager, A.012 ManagedDeviceManager, and Annex E
 E.001 HostPublicationAdapter runtime composition.
 The component specs own normative requirement traceability.
 
@@ -594,7 +594,8 @@ def publish_alpha_accepted_effective(
     if (not payload_confirmed or availability is None or not availability.confirmed
             or availability.observation is None or availability.priority is None
             or not availability.priority.confirmed or wireguard_error is not None
-            or (prepared.current_config.wireguard_groups and wireguard is None)):
+            or (prepared.current_config.wireguard_groups and wireguard is None)
+            or (wireguard is not None and not wireguard.confirmed)):
         return
     prepared.accepted_effective_state = AcceptedEffectiveState(
         availability.observation.projection.effective_profiles,

@@ -1849,6 +1849,11 @@ API
     <ConfirmedCurrentUse InfoEvent> — current подтвержденное использование ordinary paths по Profile, с exact realization context, либо explicit unknown.
     <reconciliation trigger> — fresh-observe dependent lower domains и при необходимости converge через Adapters.
 
+Implementation
+
+    design/NG3/code/python/rou/accepted_effective_state.py — immutable accepted effective context и read-only admission по exact C.004 intersection и fresh D.001 facts.
+    design/NG3/code/python/rou/alpha_runtime.py — runtime capture/invalidate/publish boundary; only final confirmed effective generation, including post-release recovery.
+
 Architectural decisions
 
 1. `One effective-policy writer`
@@ -1879,7 +1884,7 @@ Architectural decisions
    *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией.*
 
 10. `Подтвержденное текущее использование для reclaim`
-   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. R7.R4.R1/R2 contribution материализован частично: pure `project_confirmed_current_use` в `rou/confirmed_current_use.py` принимает от вызывающего один уже подтвержденный effective-policy generation, проверяет его cross-links и выпускает per-Profile `CONFIRMED`, `NONE` или `UNKNOWN` с exact ordinary path/realization context при `CONFIRMED`. Для выбранного managed WireGuard проверяется D.001 и полный current Device-wide набор D.002 group owners, в том числе для выбранного reserve path до вывода `NONE`. Проектор сам не доказывает свежесть принятого generation, не наблюдает Linux и не выполняет policy/lifecycle mutation; tentative desired-building поля по-прежнему не являются подтвержденным контрактом. Runtime admission, invalidation и передача этой проекции A.012 пока не материализованы.*
+   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. R7.R4.R1/R2 contribution материализован частично: pure `project_confirmed_current_use` в `rou/confirmed_current_use.py` принимает от вызывающего один уже подтвержденный effective-policy generation, проверяет его cross-links и выпускает per-Profile `CONFIRMED`, `NONE` или `UNKNOWN` с exact ordinary path/realization context при `CONFIRMED`. Для выбранного managed WireGuard проверяется D.001 и полный current Device-wide набор D.002 group owners, в том числе для выбранного reserve path до вывода `NONE`. Проектор сам не доказывает свежесть принятого generation, не наблюдает Linux и не выполняет policy/lifecycle mutation; tentative desired-building поля по-прежнему не являются подтвержденным контрактом. В alpha runtime материализованы admission/invalidation отдельного immutable effective snapshot и pre-reclaim read-only проекция; ее передача в активную reclaim/retirement policy A.012 еще не материализована.*
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
@@ -1888,13 +1893,21 @@ Architectural decisions
 но новая конфигурационная проекция требуемого присутствия Devices ему не принадлежит и пока
 не материализована отдельной границей.
 
-По `VPNG-U001-R1.R3.R7.R4.R1` вклад A.004 теперь [`partial`]: материализован только
-pure confirmed-current-use projector; по `VPNG-U001-R1.R3.R7.R4.R2` вклад [`partial`]
-только в части current-use/tie evidence input. Exact step-1 source `eeb8e4dc44aa2577a098c5d9d5d6c485011720c1`
-прошел NG3 Python run `46076998937` (984 unit tests, 25 jobs PASS) и независимую приемку
-pure projection/trace registration. Это не подтверждает runtime admission или передачу
-current-use в lifecycle, A.012 protection/tie/survivor selection, strict reclaim, dependency
-release или retirement по новой policy. R7.R4/R1/R2 остаются незакрытыми.
+По `VPNG-U001-R1.R3.R7.R4.R1` и `VPNG-U001-R1.R3.R7.R4.R2` вклад A.004 остается [`partial`]:
+pure confirmed-current-use projector дополнен runtime admission. В начале normal trigger
+`AlphaPreparedPolicy` захватывает previous accepted snapshot и инвалидирует current admission.
+После bounded presence convergence, до normal eligibility-filtered policy, read-only observation
+получает полную C.004 проекцию без commit binding state; для A.004 допускается только exact
+intersection accepted/fresh PathBinding. D.001 non-mutating confirmation и D.002 realization
+из захваченного accepted snapshot проверяются через существующий pure projector. Ошибка
+или partial transition не создает новый admitted snapshot; следующий trigger без полного
+подтверждения получает UNKNOWN. Новый snapshot публикуется только после final confirmed
+payload/priority/D.002 result, в том числе после existing legacy release/recovery.
+Exact step-1 pure source `eeb8e4dc44aa2577a098c5d9d5d6c485011720c1` прошел NG3 Python
+run `46076998937` (984 unit tests, 25 jobs PASS) и независимую приемку pure projection/trace.
+Новая runtime evidence boundary остается diagnostic/non-exposing: не передает решение
+на reclaim/lifecycle, не изменяет legacy release и не подтверждает safe retirement по новой
+policy. R7.R4/R1/R2 остаются незакрытыми.
 
 **Evidence:** `EV-00280`.
 
@@ -2277,6 +2290,7 @@ Implementation
 
     design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
     design/NG3/code/python/rou/managed_reclaim_projection.py — pure A.012 reclaim projection over caller-admitted structural/use/realization facts; exact survivor/candidate/deferred decisions, no actuation.
+    design/NG3/code/python/rou/accepted_effective_state.py — read-only pre-reclaim evidence: all-interface structural contribution facts, exact non-mutating D.001 confirmation and scoped A.004 use; not a retirement decision.
     design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, selective dependency release при снятии demand, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
@@ -2326,7 +2340,7 @@ Architectural decisions
 15. `Раздельные truthful projections`
    *A.012 не изображает GC-retained surplus как structural demand или waiting_for_dependencies. Отдельно публикуются accepted survivor intent, exact confirmed realization, confirmed current-use protection, retirement candidate/reason и unknown/problem; A.013 per-Profile target/presence/deficit остается отдельным owner projection. При нескольких равноценных structural covers не утверждается уникальный per-Device structural owner.*
 
-**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. A.012 contributions R7.R4/R1/R2 остаются partial: runtime admission/invalidation, retention confirmation in composition, normal-policy exclusion, fresh retirement revalidation и применение exact D.001 operations еще не связаны с этой проекцией. Все три требования остаются pending_closure. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
+**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. A.012 contributions R7.R4/R1/R2 остаются partial. Runtime admission/invalidation и read-only pre-reclaim evidence теперь материализованы отдельно: полный C.004 inventory до normal policy exclusion передается A.013 без eligibility pruning; exact D.001 presence/generation подтверждается через Manager без converge/start/restart, несовпадающие C.004/D.001 facts остаются unresolved. A.004 use берется из exact intersection captured accepted и fresh bindings. Эти факты пока не потребляются pure project_reclaim в active lifecycle, не меняют legacy release. Retention-aware policy exclusion, fresh retirement revalidation и применение exact D.001 retirement еще не связаны с этой проекцией. Все три требования остаются pending_closure. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
 
 **Evidence:** `EV-00080`, `EV-00090`, `EV-00300`.
 

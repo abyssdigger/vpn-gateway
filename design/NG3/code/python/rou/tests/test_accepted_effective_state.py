@@ -20,6 +20,7 @@ from rou.managed_device_manager import ManagedDeviceManager
 from rou.managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
 from rou.payload_profile import PayloadProfileRequest
 from rou.wireguard_peer_manager import WireGuardGroupOwnershipRecord, WireGuardPeerRealization
+from rou.wireguard_peer_runtime import WireGuardPeerRuntimeResult
 
 
 CONFIG = """
@@ -241,7 +242,7 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
         publish_alpha_accepted_effective(
             self.prepared, payload_confirmed=payload,
             availability=availability(profiles, confirmed, priority),
-            wireguard=SimpleNamespace(realizations=(peer(),)) if wireguard else None,
+            wireguard=WireGuardPeerRuntimeResult((peer(),)) if wireguard else None,
             wireguard_error=wireguard_error,
         )
 
@@ -279,6 +280,14 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
             self.assertIsNotNone(p.begin_effective_transition())
             self.publish(self.profiles, **kwargs)
             self.assertIsNone(p.accepted_effective_state)
+        # The result object itself must not claim a partial D.002 generation
+        # even if the separate diagnostic argument is missing.
+        publish_alpha_accepted_effective(
+            p, payload_confirmed=True, availability=availability(self.profiles),
+            wireguard=WireGuardPeerRuntimeResult((
+                replace(peer(), generation=None, group_owners=(), problem="failed"),)),
+            wireguard_error=None)
+        self.assertIsNone(p.accepted_effective_state)
 
     def test_final_recovered_state_not_pre_release_scratch(self):
         p = self.prepared
@@ -291,7 +300,7 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
             request(self.cfg, key, EXT) for key in ("corp", "other", "z"))
         initial_payload = SimpleNamespace(ready=True)
         initial_availability = availability(self.profiles)
-        initial_wg = SimpleNamespace(realizations=(peer(),))
+        initial_wg = WireGuardPeerRuntimeResult((peer(),))
         convergence = SimpleNamespace(realizations=("initial",))
         ownership = Mock()
         domain, runner, coordinator, probe_driver = Mock(), Mock(), Mock(), Mock()
@@ -302,7 +311,7 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
             return AlphaPostReleaseResult(
                 ("recovered",), SimpleNamespace(ready=True),
                 availability(recovered_profiles),
-                SimpleNamespace(realizations=()), None,
+                WireGuardPeerRuntimeResult(()), None,
             )
 
         with patch("rou.alpha_runtime.release_alpha_undemanded_devices",
@@ -337,7 +346,7 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
             final = complete_alpha_normal_reconciliation(
                 p, Mock(), Mock(), self.manager, SimpleNamespace(realizations=()),
                 Mock(), Mock(), Mock(), SimpleNamespace(ready=True),
-                availability(self.profiles), SimpleNamespace(realizations=(peer(),)), None)
+                availability(self.profiles), WireGuardPeerRuntimeResult((peer(),)), None)
         self.assertIs(final, failed)
         self.assertIsNone(p.accepted_effective_state)
 
