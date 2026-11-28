@@ -160,7 +160,8 @@ from .payload_network_policy_desired import (
 )
 from .payload_forward_desired import PayloadForwardDesiredState
 from .device_firewall_desired import DeviceFirewallDesiredState
-from .payload_routing_desired import PayloadRoutingDesiredState
+from .payload_routing_desired import PayloadRoutingDesiredState, build_payload_routing_desired_state
+from .probe_precondition import verify_probe_execution_precondition
 from .payload_profile import (
     LOG_TAG as PROF_LOG_TAG,
     PayloadProfileRequest,
@@ -630,6 +631,91 @@ class ManagedDeviceReleaseOutcome:
     @property
     def requires_reconvergence(self) -> bool:
         return self.dependencies_touched or self.retirement_attempted
+
+
+@dataclass(frozen=True, slots=True)
+class ReclaimReplacementEvidence:
+    """Confirmed replacement inputs captured before any retirement touch."""
+
+    config: CurrentConfig
+    bindings: tuple[PathBinding, ...]
+    path_routes: tuple[RoutePriorityPathRoute, ...]
+    profiles: tuple[PayloadProfileRequest, ...]
+    assembly: ProbePlaneDesiredAssembly
+    desired: PayloadNetworkPolicyDesiredState
+
+
+def capture_reclaim_replacement_evidence(
+    prepared: AlphaPreparedPolicy,
+    result: AlphaReconcileResult,
+    availability: LinuxAvailabilityCycleResult | None,
+    wireguard: WireGuardPeerRuntimeResult | None,
+    wireguard_error: str | None,
+) -> ReclaimReplacementEvidence | None:
+    """Capture only fully confirmed C.001/A.004/D.002 replacement state."""
+    if (not result.ready or result.desired is None
+            or availability is None or not availability.confirmed
+            or availability.observation is None
+            or availability.priority is None or not availability.priority.confirmed
+            or wireguard_error is not None
+            or (prepared.current_config.wireguard_groups and wireguard is None)
+            or (wireguard is not None and not wireguard.confirmed)
+            or prepared.last_probe_assembly is None):
+        return None
+    return ReclaimReplacementEvidence(
+        prepared.current_config, prepared.last_bindings, prepared.last_path_routes,
+        availability.observation.projection.effective_profiles,
+        prepared.last_probe_assembly, result.desired,
+    )
+
+
+def reclaim_replacement_policy_exact(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    replacement: ReclaimReplacementEvidence,
+    retirement_ids: frozenset[str],
+) -> bool:
+    """Fresh read-only C.001/probe/priority/affinity verification.
+
+    Route priorities may have legitimately changed after the initial payload
+    convergence; compare against the final confirmed effective order, not
+    the initial desired route metrics. The original plan is not recomputed.
+    """
+    if prepared.current_config is not replacement.config:
+        return False
+    if (any(b.path_id.device_id in retirement_ids for b in replacement.bindings)
+            or any(r.path_id.device_id in retirement_ids for r in replacement.path_routes)
+            or any(p.device_id in retirement_ids
+                   for profile in replacement.profiles for p in profile.ordered_paths)):
+        return False
+    try:
+        routing = build_payload_routing_desired_state(
+            replacement.profiles, replacement.assembly.layout,
+            replacement.path_routes, replacement.desired.routing.host_boundary,
+        )
+        snapshot = LinuxStructuralPolicyBackend(
+            runner=runner, namespace=domain_spec.namespace,
+            platform=NG3_LINUX_POLICY_PLATFORM,
+        ).observe_structural_snapshot()
+        if not compare_structural_policy(
+            snapshot, routing, replacement.desired.nft, NG3_LINUX_POLICY_PLATFORM,
+        ).desired_confirmed:
+            return False
+        if not verify_probe_execution_precondition(
+            snapshot, replacement.assembly.probe, NG3_LINUX_POLICY_PLATFORM,
+        ).confirmed:
+            return False
+        if replacement.desired.stack_return_affinity is not None:
+            if LinuxStackReturnAffinityBackend(
+                runner, domain_spec.namespace, NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            ).observe(replacement.desired.stack_return_affinity).status is not StackReturnAffinityOwnerStatus.EXACT:
+                return False
+        return LinuxForwardingGateDriver(
+            runner, domain_spec.namespace,
+        ).observe_forwarding_gate() is ForwardingGateState.ENABLED
+    except Exception:
+        return False
 
 
 def release_alpha_undemanded_devices(

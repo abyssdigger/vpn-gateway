@@ -2,10 +2,16 @@
 from dataclasses import replace
 from ipaddress import IPv4Address
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from rou.accepted_effective_state import AcceptedEffectiveState, observe_pre_reclaim
-from rou.alpha_runtime import AlphaPreparedPolicy
+from rou.alpha_runtime import (
+    AlphaPreparedPolicy, AlphaReconcileResult, AlphaReconcileStatus,
+    capture_reclaim_replacement_evidence, reclaim_replacement_policy_exact,
+)
+from rou.forwarding_gate import ForwardingGateState
+from rou.alpha_runtime import StackReturnAffinityOwnerStatus
 from rou.managed_device_manager import (
     ManagedDeviceManager, ManagedDeviceDesiredState, ManagedDeviceIntentBasis,
 )
@@ -23,7 +29,7 @@ from rou.managed_device_demand import ManagedOrdinaryContribution
 from rou.managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
 from rou.wireguard_peer_ownership import WireGuardPeerOwnershipObservation
 
-from test_accepted_effective_state import A, EXT, CONFIG, PRESENT, peer, request
+from test_accepted_effective_state import A, EXT, CONFIG, PRESENT, peer, request, availability
 
 
 class RuntimeReclaimPlanTests(TestCase):
@@ -243,3 +249,39 @@ class RuntimeReclaimPlanTests(TestCase):
         self.assertFalse(result.payload_eligible)
         self.assertFalse(result.waiting_for_dependencies)
         self.assertIsNone(result.problem)
+
+    def test_replacement_capture_requires_confirmed_final_result_and_reobserves_policy(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG, local_address=IPv4Address("198.19.255.2"))
+        prepared.confirmed_managed_interfaces = frozenset()
+        desired = prepared.build_current(EXT.endpoint, (A.endpoint, EXT.endpoint))
+        result = AlphaReconcileResult(AlphaReconcileStatus.EXACT, desired)
+        confirmed = availability(prepared.last_profiles)
+        self.assertIsNone(capture_reclaim_replacement_evidence(
+            prepared, result, availability(prepared.last_profiles, confirmed=False),
+            SimpleNamespace(confirmed=True), None))
+        replacement = capture_reclaim_replacement_evidence(
+            prepared, result, confirmed, SimpleNamespace(confirmed=True), None)
+        self.assertIsNotNone(replacement)
+        domain = SimpleNamespace(namespace="ns")
+        runner = Mock()
+        with patch("rou.alpha_runtime.LinuxStructuralPolicyBackend") as backend, \
+             patch("rou.alpha_runtime.compare_structural_policy") as compare, \
+             patch("rou.alpha_runtime.verify_probe_execution_precondition") as probe, \
+             patch("rou.alpha_runtime.LinuxStackReturnAffinityBackend") as affinity, \
+             patch("rou.alpha_runtime.LinuxForwardingGateDriver") as gate:
+            compare.return_value.desired_confirmed = True
+            probe.return_value.confirmed = True
+            affinity.return_value.observe.return_value.status = StackReturnAffinityOwnerStatus.EXACT
+            gate.return_value.observe_forwarding_gate.return_value = ForwardingGateState.ENABLED
+            self.assertTrue(reclaim_replacement_policy_exact(
+                prepared, domain, runner, replacement, frozenset({"a"})))
+            backend.return_value.observe_structural_snapshot.assert_called_once()
+            probe.return_value.confirmed = False
+            self.assertFalse(reclaim_replacement_policy_exact(
+                prepared, domain, runner, replacement, frozenset({"a"})))
+            probe.return_value.confirmed = True
+            compare.return_value.desired_confirmed = False
+            self.assertFalse(reclaim_replacement_policy_exact(
+                prepared, domain, runner, replacement, frozenset({"a"})))
+        runner.assert_not_called()
