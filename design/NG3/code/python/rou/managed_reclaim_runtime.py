@@ -528,6 +528,7 @@ def project_managed_reclaim_realizations(
             )
             continue
         basis = (ManagedDeviceIntentBasis.RECLAIM_RETIREMENT if device_id in retirement_ids
+                 else None if observed is not None and observed.state is ManagedWireGuardState.ABSENT
                  else ManagedDeviceIntentBasis.RECLAIM_DEFERRED_HOLD)
         result[device_id] = ManagedDeviceRealization(
             device_id, ManagedDeviceDesiredState.ABSENT, None,

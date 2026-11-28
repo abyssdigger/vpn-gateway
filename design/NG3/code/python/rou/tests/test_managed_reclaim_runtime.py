@@ -285,3 +285,49 @@ class RuntimeReclaimPlanTests(TestCase):
             self.assertFalse(reclaim_replacement_policy_exact(
                 prepared, domain, runner, replacement, frozenset({"a"})))
         runner.assert_not_called()
+
+    def test_scoped_guard_allows_unrelated_unprovable_floor(self):
+        extra = """
+[device.b]
+enabled = true
+use_outbound_nat = true
+[device.b.managed_vpn]
+kind = "wireguard"
+interface = "wg2"
+address = "10.200.0.2/32"
+private_key_file = "/secret/b.key"
+[[device.b.managed_vpn.peers]]
+id = "peer"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.2:51820"
+probe_target = "10.201.0.2"
+[profile.isolated]
+enabled = true
+direction = "outbound"
+destinations = ["10.80.0.0/24"]
+device_order = ["b"]
+warm_paths = 1
+"""
+        from rou.binding import PathBinding, LogicalPathId
+        from rou.interface_identity import InterfaceIdentity
+        from rou.release1_config import parse_current_config
+        cfg = parse_current_config('managed_reclaim = "strict"\n' + CONFIG + extra)
+        b = PathBinding(LogicalPathId("b", 0, 0), InterfaceIdentity("wg2", 12))
+
+        def observe_base(config, device_id):
+            if device_id == "b":
+                raise RuntimeError("unconfirmed isolated base")
+            return "base-a", PRESENT
+
+        with patch.object(ManagedDeviceManager, "observe_exact_base", side_effect=observe_base):
+            evidence = observe_pre_reclaim(cfg, self.previous, self.manager, lambda: (A, EXT, b))
+        plan = build_runtime_reclaim_plan(cfg, evidence, self.previous)
+        self.assertEqual([r.device_id for r in plan.projection.retirement_candidates], ["a"])
+        self.assertIn("b", {r.device_id for r in plan.projection.deferred})
+        self.assertEqual(dict(plan.projection.floors)["isolated"], 1)
+        self.assertTrue(structural_retirement_precondition(
+            plan, cfg, evidence, candidate_id="a", already_retired=frozenset(),
+            replacement_bindings=frozenset({EXT})))
+        self.assertFalse(structural_retirement_precondition(
+            plan, cfg, evidence, candidate_id="a", already_retired=frozenset(),
+            replacement_bindings=frozenset()))
