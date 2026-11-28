@@ -475,23 +475,27 @@ and green CI are necessary but **not sufficient** to publish that work to `main`
 
 Immediately before a `main` publication that includes such work, verify all of the following:
 
-1. the project-task Issue contains an explicit terminal `GUARD ACCEPT` verdict against the
-   current accepted specification;
-2. the acceptance names the exact accepted source commit SHA and, when the publication mechanism
+1. the project-task Issue contains an explicit terminal **review acceptance** against the current
+   task specification, expressed as ordinary task/review prose rather than a reserved role or
+   transport-protocol marker;
+2. when the task requires independent verification, the governing service/control state establishes
+   that the acceptance was produced by the selected independent reviewer; never infer reviewer
+   identity merely from a role word written into the task comment;
+3. the acceptance names the exact accepted source commit SHA and, when the publication mechanism
    uses tree-equivalent snapshots, the accepted source tree is known;
-3. the final task comment links the exact accepted source commit and the Issue has then been
+4. the final task comment links the exact accepted source commit and the Issue has then been
    honestly closed;
-4. no commit affecting the accepted task scope was added after that acceptance without a new
-   GUARD review/acceptance;
-5. every task-scoped delta included in the proposed `main` result is covered by an accepted
+5. no commit affecting the accepted task scope was added after that acceptance without a new
+   independent review/acceptance;
+6. every task-scoped delta included in the proposed `main` result is covered by an accepted
    project-task Issue; an aggregate snapshot must not smuggle unrelated or still-unaccepted
    development through another task's verdict;
-6. the proposed source/tree is the reviewed result. Any material delta discovered after acceptance
+7. the proposed source/tree is the reviewed result. Any material delta discovered after acceptance
    invalidates the gate and returns the affected task to review.
 
-`BUILDER READY FOR REVIEW`, successful compilation, unit/integration tests, green CI, a clean
-runtime start, peer consensus or an implementation-complete claim are evidence only. None of them
-is task acceptance, Issue-closure authority or a substitute for the GUARD terminal verdict.
+An implementation-complete/review-request comment, successful compilation, unit/integration tests,
+green CI, a clean runtime start or peer consensus is evidence only. None of these is task acceptance
+or Issue-closure authority.
 
 This gate does not replace the ordinary authorization check above: **both** authorization and
 task acceptance must hold. Non-task repository maintenance/process operations continue to use
