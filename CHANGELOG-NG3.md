@@ -16,7 +16,10 @@ describe this distinction.
 
 The implementation/test baseline passed integrated verification (EV-00310); [independent
 terminal acceptance of #41](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255) is recorded at `52c2da248269b42ac1be757981a3a8fbfe488dc7`.
-R7.R4/R1/R2 closure remains pending; no released 0.1.0 capability or main publication is implied.
+The separate [independent #48 closure review](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239178657)
+accepted architecture closure of R7.R4/R1/R2; final #41 documentation reconciliation and
+local component materialization accounting are recorded in EV-00310. No released 0.1.0 capability
+or main publication is implied.
 
 
 ## 2026-11-25 — Generalized managed-WireGuard recovery requirement family closed

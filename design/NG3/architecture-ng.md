@@ -1830,8 +1830,8 @@ policy.
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
-- `VPNG-U001-R1.R3.R7.R4.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
@@ -1884,7 +1884,7 @@ Architectural decisions
    *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией.*
 
 10. `Подтвержденное текущее использование для reclaim`
-   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. R7.R4.R1/R2 contribution материализован частично: pure `project_confirmed_current_use` в `rou/confirmed_current_use.py` принимает от вызывающего один уже подтвержденный effective-policy generation, проверяет его cross-links и выпускает per-Profile `CONFIRMED`, `NONE` или `UNKNOWN` с exact ordinary path/realization context при `CONFIRMED`. Для выбранного managed WireGuard проверяется D.001 и полный current Device-wide набор D.002 group owners, в том числе для выбранного reserve path до вывода `NONE`. Проектор сам не доказывает свежесть принятого generation, не наблюдает Linux и не выполняет policy/lifecycle mutation; tentative desired-building поля по-прежнему не являются подтвержденным контрактом. В alpha runtime материализованы admission/invalidation отдельного immutable effective snapshot и pre-reclaim read-only проекция; в принятой реализации #41 ее факты потребляются активным контуром A.012; точная приемка зафиксирована в EV-00310.*
+   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. R7.R4.R1/R2 local current-use contribution материализован полностью: pure `project_confirmed_current_use` в `rou/confirmed_current_use.py` принимает от вызывающего один уже подтвержденный effective-policy generation, проверяет его cross-links и выпускает per-Profile `CONFIRMED`, `NONE` или `UNKNOWN` с exact ordinary path/realization context при `CONFIRMED`. Для выбранного managed WireGuard проверяется D.001 и полный current Device-wide набор D.002 group owners, в том числе для выбранного reserve path до вывода `NONE`. Проектор сам не доказывает свежесть принятого generation, не наблюдает Linux и не выполняет policy/lifecycle mutation; tentative desired-building поля по-прежнему не являются подтвержденным контрактом. В alpha runtime материализованы admission/invalidation отдельного immutable effective snapshot и pre-reclaim read-only проекция; в принятой реализации #41 ее факты потребляются активным контуром A.012; точная приемка зафиксирована в EV-00310.*
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
@@ -1894,7 +1894,7 @@ Architectural decisions
 материализована его Calculator и используется в normal lifecycle A.012. A.004 поставляет
 отдельные подтвержденные факты current-use для reclaim и не владеет structural demand.
 
-По `VPNG-U001-R1.R3.R7.R4.R1` и `VPNG-U001-R1.R3.R7.R4.R2` вклад A.004 остается [`partial`]:
+По `VPNG-U001-R1.R3.R7.R4.R1` и `VPNG-U001-R1.R3.R7.R4.R2` локальный вклад A.004 [`full`]:
 pure confirmed-current-use projector дополнен runtime admission. В начале normal trigger
 `AlphaPreparedPolicy` захватывает previous accepted snapshot и инвалидирует current admission.
 После bounded presence convergence, до normal eligibility-filtered policy, read-only observation
@@ -1906,7 +1906,7 @@ intersection accepted/fresh PathBinding. D.001 non-mutating confirmation и D.00
 payload/priority/D.002 result, в том числе после bounded exact reclaim/F2 recovery.
 Exact step-1 pure source `eeb8e4dc44aa2577a098c5d9d5d6c485011720c1` прошел NG3 Python
 run `46076998937` (984 unit tests, 25 jobs PASS) и независимую приемку pure projection/trace.
-Runtime evidence boundary теперь потребляется единым normal reclaim контуром #41; snapshot A.004 сам не разрешает retirement. Интеграционные проверки базовой реализации прошли, независимая терминальная приемка #41 завершена (EV-00310). R7.R4/R1/R2 остаются незакрытыми.
+Runtime evidence boundary теперь потребляется единым normal reclaim контуром #41; snapshot A.004 сам не разрешает retirement. Интеграционные проверки базовой реализации прошли, независимая терминальная приемка #41 завершена (EV-00310). Архитектурное закрытие R7.R4/R1/R2 принято отдельным review #48 (EV-00310).
 
 **Evidence:** `EV-00280`, `EV-00310`.
 
@@ -2273,9 +2273,9 @@ Manager текущей базовой VPN-реализации только дл
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
-- `VPNG-U001-R1.R3.R7.R4` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 
 API
 
@@ -2340,7 +2340,7 @@ Architectural decisions
 15. `Раздельные truthful projections`
    *A.012 не изображает GC-retained surplus как structural demand или waiting_for_dependencies. Отдельно публикуются accepted survivor intent, exact confirmed realization, confirmed current-use protection, retirement candidate/reason и unknown/problem; A.013 per-Profile target/presence/deficit остается отдельным owner projection. При нескольких равноценных structural covers не утверждается уникальный per-Device structural owner.*
 
-**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. A.012 contributions R7.R4/R1/R2 остаются partial. Runtime admission/invalidation и read-only pre-reclaim evidence теперь материализованы отдельно: полный C.004 inventory до normal policy exclusion передается A.013 без eligibility pruning; exact D.001 presence/generation подтверждается через Manager без converge/start/restart, несовпадающие C.004/D.001 facts остаются unresolved. A.004 use берется из exact intersection captured accepted и fresh bindings. В принятой реализации #41 эти факты потребляются единым startup/periodic prepare → replacement → exact retirement → F2 контуром. Runtime call sites материализованы, интеграционное evidence и независимая терминальная приемка #41 зафиксированы в EV-00310. Raw pre-prune A.013 contribution/floor snapshot сохранен; для lifecycle obligations A.012 применяет тот же A.013 project_final к external bindings и exact C.004/D.001-confirmed managed bindings. Эта exact-capacity проекция определяет mandatory reserve, independent eligibility, recovery, pre/post-retirement reserve guard и публикуемый A.013 status. Неподтвержденный одноименный ordinary link не снимает обязательный reserve. Все три требования остаются pending_closure. Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
+**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. Pure projection сама по себе не исчерпывает локальные обязанности A.012 по R7.R4/R1/R2. Runtime admission/invalidation и read-only pre-reclaim evidence теперь материализованы отдельно: полный C.004 inventory до normal policy exclusion передается A.013 без eligibility pruning; exact D.001 presence/generation подтверждается через Manager без converge/start/restart, несовпадающие C.004/D.001 facts остаются unresolved. A.004 use берется из exact intersection captured accepted и fresh bindings. В принятой реализации #41 эти факты потребляются единым startup/periodic prepare → replacement → exact retirement → F2 контуром. Runtime call sites материализованы, интеграционное evidence и независимая терминальная приемка #41 зафиксированы в EV-00310. Raw pre-prune A.013 contribution/floor snapshot сохранен; для lifecycle obligations A.012 применяет тот же A.013 project_final к external bindings и exact C.004/D.001-confirmed managed bindings. Эта exact-capacity проекция определяет mandatory reserve, independent eligibility, recovery, pre/post-retirement reserve guard и публикуемый A.013 status. Неподтвержденный одноименный ordinary link не снимает обязательный reserve. Локальные обязанности A.012 по R7.R4/R1/R2 материализованы полностью (`full`): selection, admission, replacement, guarded exact retirement, bounded batch и F2. Архитектурное закрытие всех трех требований принято отдельным review #48 (EV-00310). Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
 
 **Evidence:** `EV-00080`, `EV-00090`, `EV-00300`, `EV-00310`.
 
@@ -2405,7 +2405,7 @@ Linux самостоятельно и не владеет lifecycle.
 - `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 
 API
 
@@ -2460,7 +2460,7 @@ F1 materialization: A.013 дополнительно публикует `externa
 `LogicalPathId`-проекции, что и `regular_present`, с сохранением Profile-local membership.
 Raw all-interface наблюдения служат диагностическим pre-prune contribution/floor input. Для lifecycle obligation и current status A.012 вызывает тот же A.013 project_final над external и exact C.004/D.001 managed bindings. Baseline selection A.013 остается неизменным и не разрешает retirement. A.013 не получает reclaim
 policy, current-use, payload или availability; выбор survivor/reclaim остается за A.012,
-подтвержденный current-use — за A.004. Вклад A.013 в R7.R4.R2 частичный: требование еще не закрыто.
+подтвержденный current-use — за A.004. Локальная обязанность A.013 по R7.R4.R2 — точные structural contribution/floor inputs без изменения structural demand — материализована полностью (`full`); ее использование normal reclaim подтверждено EV-00310.
 
 # Annex B. Ordinary-side transition components
 
@@ -3052,9 +3052,9 @@ Direct Adapter от нормализованного намерения упра
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`partial`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R4.R2` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 
 API
 
@@ -3110,7 +3110,7 @@ Architectural decisions
 13. `Selective retire bound to expected generation`
    *Для A.012 selective reclaim D.001 принимает exact expected InterfaceIdentity и confirmed base generation. Непосредственно внутри D.001 ownership/delete guard повторно подтверждается именно эта реализация и действующее поколение; отсутствие или замена не позволяют удалить другой экземпляр, даже с тем же ownership marker. После actuation свежо подтверждается требуемый postcondition; replacement/drift не изображается как подтвержденное отсутствие. Не заявляется атомарная compare-delete вне принятой operating boundary. Broad owner-wide converge_absent остается отдельным explicit/global cleanup contract и не используется вместо exact selective retire.*
 
-**F1 materialization frontier:** D.001 реализует отдельный read-only `confirm_present` и exact generation/identity-bound `retire_exact`. Вклад в R7.R4/R1/R2 остается partial: это нижние механизмы подтверждения и selective retirement, не careful/strict survivor selection, A.004 current-use protection, A.012 reclaim authorization или runtime integration. Existing evidence ниже не является F1 acceptance.
+**F1 materialization frontier:** D.001 реализует отдельный read-only `confirm_present` и exact generation/identity-bound `retire_exact`. Локальные обязанности D.001 по R7.R4/R1/R2 материализованы полностью (`full`): exact confirmation и selective retirement. Careful/strict survivor selection, A.004 current-use protection и A.012 reclaim authorization/runtime integration принадлежат другим компонентам. Existing evidence ниже не является F1 acceptance; интеграционная приемка reclaim зафиксирована в EV-00310.
 
 **Evidence:** `EV-00050`, `EV-00060`, `EV-00070`.
 

@@ -713,5 +713,11 @@ candidate. Exact-candidate [NG3 Python 46143677980](https://github.com/abyssdigg
 [actual-main lineage 46143678005](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143678005) — PASS.
 The implementation/test baseline and limitations above are unchanged.
 
-Neither evidence nor task acceptance closes R7.R4/R1/R2, authorizes main publication or
-claims released 0.1.0 support.
+The #41 task acceptance alone did not close R7.R4/R1/R2. Final documentation/trace-only
+reconciliation was independently accepted at [`28e92477b1b9b6ec4746de52d3ad2e4d021601ba`](https://github.com/abyssdigger/vpn-gateway/commit/28e92477b1b9b6ec4746de52d3ad2e4d021601ba)
+([#41 final review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239352505),
+[NG3 Python 46145226957](https://github.com/abyssdigger/vpn-gateway/actions/runs/46145226957) — 25/25 jobs PASS).
+The separate [independent #48 requirement closure review](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239178657)
+accepted R7.R4/R1/R2 architecture closure on the established evidence; its [local-edge review](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239328302)
+reconciles component materialization according to architecture §2.9. Evidence limits above remain unchanged.
+Neither review authorizes main publication or claims released 0.1.0 support.
