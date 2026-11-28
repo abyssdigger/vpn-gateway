@@ -16,7 +16,7 @@ from .confirmed_current_use import (
 )
 from .managed_device_demand import ManagedDeviceDemandProjection, project_final
 from .managed_device_manager import ManagedDeviceManager
-from .managed_wireguard_adapter import ManagedWireGuardObservation
+from .managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
 from .payload_profile import PayloadProfileRequest
 from .release1_config import CurrentConfig
 from .wireguard_peer_manager import WireGuardPeerRealization
@@ -71,6 +71,13 @@ def observe_pre_reclaim(
     for device_id in sorted(set(config.managed_vpns) & config.structural.active_device_ids):
         try:
             generation, observation = manager.observe_exact_base(config, device_id)
+            bound = tuple(b for b in bindings if b.path_id.device_id == device_id)
+            # C.004 and D.001 are separate reads. A conflicting exact identity
+            # (or owned absence despite a raw matching path) is unresolved,
+            # not a confirmed realization that can back the raw contribution.
+            if bound and (observation.state is not ManagedWireGuardState.PRESENT
+                          or any(b.endpoint != observation.interface for b in bound)):
+                raise ValueError("C.004 and D.001 observations disagree")
         except Exception:
             problems.append(device_id)
             continue

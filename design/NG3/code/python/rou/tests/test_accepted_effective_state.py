@@ -9,7 +9,9 @@ from unittest.mock import Mock, patch
 
 from rou.accepted_effective_state import AcceptedEffectiveState, observe_pre_reclaim
 from rou.alpha_runtime import (
-    AlphaPreparedPolicy, observe_alpha_pre_reclaim, publish_alpha_accepted_effective,
+    AlphaPostReleaseResult, AlphaPreparedPolicy, ManagedDeviceReleaseOutcome,
+    complete_alpha_normal_reconciliation, observe_alpha_pre_reclaim,
+    publish_alpha_accepted_effective,
 )
 from rou.binding import LogicalPathId, PathBinding, project_device_bindings
 from rou.confirmed_current_use import CurrentUseState
@@ -152,6 +154,8 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
         r = self.evidence(self.accepted, (new, EXT))
         self.assertIs(states(r)["corp"], CurrentUseState.UNKNOWN)
         self.assertIs(states(r)["other"], CurrentUseState.CONFIRMED)
+        self.assertEqual(r.unconfirmed_devices, ("a",))
+        self.assertEqual(r.managed_base_observations, ())
         self.lifecycle.desired_generation.return_value = "base-new"
         self.lifecycle.confirm_present.return_value = replace(PRESENT, confirmed_generation="base-new")
         r = self.evidence(self.accepted)
@@ -176,6 +180,16 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
         self.assertIs(states(r)["corp"], CurrentUseState.UNKNOWN)
         self.assert_read_only()
 
+    def test_raw_binding_with_owned_absence_is_not_confirmed_absence(self):
+        self.lifecycle.observe.return_value = ABSENT
+        r = self.evidence(self.accepted)
+        self.assertEqual(r.unconfirmed_devices, ("a",))
+        self.assertEqual(r.managed_base_observations, ())
+        self.assertIn(A, r.bindings)
+        self.assertIs(states(r)["corp"], CurrentUseState.UNKNOWN)
+        self.assertIs(states(r)["other"], CurrentUseState.CONFIRMED)
+        self.assert_read_only()
+
     def test_observe_and_confirm_identity_must_match(self):
         self.lifecycle.confirm_present.return_value = replace(
             PRESENT, interface=InterfaceIdentity("wg1", 99))
@@ -188,7 +202,7 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
     def test_missing_d002_or_no_prior_generation(self):
         for prior in (replace(self.accepted, wireguard_peer_realizations=()),
                       replace(self.accepted, wireguard_peer_realizations=(
-                          replace(peer(), generation=None),))):
+                          replace(peer(), generation=None, group_owners=(), problem="unconfirmed"),))):
             r = self.evidence(prior)
             self.assertIs(states(r)["corp"], CurrentUseState.UNKNOWN)
             self.assertIs(states(r)["other"], CurrentUseState.CONFIRMED)
@@ -271,14 +285,61 @@ class AcceptedEffectiveStateTests(unittest.TestCase):
         p.last_bindings = (A, EXT)
         self.publish(self.profiles)
         p.begin_effective_transition()
-        # The normal caller passes only the final result after legacy release/recovery.
         p.last_profiles = self.profiles
-        p.last_bindings = (EXT,)
-        recovered = tuple(request(self.cfg, key, EXT) for key in ("corp", "other", "z"))
-        self.publish(recovered)
-        self.assertEqual(p.accepted_effective_state.profiles, recovered)
+        p.pre_reclaim_evidence = self.evidence(self.accepted)
+        recovered_profiles = tuple(
+            request(self.cfg, key, EXT) for key in ("corp", "other", "z"))
+        initial_payload = SimpleNamespace(ready=True)
+        initial_availability = availability(self.profiles)
+        initial_wg = SimpleNamespace(realizations=(peer(),))
+        convergence = SimpleNamespace(realizations=("initial",))
+        ownership = Mock()
+        domain, runner, coordinator, probe_driver = Mock(), Mock(), Mock(), Mock()
+
+        def recover(*args):
+            self.assertIsNone(p.accepted_effective_state)
+            p.last_bindings = (EXT,)
+            return AlphaPostReleaseResult(
+                ("recovered",), SimpleNamespace(ready=True),
+                availability(recovered_profiles),
+                SimpleNamespace(realizations=()), None,
+            )
+
+        with patch("rou.alpha_runtime.release_alpha_undemanded_devices",
+                   return_value=ManagedDeviceReleaseOutcome(("released",), True)) as release, \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   side_effect=recover) as recovery:
+            final = complete_alpha_normal_reconciliation(
+                p, domain, runner, self.manager, convergence, coordinator,
+                probe_driver, ownership, initial_payload, initial_availability,
+                initial_wg, None)
+        release.assert_called_once_with(
+            p, domain, runner, self.manager, convergence, ownership,
+            dependencies_confirmed=True)
+        recovery.assert_called_once()
+        self.assertEqual(final.realizations, ("recovered",))
+        self.assertEqual(p.accepted_effective_state.profiles, recovered_profiles)
         self.assertEqual(p.accepted_effective_state.bindings, (EXT,))
+        self.assertEqual(p.accepted_effective_state.wireguard_peer_realizations, ())
         self.assertNotEqual(p.accepted_effective_state.profiles, p.last_profiles)
+
+    def test_failed_post_release_recovery_does_not_admit_old_generation(self):
+        p = self.prepared
+        p.last_bindings = (A, EXT)
+        self.publish(self.profiles)
+        p.begin_effective_transition()
+        failed = AlphaPostReleaseResult(
+            (), SimpleNamespace(ready=False), None, None, "recovery failed")
+        with patch("rou.alpha_runtime.release_alpha_undemanded_devices",
+                   return_value=ManagedDeviceReleaseOutcome((), True)), \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   return_value=failed):
+            final = complete_alpha_normal_reconciliation(
+                p, Mock(), Mock(), self.manager, SimpleNamespace(realizations=()),
+                Mock(), Mock(), Mock(), SimpleNamespace(ready=True),
+                availability(self.profiles), SimpleNamespace(realizations=(peer(),)), None)
+        self.assertIs(final, failed)
+        self.assertIsNone(p.accepted_effective_state)
 
 
 if __name__ == "__main__":

@@ -1249,6 +1249,50 @@ def reconcile_alpha_after_managed_release(
         )
 
 
+def complete_alpha_normal_reconciliation(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    convergence: ManagedDeviceConvergence,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    result: AlphaReconcileResult,
+    availability_result: LinuxAvailabilityCycleResult | None,
+    wireguard_result: WireGuardPeerRuntimeResult | None,
+    wireguard_error: str | None,
+) -> AlphaPostReleaseResult:
+    """Finish the unchanged legacy release path before admitting its final state.
+
+    Pre-reclaim evidence is diagnostic only: this helper never reads it.
+    In particular, a post-release recovery is the only possible source of
+    accepted state after dependency/lifecycle mutation in the same trigger.
+    """
+    final = AlphaPostReleaseResult(
+        convergence.realizations, result, availability_result,
+        wireguard_result, wireguard_error,
+    )
+    if (result.ready and availability_result is not None
+            and availability_result.confirmed and wireguard_error is None):
+        release = release_alpha_undemanded_devices(
+            prepared, domain_spec, runner, manager, convergence, ownership,
+            dependencies_confirmed=True,
+        )
+        if release.requires_reconvergence:
+            final = reconcile_alpha_after_managed_release(
+                prepared, domain_spec, runner, manager, coordinator, probe_driver, ownership,
+            )
+        else:
+            final = replace(final, realizations=release.realizations)
+    publish_alpha_accepted_effective(
+        prepared, payload_confirmed=final.payload.ready,
+        availability=final.availability, wireguard=final.wireguard,
+        wireguard_error=final.wireguard_error,
+    )
+    return final
+
+
 def _wireguard_peer_problem(
     result: WireGuardPeerRuntimeResult,
 ) -> str | None:
@@ -1786,30 +1830,19 @@ def run_alpha_runtime(
                 availability_result = None
                 wireguard_result = None
                 wireguard_error = None
-            if (
-                result.ready
-                and availability_result is not None
-                and availability_result.confirmed
-                and wireguard_error is None
-            ):
-                release = release_alpha_undemanded_devices(
-                    prepared, domain_spec, runner, managed_device_manager,
-                    convergence, wireguard_peer_ownership,
-                    dependencies_confirmed=True,
-                )
-                managed_realizations = release.realizations
-                if release.requires_reconvergence:
-                    recovered = reconcile_alpha_after_managed_release(
-                        prepared, domain_spec, runner, managed_device_manager,
-                        wireguard_peer_runtime, probe_driver, wireguard_peer_ownership,
-                    )
-                    managed_realizations = recovered.realizations
-                    result = recovered.payload
-                    availability_result = recovered.availability
-                    wireguard_result = recovered.wireguard
-                    wireguard_error = recovered.wireguard_error
-                managed_realizations_holder["current"] = managed_realizations
-                status_agent.confirm_managed_devices(managed_realizations)
+            final = complete_alpha_normal_reconciliation(
+                prepared, domain_spec, runner, managed_device_manager,
+                convergence, wireguard_peer_runtime, probe_driver,
+                wireguard_peer_ownership, result, availability_result,
+                wireguard_result, wireguard_error,
+            )
+            managed_realizations = final.realizations
+            result = final.payload
+            availability_result = final.availability
+            wireguard_result = final.wireguard
+            wireguard_error = final.wireguard_error
+            managed_realizations_holder["current"] = managed_realizations
+            status_agent.confirm_managed_devices(managed_realizations)
             if result.ready:
                 refresh_alpha_managed_demand_status(prepared, status_agent)
             else:
@@ -1818,11 +1851,6 @@ def run_alpha_runtime(
                 ()
                 if wireguard_result is None
                 else wireguard_result.realizations
-            )
-            publish_alpha_accepted_effective(
-                prepared, payload_confirmed=result.ready,
-                availability=availability_result, wireguard=wireguard_result,
-                wireguard_error=wireguard_error,
             )
             return (
                 result,
