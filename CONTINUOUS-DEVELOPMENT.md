@@ -14,6 +14,10 @@ semantics, component semantics or artifact conventions.
 Explicit projectholder `CD` / `CDC` start/resume/continue wording activates the generic loop
 and this development overlay under `AGENTS.md`.
 
+`CD` and `CDC` are accepted activation aliases with **identical process semantics**. The
+project does not assign a separate mode, lifecycle or authority meaning to the extra letter in
+`CDC`, and agents must not infer one from historical wording.
+
 A generic loop, ID/IDC or research-loop instruction does not activate development.
 
 ### New CDC initialization
@@ -43,7 +47,7 @@ Keep routine development-boundary chatter out of chat. The generic `FINAL` summa
 normal end-of-cycle report; an occasional materially useful intermediate note does not alter the
 loop state.
 
-## 2. Review units and development blocks## 2. Review units and development blocks
+## 2. Review units and development blocks
 
 Work proceeds in coherent **review units**.
 
@@ -183,9 +187,9 @@ changed scope again.
 
 ### Documentation impact
 
-For every review unit, determine whether the proposed change materially affects the user/operator documentation required by \`VPNG-M001-R6*\`, including externally observable behavior, configuration/defaults, interfaces, supported environments, safety/trust boundaries or operator procedures. At the affected review boundary require either the applicable documentation delta (both EN and RU, including affected diagrams and examples), or an explicit reviewable reason why no documentation change is necessary.
+For every review unit, determine whether the proposed change materially affects the user/operator documentation required by `VPNG-M001-R6*`, including externally observable behavior, configuration/defaults, interfaces, supported environments, safety/trust boundaries or operator procedures. At the affected review boundary require either the applicable documentation delta (both EN and RU, including affected diagrams and examples), or an explicit reviewable reason why no documentation change is necessary.
 
-A missing pre-existing documentation page is not by itself a no-impact reason. Identify and track pre-existing gaps separately where they are neither introduced nor materially worsened by the proposed change. They do not automatically prevent acceptance of unrelated work. This gate does not establish a historical-backfill release gate, waive existing documentation obligations, or close a permanent Requirement. Documentation layout and artifact conventions remain owned by \`PROJECT-CONVENTIONS.md\`. When the COLLAB overlay is active, bounded processing of these already-established documentation obligations during productive WAIT or true no-WAIT idle follows the documentation-reconciliation lanes in \`COLLABORATIVE-EXECUTION.md\` §§6.1–6.2.
+A missing pre-existing documentation page is not by itself a no-impact reason. Identify and track pre-existing gaps separately where they are neither introduced nor materially worsened by the proposed change. They do not automatically prevent acceptance of unrelated work. This gate does not establish a historical-backfill release gate, waive existing documentation obligations, or close a permanent Requirement. Documentation layout and artifact conventions remain owned by `PROJECT-CONVENTIONS.md`. When the COLLAB overlay is active, bounded processing of these already-established documentation obligations during productive WAIT or true no-WAIT idle follows the documentation-reconciliation lanes in `COLLABORATIVE-EXECUTION.md` §§6.1–6.2.
 
 ## 7. Blocking, deferral and human decisions
 
