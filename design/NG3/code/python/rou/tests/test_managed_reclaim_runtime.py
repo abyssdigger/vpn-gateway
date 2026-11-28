@@ -178,10 +178,25 @@ class RuntimeReclaimPlanTests(TestCase):
             out = execute_reclaim_batch(plan, verify=verify, cleanup=cleanup, retire=retire)
             self.assertEqual(out.dependencies_touched, expected_touched)
             self.assertEqual(out.retirement_attempted, expected_attempt)
-            self.assertEqual(out.requires_recovery, expected_touched)
+            # Replacement policy was already applied, so even the first
+            # pre-cleanup guard failure requires fresh recovery.
+            self.assertTrue(out.requires_recovery)
+            self.assertEqual(cleanup.call_count, int(expected_touched))
             self.assertEqual(retire.call_count, int(expected_attempt))
             self.assertEqual(out.retired, frozenset({"a"}) if expected_attempt else frozenset())
             self.assertEqual(out.problem is None, expected_attempt)
+
+    def test_empty_batch_without_problem_does_not_require_recovery(self):
+        plan = self.strict_plan()
+        plan = replace(plan, projection=replace(plan.projection, retirement_candidates=()))
+        verify, cleanup, retire = Mock(), Mock(), Mock()
+        out = execute_reclaim_batch(plan, verify=verify, cleanup=cleanup, retire=retire)
+        self.assertIsNone(out.problem)
+        self.assertFalse(out.requires_recovery)
+        self.assertFalse(out.retired)
+        verify.assert_not_called()
+        cleanup.assert_not_called()
+        retire.assert_not_called()
 
     def test_batch_failure_after_success_stops_remaining_without_rollback(self):
         plan = self.strict_plan()

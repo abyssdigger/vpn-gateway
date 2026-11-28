@@ -320,7 +320,7 @@ class ReclaimBatchOutcome:
 
     @property
     def requires_recovery(self) -> bool:
-        return self.dependencies_touched or self.retirement_attempted
+        return self.problem is not None or self.dependencies_touched or self.retirement_attempted
 
 
 def execute_reclaim_batch(
@@ -334,7 +334,9 @@ def execute_reclaim_batch(
 
     verify must include fresh replacement-policy/dependency, structural and
     protected peer realization checks. retire must raise unless exact absence
-    has been confirmed. Caller must run one F2 recovery after any touch.
+    has been confirmed. The caller invokes the batch only after confirmed
+    replacement policy was applied and must run one F2 recovery after any
+    problem (even before cleanup), dependency touch, or retirement attempt.
     """
     retired: set[str] = set()
     touched = attempted = False
