@@ -2290,6 +2290,7 @@ Implementation
 
     design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
     design/NG3/code/python/rou/managed_reclaim_projection.py — pure A.012 reclaim projection over caller-admitted structural/use/realization facts; exact survivor/candidate/deferred decisions, no actuation.
+    design/NG3/code/python/rou/managed_reclaim_runtime.py — #41 WIP: immutable plan composition, exact eligibility/retention intent, scoped fresh guard and bounded retirement batch. Не включен в startup/periodic reconcile; не заменяет legacy release до целостной runtime activation и приемки.
     design/NG3/code/python/rou/accepted_effective_state.py — read-only pre-reclaim evidence: all-interface structural contribution facts, exact non-mutating D.001 confirmation and scoped A.004 use; not a retirement decision.
     design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, selective dependency release при снятии demand, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
 

@@ -12,6 +12,7 @@ from rou.alpha_runtime import (
     release_alpha_reclaim_batch,
 )
 from rou.forwarding_gate import ForwardingGateState
+from rou.interface_identity import InterfaceIdentity
 from rou.alpha_runtime import StackReturnAffinityOwnerStatus
 from rou.managed_device_manager import (
     ManagedDeviceManager, ManagedDeviceDesiredState, ManagedDeviceIntentBasis,
@@ -255,7 +256,7 @@ class RuntimeReclaimPlanTests(TestCase):
         prepared = AlphaPreparedPolicy.from_text(
             CONFIG, local_address=IPv4Address("198.19.255.2"))
         prepared.confirmed_managed_interfaces = frozenset()
-        desired = prepared.build_current(EXT.endpoint, (A.endpoint, EXT.endpoint))
+        desired = prepared.build_current(InterfaceIdentity("host0", 99), (A.endpoint, EXT.endpoint))
         result = AlphaReconcileResult(AlphaReconcileStatus.EXACT, desired)
         confirmed = availability(prepared.last_profiles)
         self.assertIsNone(capture_reclaim_replacement_evidence(
