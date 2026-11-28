@@ -179,6 +179,27 @@ class ReclaimProjectionTests(unittest.TestCase):
         self.assertEqual(r.deferred, ())
         self.assertEqual(ids(r.retirement_candidates), {"b", "d"})
 
+    def test_external_binding_conflict_is_scoped_across_profiles(self):
+        e = ConfirmedCurrentUse("p", CurrentUseState.CONFIRMED,
+                               LogicalPathId("external", 0, 0),
+                               InterfaceIdentity("ext0", 800))
+        p = profile("p", 0, {"a": 1}, external=1, current=e)
+        t = profile("t", 0, {"c": 1})
+        for conflicting in (
+            replace(e, profile_id="q", endpoint=InterfaceIdentity("ext0", 801)),
+            replace(e, profile_id="q", path_id=LogicalPathId("external", 0, 1)),
+            replace(e, profile_id="q", endpoint=InterfaceIdentity("ext1", 800)),
+        ):
+            q = profile("q", 0, {"b": 1}, external=1, current=conflicting)
+            r = project(STRICT, [p, q, t], "abc")
+            self.assertEqual(ids(r.deferred), {"a", "b"})
+            self.assertEqual(ids(r.retirement_candidates), {"c"})
+        q = profile("q", 0, {"b": 1}, external=1,
+                    current=replace(e, profile_id="q"))
+        r = project(STRICT, [p, q, t], "abc")
+        self.assertEqual(r.deferred, ())
+        self.assertEqual(ids(r.retirement_candidates), {"a", "b", "c"})
+
     def test_nonmember_positive_use_claim_defers_claimed_managed_device(self):
         p = profile("p", 0, {"b": 1}, current=use("p", "a"))
         q = profile("q", 0, {"a": 1})

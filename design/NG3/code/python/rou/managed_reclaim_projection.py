@@ -290,6 +290,7 @@ def project_reclaim(
     # This detects contradictions, not freshness of an isolated claim.
     bad_use_profiles: set[str] = set()
     use_by_device: dict[str, list[ConfirmedCurrentUse]] = {}
+    binding_claims: dict[tuple[str, object], list[ConfirmedCurrentUse]] = {}
     for row in profiles:
         members = row.managed_ordinary_ids
         if (not _ids(members) or not members <= managed_device_ids
@@ -305,6 +306,10 @@ def project_reclaim(
                 or not isinstance(u.endpoint, InterfaceIdentity)):
             continue
         d = u.path_id.device_id
+        if _count(u.path_id.selector_index) and _count(u.path_id.slot_index):
+            for key in (("path", u.path_id), ("ifname", u.endpoint.ifname),
+                        ("ifindex", u.endpoint.ifindex)):
+                binding_claims.setdefault(key, []).append(u)
         aliases = (names.get(u.endpoint.ifname, set())
                    | indices.get(u.endpoint.ifindex, set())) - {d}
         if aliases:
@@ -324,8 +329,13 @@ def project_reclaim(
                     and _count(u.path_id.selector_index)
                     and _count(u.path_id.slot_index)):
                 use_by_device.setdefault(d, []).append(u)
+    for claims in binding_claims.values():
+        if len({(u.path_id, u.endpoint) for u in claims}) > 1:
+            bad_use_profiles.update(u.profile_id for u in claims)
+            defer({u.path_id.device_id for u in claims} & managed_device_ids,
+                  ReclaimReason.USE)
     for d, claims in use_by_device.items():
-        if len({(u.path_id, u.wireguard_generation) for u in claims}) > 1:
+        if len({u.wireguard_generation for u in claims}) > 1:
             bad_use_profiles.update(u.profile_id for u in claims)
             defer({d}, ReclaimReason.USE)
 
