@@ -1,6 +1,6 @@
 """Non-exposing runtime plan composition tests for #41."""
 from dataclasses import replace
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv4Network
 from unittest import TestCase
 from unittest.mock import Mock, patch
 from types import SimpleNamespace
@@ -370,6 +370,31 @@ warm_paths = 1
             out = release_alpha_reclaim_batch(
                 SimpleNamespace(current_config=plan.config), SimpleNamespace(namespace="ns"),
                 Mock(), self.manager, plan, SimpleNamespace(bindings=(EXT,)), None, ownership)
+        self.assertTrue(out.requires_recovery)
+        self.assertFalse(out.retirement_attempted)
+        self.assertFalse(out.retired)
+        self.adapter.retire_exact.assert_not_called()
+
+    def test_alpha_batch_rejects_reappearing_candidate_payload_after_cleanup(self):
+        plan = self.strict_plan()
+        ownership = Mock()
+        ownership.converge.return_value.confirmed = True
+
+        def drift(desired):
+            original = desired.peers[0]
+            restored = replace(original, allowed_ips=(
+                *original.allowed_ips, IPv4Network("10.253.0.0/24"),
+            ))
+            return WireGuardPeerOwnershipObservation(
+                desired.device_id, desired.interface, (restored, *desired.peers[1:]))
+        ownership.observe.side_effect = drift
+        with patch("rou.alpha_runtime.observe_alpha_pre_reclaim", return_value=plan.evidence), \
+             patch("rou.alpha_runtime.reclaim_replacement_policy_exact", return_value=True):
+            out = release_alpha_reclaim_batch(
+                SimpleNamespace(current_config=plan.config), SimpleNamespace(namespace="ns"),
+                Mock(), self.manager, plan, SimpleNamespace(bindings=(EXT,)), None, ownership)
+        ownership.converge.assert_called_once()
+        ownership.observe.assert_called_once()
         self.assertTrue(out.requires_recovery)
         self.assertFalse(out.retirement_attempted)
         self.assertFalse(out.retired)
