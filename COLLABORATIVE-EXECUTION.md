@@ -500,6 +500,53 @@ Set PRODUCTIVE_WAIT_BUDGET = 5 minutes as a maximum continuous slice, not a quot
 
 An eligible gap is an existing project object within an accepted permanent Requirement that lacks unambiguously required coverage/conformance. Record the exact Requirement, object and baseline, observed missing property, accepted sources, and falsifiable acceptance condition. The required semantic effect must follow from these sources without choosing new support, scope, architecture, recovery or version semantics or resolving an ambiguous normative source. Different equivalent implementations or wording are not by themselves a semantic choice. If materially different semantic effects remain permissible, or the basis is insufficient, route the affected gap to SPEC.
 
+#### Documentation reconciliation during productive WAIT
+
+When productive WAIT is admitted and no ordinary runnable work exists, perform a bounded
+documentation-reconciliation pass **before inventing a new maintenance/discovery topic**.
+
+Use the documentation-impact rule in `CONTINUOUS-DEVELOPMENT.md` and artifact conventions in
+`PROJECT-CONVENTIONS.md`. Prefer, in order:
+
+1. documentation obligations already attached to a current or recently completed review unit but not
+   yet materialized or explicitly dispositioned;
+2. current user/operator/architecture/implementation documentation whose factual statements became
+   stale because of an accepted implementation, materialization-status or architecture change;
+3. required EN/RU parity, affected diagrams and examples when the governing documentation obligation
+   requires them;
+4. traceability/status/CHANGELOG corrections only when the owning conventions say the completed
+   change actually requires them;
+5. clearly established pre-existing documentation gaps under an accepted permanent Requirement,
+   after current-work documentation debt has been exhausted.
+
+For every candidate, bind the check to exact current evidence: relevant task Issue/review result,
+accepted source SHA/baseline, affected Requirement/architecture rule and the specific documentation
+claim or required artifact. Re-read the current source rather than assuming a remembered gap still
+exists.
+
+Documentation maintenance is not a license to manufacture prose. Do **not** use idle time for
+stylistic polishing, speculative future documentation, broad rewrites, historical backfill without
+an accepted present obligation, or wording that chooses unresolved product/architecture semantics.
+Do not turn a missing page into evidence that a new feature, support promise or behavior is required.
+If the required semantic effect is ambiguous, route the ambiguity normally instead of documenting a
+guess.
+
+If the documentation delta is mechanically determined, bounded, authorized by the active development
+scope and has an independent review path, it may be implemented as productive-WAIT maintenance.
+Otherwise create/reuse a normal topical Issue or preserve the exact gap for later routing. A
+documentation-only maintenance task follows the same GitHub-native trace rule as other development:
+its Issue/comment history contains the documentation problem, basis, exact changed files/commit,
+checks and review result; service coordination stays outside it.
+
+A documentation pass is complete when the checked current-work frontier has either:
+- no remaining mechanically actionable documentation obligation;
+- a bounded documentation candidate produced for independent review; or
+- each remaining gap truthfully routed/recorded with its unresolved dependency.
+
+Do not repeatedly rescan the same unchanged documentation frontier inside one productive-WAIT slice
+after such a conclusion. Re-run only after a relevant task/commit/documentation source changes or a
+new ordinary work item becomes available.
+
 Before creating a narrow maintenance task, check the current ordinary task inventory for existing compatible work. Identify the gap by Requirement ID, affected object and gap class as coordination metadata, not authority. Reuse compatible work and ordinary branch/lease coordination. An inventory check is not an atomic reservation; revalidate before implementation if overlapping tasks were discovered concurrently. On a later slice revalidate the accepted Requirement and source baseline; preserve partial state only within the still-applicable scope.
 
 Discovery/task creation is separate from implementation. Before taking a mechanically determined task into implementation without prior SPEC task specification, establish an independent terminal-review/acceptance path under the current role/process contract. A producer of the candidate may not terminally accept it. In the current pilot GUARD may discover/scope and route to BUILDER but may not implement a candidate it would then terminally accept. Discovery/specification alone does not preclude independent review of a separately produced candidate. A reviewer who performs a substantive correction of a candidate is a producer of the corrected candidate and may not terminally self-accept it. A different chat/session of the same transport role does not establish independence by itself. If the permitted independent acceptance path is unavailable, preserve or route the gap without self-implementation.
