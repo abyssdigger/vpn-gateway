@@ -1,7 +1,7 @@
 """First executable NG3 alpha runtime assembly.
 
 Architecture: structured Annex A A.001 ProductLifecycleControl,
-A.011 ProtectiveModeManager, A.012 ManagedDeviceManager, and Annex E
+A.004 PayloadTrafficManager, A.011 ProtectiveModeManager, A.012 ManagedDeviceManager, and Annex E
 E.001 HostPublicationAdapter runtime composition.
 The component specs own normative requirement traceability.
 
@@ -23,9 +23,9 @@ rejected at configuration load rather than silently ignored.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
-from ipaddress import IPv4Address, IPv4Interface
+from ipaddress import IPv4Address, IPv4Interface, IPv4Network
 import os
 from pathlib import Path
 import signal
@@ -34,6 +34,9 @@ import sys
 import threading
 from typing import Iterable, Mapping
 
+from .accepted_effective_state import (
+    AcceptedEffectiveState, PreReclaimEvidence, observe_pre_reclaim,
+)
 from .composite_nft_policy import CompositeNftDesiredState
 from .availability_description import resolve_availability_probe_intents
 from .availability_manager import (
@@ -92,8 +95,19 @@ from .linux_availability_cycle import (
 from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_protective_payload_gate import LinuxProtectivePayloadGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
+from .managed_device_demand import project_final
+from .managed_reclaim_runtime import (
+    ExactEligibility, RuntimeReclaimPlan, ReclaimBatchOutcome,
+    build_runtime_reclaim_plan, replacement_managed_interfaces, exact_lifecycle_demand,
+    project_managed_reclaim_realizations, structural_retirement_precondition,
+    replacement_peer_ownership_exact, cleanup_ownership_desired,
+    execute_reclaim_batch, recovery_eligibility_seed, recovery_managed_interfaces,
+)
 from .managed_device_manager import (
+    ManagedDeviceConvergence,
+    converge_managed_device_presence,
     ManagedDeviceDesiredState,
+    ManagedDeviceIntentBasis,
     ManagedDeviceManager,
     ManagedDeviceRealization,
 )
@@ -101,7 +115,12 @@ from .managed_wireguard_adapter import (
     LinuxManagedWireGuardAdapter,
     ManagedWireGuardState,
 )
-from .wireguard_peer_ownership import WireGuardPeerOwnershipEnforcer
+from .wireguard_peer_ownership import (
+    WireGuardPeerAllowedIPs,
+    WireGuardPeerOwnershipDesired,
+    WireGuardPeerOwnershipObservation,
+    WireGuardPeerOwnershipEnforcer,
+)
 from .wireguard_peer_runtime import (
     WireGuardPeerRuntimeCoordinator,
     WireGuardPeerRuntimeResult,
@@ -150,7 +169,8 @@ from .payload_network_policy_desired import (
 )
 from .payload_forward_desired import PayloadForwardDesiredState
 from .device_firewall_desired import DeviceFirewallDesiredState
-from .payload_routing_desired import PayloadRoutingDesiredState
+from .payload_routing_desired import PayloadRoutingDesiredState, build_payload_routing_desired_state
+from .probe_precondition import verify_probe_execution_precondition
 from .payload_profile import (
     LOG_TAG as PROF_LOG_TAG,
     PayloadProfileRequest,
@@ -224,11 +244,16 @@ class AlphaPreparedPolicy:
     binding_state: DeviceBindingState
     current_config: CurrentConfig
     config: Release1Config
+    confirmed_managed_interfaces: frozenset[InterfaceIdentity] | None = None
     last_bindings: tuple[PathBinding, ...] = ()
     last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_path_routes: tuple[RoutePriorityPathRoute, ...] = ()
     last_probe_assembly: ProbePlaneDesiredAssembly | None = None
+    accepted_effective_state: AcceptedEffectiveState | None = None
+    # Trigger-local pre-prune evidence, never published as final current status.
+    pre_reclaim_evidence: PreReclaimEvidence | None = None
+
     availability_runtime: AvailabilityProbeRuntime = field(
         default_factory=AvailabilityProbeRuntime
     )
@@ -244,6 +269,12 @@ class AlphaPreparedPolicy:
         ProbePolicyOwner,
         ProbeOwnershipDependency,
     ] = field(default_factory=dict)
+
+    def begin_effective_transition(self) -> AcceptedEffectiveState | None:
+        previous = self.accepted_effective_state
+        self.accepted_effective_state = None
+        self.pre_reclaim_evidence = None
+        return previous
 
     @classmethod
     def from_text(
@@ -278,6 +309,20 @@ class AlphaPreparedPolicy:
             for rule in (self.config.devices[device_id].firewall or ())
         )
 
+    def eligible_interfaces(
+        self, interfaces: tuple[InterfaceIdentity, ...]
+    ) -> tuple[InterfaceIdentity, ...]:
+        if self.confirmed_managed_interfaces is None:
+            return interfaces
+        managed_names = {
+            device.interface for device in self.current_config.managed_vpns.values()
+        }
+        return tuple(
+            endpoint for endpoint in interfaces
+            if endpoint.ifname not in managed_names
+            or endpoint in self.confirmed_managed_interfaces
+        )
+
     def build_current(
         self,
         host_boundary: InterfaceIdentity,
@@ -291,7 +336,7 @@ class AlphaPreparedPolicy:
         projection = project_device_bindings(
             self.config.structural.device_binding_intents,
             self.binding_state,
-            interfaces,
+            self.eligible_interfaces(interfaces),
         )
         self.binding_state = projection.next_state
 
@@ -493,23 +538,473 @@ def _managed_device_problem(
     for item in realizations:
         if item.problem is not None:
             return f"managed Device {item.device_id!r}: {item.problem}"
-        if item.waiting_for_dependencies:
-            return f"managed Device {item.device_id!r} is still waiting for dependencies"
         if require_absent:
+            if item.waiting_for_dependencies:
+                return f"managed Device {item.device_id!r} is still waiting for dependencies"
             if item.confirmed_state is not ManagedWireGuardState.ABSENT:
                 return f"managed Device {item.device_id!r} absence is not confirmed"
             continue
+        # A.012 may intentionally hold an exact present surplus base without
+        # structural demand, or exclude a retirement candidate before its
+        # bounded cleanup. Neither is a terminal absence request.
         if (
-            item.desired_state is ManagedDeviceDesiredState.PRESENT
-            and item.confirmed_state is not ManagedWireGuardState.PRESENT
+            item.desired_state is ManagedDeviceDesiredState.ABSENT
+            and item.confirmed_state is ManagedWireGuardState.PRESENT
+            and item.intent_basis in (
+                ManagedDeviceIntentBasis.RECLAIM_DEFERRED_HOLD,
+                ManagedDeviceIntentBasis.RECLAIM_RETIREMENT,
+            )
         ):
-            return f"managed Device {item.device_id!r} presence is not confirmed"
+            if (
+                item.confirmed_interface is None
+                or not item.confirmed_generation
+                or item.payload_eligible is not False
+            ):
+                return f"managed Device {item.device_id!r} reclaim realization is not exact"
+            if (
+                item.waiting_for_dependencies
+                and item.intent_basis is not ManagedDeviceIntentBasis.RECLAIM_RETIREMENT
+            ):
+                return f"managed Device {item.device_id!r} is still waiting for dependencies"
+            continue
+        if item.waiting_for_dependencies:
+            return f"managed Device {item.device_id!r} is still waiting for dependencies"
+        if item.desired_state is ManagedDeviceDesiredState.PRESENT:
+            if item.confirmed_state is not ManagedWireGuardState.PRESENT:
+                return f"managed Device {item.device_id!r} presence is not confirmed"
+            if (
+                not item.confirmed_generation
+                or item.confirmed_generation != item.desired_generation
+                or (
+                    item.intent_basis is not None
+                    and item.confirmed_interface is None
+                )
+            ):
+                return f"managed Device {item.device_id!r} presence identity/generation is not confirmed"
         if (
             item.desired_state is ManagedDeviceDesiredState.ABSENT
             and item.confirmed_state is not ManagedWireGuardState.ABSENT
         ):
             return f"managed Device {item.device_id!r} absence is not confirmed"
     return None
+
+
+def _observe_presence_bindings(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    *,
+    eligible_only: bool = False,
+) -> tuple[PathBinding, ...]:
+    interfaces = LinuxVpnPathAdapter(
+        runner, domain_spec.namespace
+    ).observe_interfaces().interfaces
+    if eligible_only:
+        interfaces = prepared.eligible_interfaces(interfaces)
+    # A tentative read-only projection does not commit C.004 slot changes.
+    return project_device_bindings(
+        prepared.config.structural.device_binding_intents,
+        prepared.binding_state,
+        interfaces,
+    ).bindings
+
+
+def observe_alpha_pre_reclaim(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    previous_accepted: AcceptedEffectiveState | None,
+) -> PreReclaimEvidence:
+    """Read the full inventory without committing bindings or changing eligibility."""
+    return observe_pre_reclaim(
+        prepared.current_config, previous_accepted, manager,
+        lambda: _observe_presence_bindings(prepared, domain_spec, runner),
+    )
+
+
+def publish_alpha_accepted_effective(
+    prepared: AlphaPreparedPolicy,
+    *,
+    payload_confirmed: bool,
+    availability: LinuxAvailabilityCycleResult | None,
+    wireguard: WireGuardPeerRuntimeResult | None,
+    wireguard_error: str | None,
+) -> None:
+    """Publish only the final fully confirmed generation of a normal trigger."""
+    prepared.accepted_effective_state = None
+    if (not payload_confirmed or availability is None or not availability.confirmed
+            or availability.observation is None or availability.priority is None
+            or not availability.priority.confirmed or wireguard_error is not None
+            or (prepared.current_config.wireguard_groups and wireguard is None)
+            or (wireguard is not None and not wireguard.confirmed)):
+        return
+    prepared.accepted_effective_state = AcceptedEffectiveState(
+        availability.observation.projection.effective_profiles,
+        prepared.last_bindings,
+        () if wireguard is None else wireguard.realizations,
+    )
+
+
+def converge_alpha_managed_device_presence(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+) -> ManagedDeviceConvergence:
+    convergence = converge_managed_device_presence(
+        prepared.current_config,
+        manager,
+        lambda: _observe_presence_bindings(prepared, domain_spec, runner),
+    )
+    prepared.confirmed_managed_interfaces = convergence.confirmed_interfaces
+    return convergence
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedDeviceReleaseOutcome:
+    """Dependency mutation and D.001 retirement are independent facts."""
+
+    realizations: tuple[ManagedDeviceRealization, ...]
+    dependencies_touched: bool = False
+    retirement_attempted: bool = False
+
+    @property
+    def requires_reconvergence(self) -> bool:
+        return self.dependencies_touched or self.retirement_attempted
+
+
+@dataclass(frozen=True, slots=True)
+class ReclaimReplacementEvidence:
+    """Confirmed replacement inputs captured before any retirement touch."""
+
+    config: CurrentConfig
+    bindings: tuple[PathBinding, ...]
+    path_routes: tuple[RoutePriorityPathRoute, ...]
+    profiles: tuple[PayloadProfileRequest, ...]
+    assembly: ProbePlaneDesiredAssembly
+    desired: PayloadNetworkPolicyDesiredState
+
+
+def capture_reclaim_replacement_evidence(
+    prepared: AlphaPreparedPolicy,
+    result: AlphaReconcileResult,
+    availability: LinuxAvailabilityCycleResult | None,
+    wireguard: WireGuardPeerRuntimeResult | None,
+    wireguard_error: str | None,
+) -> ReclaimReplacementEvidence | None:
+    """Capture only fully confirmed C.001/A.004/D.002 replacement state."""
+    if (not result.ready or result.desired is None
+            or availability is None or not availability.confirmed
+            or availability.observation is None
+            or availability.priority is None or not availability.priority.confirmed
+            or wireguard_error is not None
+            or (prepared.current_config.wireguard_groups and wireguard is None)
+            or (wireguard is not None and not wireguard.confirmed)
+            or prepared.last_probe_assembly is None):
+        return None
+    return ReclaimReplacementEvidence(
+        prepared.current_config, prepared.last_bindings, prepared.last_path_routes,
+        availability.observation.projection.effective_profiles,
+        prepared.last_probe_assembly, result.desired,
+    )
+
+
+def reclaim_replacement_policy_exact(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    replacement: ReclaimReplacementEvidence,
+    retirement_ids: frozenset[str],
+) -> bool:
+    """Fresh read-only C.001/probe/priority/affinity verification.
+
+    Route priorities may have legitimately changed after the initial payload
+    convergence; compare against the final confirmed effective order, not
+    the initial desired route metrics. The original plan is not recomputed.
+    """
+    if prepared.current_config is not replacement.config:
+        return False
+    if (any(b.path_id.device_id in retirement_ids for b in replacement.bindings)
+            or any(r.path_id.device_id in retirement_ids for r in replacement.path_routes)
+            or any(p.device_id in retirement_ids
+                   for profile in replacement.profiles for p in profile.ordered_paths)):
+        return False
+    try:
+        routing = build_payload_routing_desired_state(
+            replacement.profiles, replacement.assembly.layout,
+            replacement.path_routes, replacement.desired.routing.host_boundary,
+        )
+        snapshot = LinuxStructuralPolicyBackend(
+            runner=runner, namespace=domain_spec.namespace,
+            platform=NG3_LINUX_POLICY_PLATFORM,
+        ).observe_structural_snapshot()
+        if not compare_structural_policy(
+            snapshot, routing, replacement.desired.nft, NG3_LINUX_POLICY_PLATFORM,
+        ).desired_confirmed:
+            return False
+        if not verify_probe_execution_precondition(
+            snapshot, replacement.assembly.probe, NG3_LINUX_POLICY_PLATFORM,
+        ).confirmed:
+            return False
+        if replacement.desired.stack_return_affinity is not None:
+            if LinuxStackReturnAffinityBackend(
+                runner, domain_spec.namespace, NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            ).observe(replacement.desired.stack_return_affinity).status is not StackReturnAffinityOwnerStatus.EXACT:
+                return False
+        return LinuxForwardingGateDriver(
+            runner, domain_spec.namespace,
+        ).observe_forwarding_gate() is ForwardingGateState.ENABLED
+    except Exception:
+        return False
+
+
+def prepare_alpha_reclaim_plan(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    convergence: ManagedDeviceConvergence,
+    previous_accepted: AcceptedEffectiveState | None,
+) -> tuple[RuntimeReclaimPlan, tuple[ManagedDeviceRealization, ...]]:
+    """Prepare a coherent new eligibility/realization projection before policy I/O."""
+    evidence = observe_alpha_pre_reclaim(
+        prepared, domain_spec, runner, manager, previous_accepted,
+    )
+    plan = build_runtime_reclaim_plan(prepared.current_config, evidence, previous_accepted)
+    eligible = replacement_managed_interfaces(plan)
+    realizations = project_managed_reclaim_realizations(
+        prepared.current_config, evidence, convergence.realizations, eligible,
+        frozenset(row.device_id for row in plan.projection.retirement_candidates),
+    )
+    # Publish only after the whole pure plan/realization composition succeeded.
+    prepared.pre_reclaim_evidence = evidence
+    prepared.confirmed_managed_interfaces = eligible
+    return plan, realizations
+
+
+def prepare_alpha_normal_reconciliation(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+) -> tuple[ManagedDeviceConvergence, RuntimeReclaimPlan | None, tuple[ManagedDeviceRealization, ...]]:
+    """Shared startup/periodic preparation; no policy or retirement actuation.
+
+    Structural presence convergence may create a demanded VPN. The immutable
+    reclaim plan and its exact eligibility must both succeed before the caller
+    may converge normal payload policy. External-only configurations have no
+    reclaim subject.
+    """
+    previous = prepared.begin_effective_transition()
+    convergence = converge_alpha_managed_device_presence(prepared, domain_spec, runner, manager)
+    if not prepared.current_config.managed_vpns:
+        return convergence, None, convergence.realizations
+    plan, realizations = prepare_alpha_reclaim_plan(
+        prepared, domain_spec, runner, manager, convergence, previous,
+    )
+    return convergence, plan, realizations
+
+
+def release_alpha_reclaim_batch(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    plan: RuntimeReclaimPlan,
+    replacement: ReclaimReplacementEvidence,
+    wireguard: WireGuardPeerRuntimeResult | None,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> ReclaimBatchOutcome:
+    """Execute the exact immutable batch; the caller owns mandatory F2 recovery."""
+    retirement_ids = frozenset(row.device_id for row in plan.projection.retirement_candidates)
+    bindings = frozenset(replacement.bindings)
+    peers = () if wireguard is None else wireguard.realizations
+
+    def verify(candidate, already_retired, cleaned):
+        if prepared.current_config is not plan.config:
+            return False
+        fresh = observe_alpha_pre_reclaim(
+            prepared, domain_spec, runner, manager, plan.previous_accepted,
+        )
+        if not structural_retirement_precondition(
+            plan, prepared.current_config, fresh, candidate_id=candidate.device_id,
+            already_retired=already_retired, replacement_bindings=bindings,
+        ):
+            return False
+        if not reclaim_replacement_policy_exact(
+            prepared, domain_spec, runner, replacement, retirement_ids,
+        ):
+            return False
+        if not replacement_peer_ownership_exact(
+            plan, fresh, bindings, candidate.device_id, peers, ownership.observe,
+        ):
+            return False
+        if cleaned:
+            desired = cleanup_ownership_desired(plan.config, candidate)
+            if ownership.observe(desired) != WireGuardPeerOwnershipObservation(
+                desired.device_id, desired.interface, desired.peers,
+            ):
+                return False
+        return True
+
+    def cleanup(candidate):
+        return ownership.converge(cleanup_ownership_desired(plan.config, candidate)).confirmed
+
+    def retire(candidate):
+        manager.retire_reclaim_candidate(plan.config, candidate)
+
+    return execute_reclaim_batch(
+        plan, verify=verify, cleanup=cleanup, retire=retire,
+    )
+
+
+def release_alpha_undemanded_devices(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    convergence: ManagedDeviceConvergence,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    *,
+    dependencies_confirmed: bool,
+) -> ManagedDeviceReleaseOutcome:
+    """Stop only after exact replacement policy and peer-dependency removal."""
+    pending = tuple(
+        item for item in convergence.realizations if item.waiting_for_dependencies
+    )
+    if not dependencies_confirmed or not pending:
+        return ManagedDeviceReleaseOutcome(convergence.realizations)
+    desired = convergence.projection.desired_device_ids
+
+    def replacement_still_current() -> bool:
+        fresh = _observe_presence_bindings(
+            prepared, domain_spec, runner, eligible_only=True
+        )
+        # A desired Device set alone cannot distinguish a vanished or replaced
+        # concrete path from the generation whose dependencies were confirmed.
+        return (
+            frozenset(fresh) == frozenset(prepared.last_bindings)
+            and project_final(prepared.current_config, fresh).desired_device_ids == desired
+        )
+
+    # In particular, a replacement disappearing since policy convergence
+    # must not cause release of a still-needed reserve.
+    try:
+        if not replacement_still_current():
+            return ManagedDeviceReleaseOutcome(convergence.realizations)
+    except Exception:
+        return ManagedDeviceReleaseOutcome(convergence.realizations)
+
+    safe_ids: set[str] = set()
+    problems: dict[str, str] = {}
+    dependencies_touched = False
+    for item in pending:
+        try:
+            config = prepared.current_config.managed_vpns[item.device_id]
+            if item.confirmed_interface is None:
+                raise AlphaRuntimeError("retiring interface identity is unconfirmed")
+            # C.001 no longer references this path. Remove D.003 payload
+            # ownership too, retaining only D.001's permanent probe identities.
+            peer_desired = WireGuardPeerOwnershipDesired(
+                item.device_id,
+                item.confirmed_interface,
+                tuple(sorted(
+                    WireGuardPeerAllowedIPs(
+                        peer.public_key,
+                        (IPv4Network(f"{peer.probe_target}/32"),),
+                    )
+                    for peer in config.peers
+                )),
+            )
+            # Even an exception or an unconfirmed result can follow mutation.
+            dependencies_touched = True
+            result = ownership.converge(peer_desired)
+            if not result.confirmed:
+                raise AlphaRuntimeError(result.diagnostic or "peer release unconfirmed")
+            safe_ids.add(item.device_id)
+        except Exception as exc:
+            problems[item.device_id] = f"dependency release: {type(exc).__name__}: {exc}"
+    if safe_ids:
+        # Recheck after D.003 mutations, immediately before authorizing D.001.
+        try:
+            if not replacement_still_current():
+                safe_ids.clear()
+        except Exception:
+            safe_ids.clear()
+    if safe_ids:
+        absent = manager.reconcile_undemanded(
+            prepared.current_config,
+            desired_device_ids=desired,
+            dependency_free_device_ids=frozenset(safe_ids),
+        )
+        realizations = tuple(sorted(
+            tuple(item for item in convergence.realizations if item.device_id in desired)
+            + absent,
+            key=lambda item: item.device_id,
+        ))
+    else:
+        realizations = convergence.realizations
+    return ManagedDeviceReleaseOutcome(
+        tuple(
+            replace(item, waiting_for_dependencies=False, problem=problems[item.device_id])
+            if item.device_id in problems else item
+            for item in realizations
+        ),
+        dependencies_touched=dependencies_touched,
+        retirement_attempted=bool(safe_ids),
+    )
+
+
+def refresh_alpha_managed_demand_status(
+    prepared: AlphaPreparedPolicy,
+    agent: RuntimeStatusAgent,
+) -> None:
+    """Project diagnostics from the last confirmed normal binding observation.
+
+    The caller must have confirmed the current binding-dependent policy.
+    This read-only A.013 calculation does not actuate a new desired set;
+    A.012's accepted desired and confirmed states remain separate.
+    """
+    agent.confirm_managed_demand(
+        project_final(prepared.current_config, prepared.last_bindings)
+    )
+
+
+def refresh_alpha_managed_reclaim_status(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    agent: RuntimeStatusAgent,
+) -> None:
+    """Publish only a fresh, read-only projection of the final accepted state.
+
+    The trigger-local actionable plan is never a source of current status.
+    Neither this observation nor the resulting projection authorizes release.
+    """
+    agent.confirm_managed_reclaim(None)
+    config = prepared.current_config
+    accepted = prepared.accepted_effective_state
+    if not config.managed_vpns:
+        return
+    agent.confirm_managed_demand(None)
+    if accepted is None:
+        return
+    try:
+        evidence = observe_alpha_pre_reclaim(
+            prepared, domain_spec, runner, manager, accepted,
+        )
+        projection = build_runtime_reclaim_plan(config, evidence, accepted).projection
+        lifecycle_demand = exact_lifecycle_demand(config, evidence)
+    except Exception:
+        return
+    # Normal triggers are serialized, but never publish a result across a
+    # changed configuration or effective-generation boundary.
+    if prepared.current_config is not config or prepared.accepted_effective_state is not accepted:
+        return
+    agent.confirm_managed_demand(lifecycle_demand)
+    agent.confirm_managed_reclaim(projection)
 
 
 def _release_alpha_managed_device_dependencies(
@@ -959,6 +1454,347 @@ def reconcile_alpha_availability_wireguard_once(
     return availability_result, wireguard_result, wireguard_error
 
 
+@dataclass(frozen=True, slots=True)
+class AlphaPostReleaseResult:
+    realizations: tuple[ManagedDeviceRealization, ...]
+    payload: AlphaReconcileResult
+    availability: LinuxAvailabilityCycleResult | None
+    wireguard: WireGuardPeerRuntimeResult | None
+    wireguard_error: str | None
+
+
+def reconcile_alpha_after_managed_release(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    *,
+    recovery_seed: frozenset[ExactEligibility] | None = None,
+) -> AlphaPostReleaseResult:
+    """Fresh recovery after possible dependency mutation, without another release.
+
+    Recompute presence first: merely reapplying payload policy with the old
+    confirmed managed-interface set can exclude the retained reserve again.
+    One bounded recovery pass is not a recursive retirement attempt.
+    """
+    try:
+        fresh = converge_alpha_managed_device_presence(
+            prepared, domain_spec, runner, manager
+        )
+        if recovery_seed is not None:
+            evidence = observe_alpha_pre_reclaim(
+                prepared, domain_spec, runner, manager, None,
+            )
+            eligible = recovery_managed_interfaces(
+                prepared.current_config, evidence, recovery_seed,
+            )
+            realizations = project_managed_reclaim_realizations(
+                prepared.current_config, evidence, fresh.realizations, eligible,
+            )
+            prepared.confirmed_managed_interfaces = eligible
+            prepared.pre_reclaim_evidence = None
+            fresh = replace(fresh, realizations=realizations)
+        payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
+        if not payload.ready:
+            return AlphaPostReleaseResult(
+                fresh.realizations, payload, None, None, None
+            )
+        availability, wireguard, error = reconcile_alpha_availability_wireguard_once(
+            prepared, fresh.realizations, coordinator, runner, probe_driver, ownership
+        )
+        return AlphaPostReleaseResult(
+            fresh.realizations, payload, availability, wireguard, error
+        )
+    except Exception as exc:
+        prepared.confirmed_managed_interfaces = frozenset()
+        diagnostic = f"post-release recovery failed: {type(exc).__name__}: {exc}"
+        try:
+            containment = converge_forwarding_gate_once(
+                LinuxForwardingGateDriver(runner, domain_spec.namespace),
+                ForwardingGateState.DISABLED,
+            )
+            diagnostic += f"; containment confirmed={containment.confirmed}"
+        except Exception as containment_exc:
+            diagnostic += f"; containment failed: {containment_exc}"
+        return AlphaPostReleaseResult(
+            (),
+            AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic=diagnostic),
+            None,
+            None,
+            None,
+        )
+
+
+
+@dataclass(frozen=True, slots=True)
+class AlphaReclaimCompletion:
+    final: AlphaPostReleaseResult
+    batch: ReclaimBatchOutcome | None = None
+    problem: str | None = None
+
+
+def complete_alpha_reclaim_reconciliation(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    plan: RuntimeReclaimPlan | None,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    replacement_result: AlphaPostReleaseResult,
+) -> AlphaReclaimCompletion:
+    """Complete one already-attempted replacement; no second reclaim plan.
+
+    This boundary does not admit the effective generation or publish status.
+    Startup and periodic callers own final admission (including startup host
+    checks). Preserve retirement diagnostics independently of the F2 result.
+    """
+    if plan is None:
+        if prepared.current_config.managed_vpns:
+            raise AlphaRuntimeError("managed reclaim completion requires a prepared plan")
+        return AlphaReclaimCompletion(replacement_result)
+    if (prepared.current_config is plan.config
+            and not plan.projection.retirement_candidates):
+        return AlphaReclaimCompletion(replacement_result)
+
+    # Freeze the recovery eligibility before any candidate cleanup/retirement.
+    # A changed configuration cannot inherit the old plan's positive seed.
+    seed = frozenset()
+    batch = None
+    problem = None
+    if prepared.current_config is not plan.config:
+        problem = "reclaim configuration changed before retirement"
+    else:
+        try:
+            seed = recovery_eligibility_seed(plan)
+            replacement = capture_reclaim_replacement_evidence(
+                prepared, replacement_result.payload, replacement_result.availability,
+                replacement_result.wireguard, replacement_result.wireguard_error,
+            )
+            if replacement is None:
+                # Exclusion may already have been applied even if a later
+                # replacement confirmation failed. Do not leave the attempted
+                # pruning as the final state or authorize cleanup from it.
+                problem = "reclaim replacement confirmation unavailable"
+            else:
+                batch = release_alpha_reclaim_batch(
+                    prepared, domain_spec, runner, manager, plan, replacement,
+                    replacement_result.wireguard, ownership,
+                )
+                problem = batch.problem
+        except Exception as exc:
+            problem = f"reclaim completion failed: {type(exc).__name__}: {exc}"
+
+    final = replacement_result
+    if problem is not None or (batch is not None and batch.requires_recovery):
+        if prepared.current_config is not plan.config:
+            seed = frozenset()
+        final = reconcile_alpha_after_managed_release(
+            prepared, domain_spec, runner, manager, coordinator, probe_driver,
+            ownership, recovery_seed=seed,
+        )
+    return AlphaReclaimCompletion(final, batch, problem)
+
+
+def finish_alpha_normal_replacement(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    plan: RuntimeReclaimPlan | None,
+    realizations: tuple[ManagedDeviceRealization, ...],
+    payload: AlphaReconcileResult,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> AlphaReclaimCompletion:
+    """Complete the same D.002/A.007 → batch → F2 path for both callers."""
+    availability = wireguard = error = None
+    if payload.ready:
+        try:
+            availability, wireguard, error = reconcile_alpha_availability_wireguard_once(
+                prepared, realizations, coordinator, runner, probe_driver, ownership,
+            )
+        except Exception as exc:
+            # The replacement may already be installed. A failed observation
+            # cannot authorize cleanup or bypass F2 when candidates were pruned.
+            error = f"replacement confirmation failed: {type(exc).__name__}: {exc}"
+    return complete_alpha_reclaim_reconciliation(
+        prepared, domain_spec, runner, manager, plan, coordinator, probe_driver,
+        ownership, AlphaPostReleaseResult(realizations, payload, availability, wireguard, error),
+    )
+
+
+def _contain_alpha_normal_failure(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    diagnostic: str,
+) -> AlphaReconcileResult:
+    prepared.confirmed_managed_interfaces = frozenset()
+    prepared.begin_effective_transition()
+    try:
+        containment = converge_forwarding_gate_once(
+            LinuxForwardingGateDriver(runner, domain_spec.namespace),
+            ForwardingGateState.DISABLED,
+        )
+        diagnostic += f"; containment confirmed={containment.confirmed}"
+    except Exception as exc:
+        diagnostic += f"; containment failed: {exc}"
+    return AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic=diagnostic)
+
+
+def reconcile_alpha_normal_once(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> tuple[AlphaReclaimCompletion, tuple[ManagedDeviceRealization, ...]]:
+    """Periodic/protective-release normal trigger, under the caller's lock.
+
+    On globally invalid preparation, do not converge a reclaim-pruned policy
+    or attempt any candidate cleanup. The caller publishes the final status.
+    """
+    try:
+        convergence, plan, realizations = prepare_alpha_normal_reconciliation(
+            prepared, domain_spec, runner, manager,
+        )
+    except Exception as exc:
+        failed = _contain_alpha_normal_failure(
+            prepared, domain_spec, runner,
+            f"managed presence/reclaim admission failed: {type(exc).__name__}: {exc}",
+        )
+        return AlphaReclaimCompletion(AlphaPostReleaseResult((), failed, None, None, None)), ()
+    try:
+        payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
+    except Exception as exc:
+        payload = _contain_alpha_normal_failure(
+            prepared, domain_spec, runner,
+            f"replacement policy failed: {type(exc).__name__}: {exc}",
+        )
+    completion = finish_alpha_normal_replacement(
+        prepared, domain_spec, runner, manager, plan, realizations, payload,
+        coordinator, probe_driver, ownership,
+    )
+    return completion, convergence.attempt_problems
+
+
+def publish_alpha_normal_status(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    agent: RuntimeStatusAgent,
+    completion: AlphaReclaimCompletion,
+) -> None:
+    """Finalize one normal generation and its status under the caller's lock.
+
+    Startup additionally requires host readiness before entering this boundary.
+    A recovered effective policy and an unsuccessful reclaim batch are separate
+    facts. A status-only projection is observed after health marking, never used
+    to initiate another batch.
+    """
+    final = completion.final
+    result, availability, wireguard = final.payload, final.availability, final.wireguard
+    publish_alpha_accepted_effective(
+        prepared, payload_confirmed=result.ready, availability=availability,
+        wireguard=wireguard, wireguard_error=final.wireguard_error,
+    )
+    agent.confirm_managed_devices(final.realizations)
+    agent.confirm_wireguard_peers(() if wireguard is None else wireguard.realizations)
+    agent.confirm_managed_reclaim(None)
+    if result.ready and availability is not None and availability.confirmed:
+        agent.confirm_effective(prepared.last_profiles, prepared.last_bindings)
+        if availability.observation is not None:
+            agent.confirm_availability(availability.observation.projection.problem_owners)
+        problems = tuple(dict.fromkeys(p for p in (
+            final.wireguard_error, _managed_device_problem(final.realizations),
+            completion.problem,
+        ) if p))
+        if problems:
+            agent.mark_degraded(
+                problem="; ".join(problems),
+                unknown_fields=("wireguard_peer_realizations",)
+                if final.wireguard_error is not None and wireguard is None else (),
+            )
+        if prepared.current_config.managed_vpns:
+            refresh_alpha_managed_reclaim_status(prepared, domain_spec, runner, manager, agent)
+        else:
+            refresh_alpha_managed_demand_status(prepared, agent)
+        return
+
+    agent.confirm_managed_demand(None)
+    diagnostic = (
+        final.wireguard_error
+        or (availability.diagnostic if availability is not None else None)
+        or result.diagnostic
+        or ("availability reconcile is not confirmed: " + availability.status.value
+            if availability is not None else f"alpha reconcile failed: {result.status.value}")
+    )
+    if completion.problem and completion.problem != diagnostic:
+        diagnostic += "; " + completion.problem
+    agent.mark_unconfirmed(
+        readiness=RuntimeReadiness.DEGRADED, problem=diagnostic,
+        unknown_fields=(
+            ("confirmed_effective_state", "managed_profile_demands")
+            + (("wireguard_peer_realizations",) if prepared.current_config.wireguard_groups else ())
+            + (("managed_device_realizations",)
+               if prepared.current_config.managed_vpns and not final.realizations else ())
+        ),
+    )
+
+
+def complete_alpha_normal_reconciliation(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    convergence: ManagedDeviceConvergence,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    result: AlphaReconcileResult,
+    availability_result: LinuxAvailabilityCycleResult | None,
+    wireguard_result: WireGuardPeerRuntimeResult | None,
+    wireguard_error: str | None,
+) -> AlphaPostReleaseResult:
+    """Historical pre-activation test composition; not a normal runtime entrypoint.
+
+    Pre-reclaim evidence is diagnostic only: this helper never reads it.
+    In particular, a post-release recovery is the only possible source of
+    accepted state after dependency/lifecycle mutation in the same trigger.
+    """
+    final = AlphaPostReleaseResult(
+        convergence.realizations, result, availability_result,
+        wireguard_result, wireguard_error,
+    )
+    if (result.ready and availability_result is not None
+            and availability_result.confirmed and wireguard_error is None):
+        release = release_alpha_undemanded_devices(
+            prepared, domain_spec, runner, manager, convergence, ownership,
+            dependencies_confirmed=True,
+        )
+        if release.requires_reconvergence:
+            final = reconcile_alpha_after_managed_release(
+                prepared, domain_spec, runner, manager, coordinator, probe_driver, ownership,
+            )
+        else:
+            final = replace(final, realizations=release.realizations)
+    publish_alpha_accepted_effective(
+        prepared, payload_confirmed=final.payload.ready,
+        availability=final.availability, wireguard=final.wireguard,
+        wireguard_error=final.wireguard_error,
+    )
+    return final
+
+
 def _wireguard_peer_problem(
     result: WireGuardPeerRuntimeResult,
 ) -> str | None:
@@ -1128,6 +1964,7 @@ def run_alpha_runtime(
     managed_realizations_holder: dict[str, tuple[ManagedDeviceRealization, ...]] = {
         "current": ()
     }
+    reclaim_plan_holder: dict[str, RuntimeReclaimPlan | None] = {}
     probe_driver = LinuxIcmpProbeDriver(
         runner=SubprocessProbeCommandRunner(),
         namespace=ALPHA_NAMESPACE,
@@ -1231,11 +2068,14 @@ def run_alpha_runtime(
             )
         if current_domain_spec.namespace != domain_spec.namespace:
             raise AlphaRuntimeError("managed Device preparation namespace mismatch")
-        realizations = managed_device_manager.reconcile(prepared.current_config)
+        convergence, plan, realizations = prepare_alpha_normal_reconciliation(
+            prepared, current_domain_spec, runner, managed_device_manager,
+        )
         managed_realizations_holder["current"] = realizations
-        problem = _managed_device_problem(realizations)
-        if problem is not None:
-            raise AlphaRuntimeError(problem)
+        reclaim_plan_holder["current"] = plan
+        for problem in convergence.attempt_problems:
+            log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
+                device_id=problem.device_id, diagnostic=problem.problem)
 
     try:
         startup = start_controller_once(
@@ -1276,7 +2116,7 @@ def run_alpha_runtime(
                 "alpha startup returned an unexpected host-routing helper"
             )
         status_agent = RuntimeStatusAgent(
-            build_configured_intent_status(prepared.config),
+            build_configured_intent_status(prepared.current_config),
             version=release_version,
         )
         status_publisher = RuntimeStatusFilePublisher(
@@ -1286,9 +2126,11 @@ def run_alpha_runtime(
         status_agent.confirm_managed_devices(
             managed_realizations_holder["current"]
         )
+        refresh_alpha_managed_demand_status(prepared, status_agent)
         status_publisher.publish(status_agent.snapshot())
 
         def stop_owned_runtime():
+            prepared.begin_effective_transition()
             host_cleanup = HostPublicationAdapter(
                 LinuxHostPublicationDriver(runner)
             ).cleanup()
@@ -1299,9 +2141,11 @@ def run_alpha_runtime(
                     domain_spec,
                     runner,
                 )
+                status_agent.confirm_managed_demand(None)
                 shutdown_config = CurrentConfig(prepared.config, {})
                 shutdown_realizations = managed_device_manager.reconcile(
                     shutdown_config,
+                    desired_device_ids=frozenset(),
                     dependency_free_device_ids=frozenset(
                         prepared.current_config.managed_vpns
                     ),
@@ -1326,25 +2170,27 @@ def run_alpha_runtime(
             )
             return host_cleanup, None, stopped
 
-        (
-            availability_start,
-            wireguard_start,
-            wireguard_start_error,
-        ) = reconcile_alpha_availability_wireguard_once(
-            prepared,
-            managed_realizations_holder["current"],
-            wireguard_peer_runtime,
-            runner,
-            probe_driver,
-            wireguard_peer_ownership,
+        startup_completion = finish_alpha_normal_replacement(
+            prepared, domain_spec, runner, managed_device_manager,
+            reclaim_plan_holder.pop("current"), managed_realizations_holder["current"],
+            AlphaReconcileResult(AlphaReconcileStatus.EXACT, startup.session.desired),
+            wireguard_peer_runtime, probe_driver, wireguard_peer_ownership,
         )
+        startup_final = startup_completion.final
+        availability_start, wireguard_start = startup_final.availability, startup_final.wireguard
+        wireguard_start_error = startup_final.wireguard_error
+        if not startup_final.payload.ready:
+            wireguard_start_error = startup_final.payload.diagnostic or "post-release payload unconfirmed"
+        managed_realizations_holder["current"] = startup_final.realizations
+        status_agent.confirm_managed_devices(startup_final.realizations)
         status_agent.confirm_wireguard_peers(
             ()
             if wireguard_start is None
             else wireguard_start.realizations
         )
         if (
-            not availability_start.confirmed
+            availability_start is None
+            or not availability_start.confirmed
             or wireguard_start_error is not None
         ):
             host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
@@ -1352,10 +2198,14 @@ def run_alpha_runtime(
                 readiness=RuntimeReadiness.FAILED,
                 problem=(
                     wireguard_start_error
-                    or availability_start.diagnostic
+                    or (
+                        availability_start.diagnostic
+                        if availability_start is not None else None
+                    )
                     or (
                         "availability startup cycle is not confirmed: "
-                        f"{availability_start.status.value}"
+                        + (availability_start.status.value
+                           if availability_start is not None else "not_attempted")
                     )
                 ),
                 unknown_fields=(
@@ -1376,10 +2226,14 @@ def run_alpha_runtime(
                 LIFE_LOG_TAG,
                 "start_failed",
                 status="availability_unready",
-                availability=availability_start.status.value,
+                availability=(
+                    availability_start.status.value
+                    if availability_start is not None else "not_attempted"
+                ),
                 diagnostic=(
                     wireguard_start_error
-                    or availability_start.diagnostic
+                    or (availability_start.diagnostic
+                        if availability_start is not None else None)
                 ),
                 host_cleanup=host_cleanup.status.value,
                 managed_device_cleanup_error=managed_cleanup_error,
@@ -1399,57 +2253,21 @@ def run_alpha_runtime(
             )
 
         def reconcile_normal_once_unlocked():
-            managed_realizations = managed_device_manager.reconcile(
-                prepared.current_config
+            status_agent.confirm_managed_reclaim(None)
+            completion, attempt_problems = reconcile_alpha_normal_once(
+                prepared, domain_spec, runner, managed_device_manager, wireguard_peer_runtime,
+                probe_driver, wireguard_peer_ownership,
             )
-            managed_realizations_holder["current"] = managed_realizations
-            status_agent.confirm_managed_devices(managed_realizations)
-            managed_problem = _managed_device_problem(managed_realizations)
-            if managed_problem is not None:
-                status_agent.confirm_wireguard_peers(())
-                return (
-                    AlphaReconcileResult(
-                        AlphaReconcileStatus.FAILED,
-                        None,
-                        diagnostic=managed_problem,
-                    ),
-                    None,
-                    None,
-                    None,
-                )
-            result = reconcile_alpha_payload_once(
-                prepared,
-                domain_spec,
-                runner,
+            for problem in attempt_problems:
+                log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
+                    device_id=problem.device_id, diagnostic=problem.problem)
+            final = completion.final
+            managed_realizations_holder["current"] = final.realizations
+            publish_alpha_normal_status(
+                prepared, domain_spec, runner, managed_device_manager, status_agent, completion,
             )
-            if result.ready:
-                (
-                    availability_result,
-                    wireguard_result,
-                    wireguard_error,
-                ) = reconcile_alpha_availability_wireguard_once(
-                    prepared,
-                    managed_realizations,
-                    wireguard_peer_runtime,
-                    runner,
-                    probe_driver,
-                    wireguard_peer_ownership,
-                )
-            else:
-                availability_result = None
-                wireguard_result = None
-                wireguard_error = None
-            status_agent.confirm_wireguard_peers(
-                ()
-                if wireguard_result is None
-                else wireguard_result.realizations
-            )
-            return (
-                result,
-                availability_result,
-                wireguard_result,
-                wireguard_error,
-            )
+            status_publisher.publish(status_agent.snapshot())
+            return final.payload, final.availability, final.wireguard, final.wireguard_error
 
         def normal_release_confirmed_unlocked() -> bool:
             (
@@ -1523,14 +2341,10 @@ def run_alpha_runtime(
                 else 2
             )
 
-        status_agent.confirm_effective(
-            prepared.last_profiles,
-            prepared.last_bindings,
+        publish_alpha_normal_status(
+            prepared, domain_spec, runner, managed_device_manager, status_agent,
+            startup_completion,
         )
-        if availability_start.observation is not None:
-            status_agent.confirm_availability(
-                availability_start.observation.projection.problem_owners
-            )
         status_publisher.publish(status_agent.snapshot())
 
         protective_manager = ProtectiveModeManager()
@@ -1615,106 +2429,40 @@ def run_alpha_runtime(
         last_diagnostic: str | None = None
         last_problem_owners = initial_problem_owners
         while not stop_event.wait(audit_interval_seconds):
-            previous_bindings = prepared.last_bindings
-            previous_profiles = prepared.last_profiles
-            # Peaceful host-routing assistance is lifecycle-scoped. Ordinary-host
-            # route changes after successful start are administrator-owned and do
-            # not gate core managed-domain reconciliation.
+            # Hold the same normal-transition lock through generation admission,
+            # fresh status observation/publication and transition diagnostics.
             with normal_operation_lock:
+                previous_bindings = prepared.last_bindings
+                previous_profiles = prepared.last_profiles
                 (
                     result,
                     availability_result,
                     wireguard_result,
                     wireguard_error,
                 ) = reconcile_normal_once_unlocked()
-            if (
-                result.ready
-                and availability_result is not None
-                and availability_result.confirmed
-                and wireguard_error is None
-            ):
-                status_agent.confirm_effective(
-                    prepared.last_profiles,
+                current_problem_owners = (
+                    availability_result.observation.projection.problem_owners
+                    if availability_result is not None
+                    and availability_result.observation is not None
+                    else last_problem_owners
+                )
+                _emit_binding_transitions(
+                    logger_holder["logger"],
+                    previous_bindings,
                     prepared.last_bindings,
-                    readiness=RuntimeReadiness.READY,
                 )
-                if availability_result.observation is not None:
-                    status_agent.confirm_availability(
-                        availability_result.observation.projection.problem_owners
-                    )
-            elif (
-                result.ready
-                and availability_result is not None
-                and availability_result.confirmed
-                and wireguard_error is not None
-            ):
-                status_agent.confirm_effective(
+                _emit_availability_transitions(
+                    logger_holder["logger"],
+                    last_problem_owners,
+                    current_problem_owners,
+                )
+                _emit_profile_reactions(
+                    logger_holder["logger"],
+                    previous_profiles,
                     prepared.last_profiles,
-                    prepared.last_bindings,
-                    readiness=RuntimeReadiness.DEGRADED,
                 )
-                if availability_result.observation is not None:
-                    status_agent.confirm_availability(
-                        availability_result.observation.projection.problem_owners
-                    )
-                status_agent.mark_degraded(
-                    problem=wireguard_error,
-                    unknown_fields=(
-                        ("wireguard_peer_realizations",)
-                        if wireguard_result is None
-                        else ()
-                    ),
-                )
-            else:
-                status_agent.mark_unconfirmed(
-                    readiness=RuntimeReadiness.DEGRADED,
-                    problem=(
-                        (
-                            availability_result.diagnostic
-                            if availability_result is not None
-                            else None
-                        )
-                        or result.diagnostic
-                        or (
-                            "availability reconcile is not confirmed: "
-                            f"{availability_result.status.value}"
-                            if availability_result is not None
-                            else f"alpha reconcile failed: {result.status.value}"
-                        )
-                    ),
-                    unknown_fields=(
-                        (
-                            "confirmed_effective_state",
-                            "wireguard_peer_realizations",
-                        )
-                        if prepared.current_config.wireguard_groups
-                        else ("confirmed_effective_state",)
-                    ),
-                )
-            current_problem_owners = (
-                availability_result.observation.projection.problem_owners
-                if availability_result is not None
-                and availability_result.observation is not None
-                else last_problem_owners
-            )
-            _emit_binding_transitions(
-                logger_holder["logger"],
-                previous_bindings,
-                prepared.last_bindings,
-            )
-            _emit_availability_transitions(
-                logger_holder["logger"],
-                last_problem_owners,
-                current_problem_owners,
-            )
-            _emit_profile_reactions(
-                logger_holder["logger"],
-                previous_profiles,
-                prepared.last_profiles,
-            )
-            last_problem_owners = current_problem_owners
+                last_problem_owners = current_problem_owners
 
-            status_publisher.publish(status_agent.snapshot())
             changed_result = (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic

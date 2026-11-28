@@ -1605,12 +1605,22 @@ Implementation
     design/NG3/code/python/rou/controller_restart.py — stop-then-start composition without hidden resume state.
     design/NG3/code/python/rou/alpha_runtime.py — daemon/bootstrap composition, host helpers/publication and final systemd readiness/termination boundary.
 
-Current alpha normal reconciliation also orders D.001 base confirmation -> payload/full probe-plane
-convergence -> D.002 peer/group reconciliation before current-status publication. The same normal
-reconciliation path is used by the periodic audit and the protective-mode explicit normal-release
-precondition; startup performs the initial D.002 trigger before READY publication.
+Current alpha normal reconciliation orders fresh C.004 presence -> A.013/A.012 ordinary
+and reserve convergence -> fresh normal binding -> payload/full probe-plane convergence ->
+D.002 peer/group reconciliation. Undemanded managed instances are released only after
+the lower dependencies are confirmed removed, including D.003 dynamic ownership; a
+release attempt is followed by another fresh normal observation/convergence before status
+publication. The same normal reconciliation path is used by periodic audit and the
+protective-mode explicit normal-release precondition; startup performs initial presence,
+normal policy and D.002 convergence before READY publication.
 
-**Evidence:** `EV-00000`, `EV-00240`
+F1 closure candidate (не текущая materialization): после ordinary/reserve convergence и до
+исключения managed endpoints из normal binding A.012 должен вычислить reclaim projection по
+свежей структурной емкости и подтвержденному current-use. После любого затронувшего lower state
+selective dependency-release/retirement attempt сохраняется F2 fresh nonrecursive normal
+reconvergence; A.001 не становится отдельным владельцем reclaim policy.
+
+**Evidence:** `EV-00000`, `EV-00240`, `EV-00300`
 
 API
 
@@ -1670,6 +1680,9 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R5` — [`full`]
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
@@ -1722,6 +1735,12 @@ Architectural decisions
 10. `Секреты нормализуются как ссылки`
    *ConfigurationAdapter проверяет только каноническое написание абсолютных ссылок на файлы секретов и не читает значение секрета. Проверка типа файла, владельца, прав доступа и свежего содержимого принадлежит D.001 непосредственно перед изменением базовой реализации. Нормализованные контракты и отчет о состоянии не содержат значения секрета.*
 
+11. `Конфигурационно заданное число теплых обычных путей`
+   *Profile нормализует canonical current field `warm_paths` как `0 | positive N | "all"`. Цель относится только к ordinary memberships; `:reserve` не входит в warm capacity. Отсутствие поля означает `"all"` для ordinary memberships. Конечное N больше суммарной configured ordinary capacity enabled memberships отклоняется до runtime mutation.*
+
+12. `Общая политика освобождения управляемых VPN`
+   *Canonical current surface принимает одно domain-level поле `managed_reclaim = "careful" | "strict"`; отсутствие поля нормализуется в `careful`. Иные значения, типы и локальные Profile/Device overrides отклоняются до network mutation. A.002 выпускает typed normalized value в `CurrentConfig`, снимая это расширение перед frozen Release-1 parser. A.012 потребляет его; A.013 не получает reclaim policy. A.002 materialized [`full`]: `parse_current_config` нормализует поле в `CurrentConfig.managed_reclaim: ManagedReclaimPolicy` (`CAREFUL` по умолчанию, `STRICT` при opt-in). Direct Profile/Device override отвергается даже на disabled placeholders; frozen `parse_release1_config` по-прежнему отвергает поле. Trailing defaulted field сохраняет прежний positional constructor. Проверено шестью целевыми тестами в `rou/tests/test_release1_config.py` и полным CI на commit `629bc935d5bcedbe0caab71418f49d4ce2ed5f01` (NG3 Python run `45843863577`: 955 unit tests, 25 jobs PASS). Это подтверждает только configuration contribution A.002, не reclaim behavior A.012 и не closure R7.R4.R1/R2.*
+
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
 сохраняет внешний Device mode при отсутствии `managed_vpn`, выводит exact binding/UDP
@@ -1739,6 +1758,15 @@ typed `CurrentConfig.wireguard_groups` напрямую, поэтому преж
 `ManagedWireGuardConfig.shared_prefixes` one-group bridge удален и второго prefix source
 между A.002 и D.002 больше нет. Дальнейшие gaps принадлежат D.002/C.001/runtime composition,
 а не configuration normalization.
+
+По `VPNG-U001-R1.R3.R7.R3` локальная обязанность A.002 по нормализации и проверке
+конфигурационного намерения материализована полностью [`full`], как и вклад в R7.R3.R1: current surface использует `warm_paths = 0 | N | "all"`,
+при этом frozen Release-1 parser не обязан приобретать новое поле. Current ConfigurationAdapter
+снимает `warm_paths` до вызова historical Release-1 normalization и публикует
+нормализованный `CurrentConfig.warm_paths` с проверкой ordinary capacity и
+вычисляемым `CurrentConfig.warm_target(profile_id)`. Расчет текущего presence/deficit и
+lifecycle actuation принадлежат A.013 и A.012; использование нормализованного намерения
+подтверждено EV-00300.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -1803,6 +1831,9 @@ policy.
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
@@ -1817,7 +1848,13 @@ API
 
     <accepted-intent / binding / availability Events> — обновить current semantic inputs.
     <payload projection InfoEvent> — опубликовать текущую подтвержденную semantic projection для observers.
+    <ConfirmedCurrentUse InfoEvent> — current подтвержденное использование ordinary paths по Profile, с exact realization context, либо explicit unknown.
     <reconciliation trigger> — fresh-observe dependent lower domains и при необходимости converge через Adapters.
+
+Implementation
+
+    design/NG3/code/python/rou/accepted_effective_state.py — immutable accepted effective context и read-only admission по exact C.004 intersection и fresh D.001 facts.
+    design/NG3/code/python/rou/alpha_runtime.py — runtime capture/invalidate/publish boundary; only final confirmed effective generation, including post-release recovery.
 
 Architectural decisions
 
@@ -1834,7 +1871,7 @@ Architectural decisions
    *Evidence не создает membership, direction или permission. Problem paths остаются structurally present и перемещаются ниже usable paths в effective order.*
 
 5. `Sticky current active path is Profile state`
-   *Current active path удерживается только для route-level failback semantics. Это не flow/session affinity и не conntrack ownership.*
+   *Current active path сохраняет route-level failback semantics. Подтвержденный effective selection также является фактом для A.012 reclaim policy, но не создает structural presence demand и не превращается в flow/session affinity либо conntrack ownership.*
 
 6. `Fresh reconciliation`
    *Manager хранит accepted desired semantics и при audit/event заново наблюдает reality; failed lower command sequence не ставится в durable retry queue и не replay'ится вслепую.*
@@ -1845,12 +1882,36 @@ Architectural decisions
 8. `Готовность управляемого WireGuard не равна привязке`
    *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
 
-**Материализация:** A.004 полностью материализует собственную архитектурную обязанность
-по generalized R8: он получает уже current A.007 availability projection после D.002-generation
-synchronization и сходится только по этой projection. D.002 realization currentness не является
-дополнительной обязанностью A.004 и поэтому не может служить основанием для `partial` статуса.
+9. `Политика полезного трафика не создает потребность в VPN`
+   *A.004 сохраняет structural membership и зависимое состояние полезного трафика, необходимое в том числе для безопасного снятия Device, но наличие пакетов и availability outcome не создают и не продлевают managed Device presence demand. Availability по-прежнему только переупорядочивает уже существующие пути. Managed presence определяется отдельной конфигурационно заданной warm-проекцией.*
 
-**Evidence:** `EV-00280`.
+10. `Подтвержденное текущее использование для reclaim`
+   *A.004 передает A.012 per-Profile факт текущего использования exact ordinary path: enabled Profile, logical path, C.004 binding с exact InterfaceIdentity, подтвержденное базовое поколение D.001 и, где необходимо, актуальный D.002 realization context. Источник — фактически подтвержденная effective policy после применимых C.001/A.007/D.002 verification boundaries, не tentative desired last_profiles/last_bindings, packet counters, idle или отдельный availability verdict. Для outbound это фактически выбранный effective ordinary path (включая материализованный fallback при всех problem paths), для разрешенного single-path inbound/bidirectional — его подтвержденный единственный ordinary path. Наличие лишь standby eligibility не доказывает use. Для каждого relevant Profile отличать подтвержденное отсутствие use от unknown/stale; затронутая partial policy transition, failure, смена binding/base/group generation инвалидирует зависимые факты до свежего подтверждения. Строгое освобождение по явной пользовательской policy не является availability-driven failback; R3.R8 сохраняет смысл для остающихся допустимыми paths. R7.R4.R1/R2 local current-use contribution материализован полностью: pure `project_confirmed_current_use` в `rou/confirmed_current_use.py` принимает от вызывающего один уже подтвержденный effective-policy generation, проверяет его cross-links и выпускает per-Profile `CONFIRMED`, `NONE` или `UNKNOWN` с exact ordinary path/realization context при `CONFIRMED`. Для выбранного managed WireGuard проверяется D.001 и полный current Device-wide набор D.002 group owners, в том числе для выбранного reserve path до вывода `NONE`. Проектор сам не доказывает свежесть принятого generation, не наблюдает Linux и не выполняет policy/lifecycle mutation; tentative desired-building поля по-прежнему не являются подтвержденным контрактом. В alpha runtime материализованы admission/invalidation отдельного immutable effective snapshot и pre-reclaim read-only проекция; в принятой реализации #41 ее факты потребляются активным контуром A.012; точная приемка зафиксирована в EV-00310.*
+
+**Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
+он получает уже current A.007 availability projection после D.002-generation synchronization
+и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` локальная обязанность A.004
+материализована полностью [`full`]: Manager сохраняет structural membership и зависимое
+payload state для безопасного dependency release; packet activity/availability не создают
+presence demand. Отдельная конфигурационная проекция требуемого присутствия Devices
+принадлежит A.013 и используется в normal lifecycle A.012. A.004 поставляет отдельные
+подтвержденные факты current-use для reclaim и не владеет structural demand (EV-00300/EV-00310).
+
+По `VPNG-U001-R1.R3.R7.R4.R1` и `VPNG-U001-R1.R3.R7.R4.R2` локальный вклад A.004 [`full`]:
+pure confirmed-current-use projector дополнен runtime admission. В начале normal trigger
+`AlphaPreparedPolicy` захватывает previous accepted snapshot и инвалидирует current admission.
+После bounded presence convergence, до normal eligibility-filtered policy, read-only observation
+получает полную C.004 проекцию без commit binding state; для A.004 допускается только exact
+intersection accepted/fresh PathBinding. D.001 non-mutating confirmation и D.002 realization
+из захваченного accepted snapshot проверяются через существующий pure projector. Ошибка
+или partial transition не создает новый admitted snapshot; следующий trigger без полного
+подтверждения получает UNKNOWN. Новый snapshot публикуется только после final confirmed
+payload/priority/D.002 result, в том числе после bounded exact reclaim/F2 recovery.
+Exact step-1 pure source `eeb8e4dc44aa2577a098c5d9d5d6c485011720c1` прошел NG3 Python
+run `46076998937` (984 unit tests, 25 jobs PASS) и независимую приемку pure projection/trace.
+Runtime evidence boundary теперь потребляется единым normal reclaim контуром #41; snapshot A.004 сам не разрешает retirement. Интеграционные проверки базовой реализации прошли, независимая терминальная приемка #41 завершена (EV-00310). Архитектурное закрытие R7.R4/R1/R2 принято отдельным review #48 (EV-00310).
+
+**Evidence:** `EV-00280`, `EV-00310`.
 
 ## [A.005] PayloadPolicyCalculator
 
@@ -2003,18 +2064,18 @@ Agent, составляющий truthful current user-facing status из authori
 других owners. Он не актуирует представляемые domains и не становится system-of-record.
 
 **Implements:**
-- `VPNG-M001-R2.R1` — [`full`]
-- `VPNG-M001-R2.R1.R1` — [`full`]
+- `VPNG-M001-R2.R1` — [`partial`]
+- `VPNG-M001-R2.R1.R1` — [`partial`]
 - `VPNG-M001-R2.R1.R2` — [`full`]
-- `VPNG-M001-R2.R1.R3` — [`full`]
-- `VPNG-M001-R2.R1.R4` — [`full`]
+- `VPNG-M001-R2.R1.R3` — [`partial`]
+- `VPNG-M001-R2.R1.R4` — [`partial`]
 - `VPNG-D001-R1.R1.R1` — [`full`]
 - `VPNG-D001-R1.R1.R1.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R1` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
 - `VPNG-D001-R3.R1.R1` — [`full`]
 
-**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. Alpha теперь подает результат каждого состоявшегося D.002 trigger в A.008; если новый D.002 trigger не состоялся из-за broader D.001/C.001 failure, прежняя projection удаляется и поле помечается unknown. Локальная D.002 problem переводит runtime в DEGRADED, сохраняя уже подтвержденные unrelated effective/availability projections. **Evidence:** `EV-00220`, `EV-00240`.
+**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. Alpha теперь подает результат каждого состоявшегося D.002 trigger в A.008; если новый D.002 trigger не состоялся из-за broader D.001/C.001 failure, прежняя projection удаляется и поле помечается unknown. Локальная D.002 problem переводит runtime в DEGRADED, сохраняя уже подтвержденные unrelated effective/availability projections. Current configured intent дополнительно сохраняет normalized `warm_paths`; `managed_profile_demands` — отдельная диагностическая A.013 projection из последнего подтвержденного normal binding (повторно вычисляется после selective release, unknown/null при неподтвержденном normal binding). A.008 не выводит из нее фактический actuation: последний принятый A.012 desired set и его подтвержденные реализации остаются в `managed_device_realizations`. Managed lifecycle problem также сохраняет независимую подтвержденную effective policy в DEGRADED. **Evidence:** `EV-00220`, `EV-00240`, `EV-00300`.
 
 API
 
@@ -2040,6 +2101,9 @@ Architectural decisions
 
 6. `No hidden Profile verdict model`
    *Более сильный aggregated ProfileState не вводится без отдельного requirement; current status достаточно truthful composition существующих owner projections.*
+
+7. `Наблюдаемость reclaim не подменяет structural demand`
+   *A.008 принимает normalized reclaim policy, отдельную A.013 per-Profile structural target/presence/deficit projection и отдельную подтвержденную A.012 survivor/retirement projection. Для managed Device независимыми facts являются accepted policy, selected/retained realization, current-use protection (confirmed/none/unknown), retirement eligibility/reason и действующее desired/confirmed generation/problem state. Не выводить единственного structural owner среди нескольких равноценных covers и не изображать отсутствие structural demand как confirmed absence. Новый reclaim status является вкладом в существующие M001 status obligations, не новым R7.R4 user-facing status requirement. В принятой реализации #41 normalized reclaim, отдельные truthful reclaim reasons, realization intent basis и payload eligibility материализованы. Current A.013 status использует допущенную lifecycle-ёмкость: external bindings и только exact C.004/D.001 managed bindings; raw all-interface pre-prune observation сохраняется внутри evidence/plan. Fresh status после F2 не разрешает новый retirement. Вклад A.008 в R2.R1/R1/R3/R4 остается partial; приемка #41 не закрывает эти требования. R2.R1.R2 effective order остается без изменений.*
 
 ## [A.009] RuntimeStatusTextRenderer
 
@@ -2202,34 +2266,43 @@ Implementation
 ## [A.012] ManagedDeviceManager
 
 Manager текущей базовой VPN-реализации только для Devices, которым пользователь явно
-передал управление VPN-GATE. Он преобразует структурную потребность Device в требование
-наличия или отсутствия VPN-экземпляра, вызывает D.001 и публикует подтвержденное поколение
-базовой реализации. Внешне управляемые Devices в его предметную область не входят.
+передал управление VPN-GATE. Он принимает вычисленную конфигурационную потребность в присутствии управляемых Devices,
+отдельную reclaim policy и подтвержденные факты текущей реализации/use, определяет допустимое
+удержание/освобождение, вызывает D.001 и публикует подтвержденное поколение базовой реализации. Внешне управляемые Devices в его предметную область не входят.
 
 **Implements:**
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 
 API
 
-    <нормализованное намерение управления / структурная потребность / текущая проекция политики полезного трафика> — заменить текущий требуемый контекст.
+    <нормализованное намерение управления / structural demand / normalized reclaim policy / ConfirmedCurrentUse / подтверждение снятия зависимостей> — заменить текущий требуемый контекст.
+    @project_reclaim(...) — pure deterministic projection допустимого набора present survivors и exact retirement candidates по fresh structural contribution matrix, confirmed generations/use и обязательным non-GC dependencies; без actuation.
+    <ManagedDeviceReclaimProjection InfoEvent> — независимые survivor/retirement facts/reasons, включая unknown/unconfirmed, без подмены structural demand.
     <reconciliation trigger> — заново наблюдать фактическое состояние и при необходимости привести его к требуемому через D.001.
     <ManagedDeviceRealization InfoEvent> — публиковать подтвержденное отсутствие/наличие с поколением либо problem.
 
 Implementation
 
-    design/NG3/code/python/rou/managed_device_manager.py — current-only Manager структурной потребности явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
-    design/NG3/code/python/rou/alpha_runtime.py — Release-1 composition: startup/reconciliation до fresh C.004 observation, подтвержденное снятие product-owned policy dependencies при stop и передача current `ManagedDeviceRealization` в A.008.
+    design/NG3/code/python/rou/managed_device_manager.py — current-only Manager базового присутствия явно управляемых Devices; отделяет desired/confirmed generation, удерживает удаление базовой реализации до явного подтверждения снятых зависимостей и сохраняет ownership удаленного из конфигурации Device до confirmed absent.
+    design/NG3/code/python/rou/managed_reclaim_projection.py — pure A.012 reclaim projection over caller-admitted structural/use/realization facts; exact survivor/candidate/deferred decisions, no actuation.
+    design/NG3/code/python/rou/managed_reclaim_runtime.py — #41 accepted implementation: immutable plan composition, exact lifecycle demand/eligibility/retention intent, scoped fresh guard and bounded retirement batch. Включен в startup/periodic reconcile; executable evidence и точная терминальная приемка #41 зафиксированы в EV-00310.
+    design/NG3/code/python/rou/accepted_effective_state.py — read-only pre-reclaim evidence: all-interface structural contribution facts, exact non-mutating D.001 confirmation and scoped A.004 use; not a retirement decision.
+    design/NG3/code/python/rou/alpha_runtime.py — current composition: read-only fresh C.004 presence до A.012, fresh normal binding после actuation, reclaim-aware replacement policy, bounded exact retirement and F2 recovery, global teardown при stop и передача current `ManagedDeviceRealization` в A.008.
 
 Architectural decisions
 
 1. `Только явное включение управления`
    *Manager вообще не создает управляемое состояние для Device без явного нормализованного намерения управления. Внешний Device продолжает появляться только через наблюдение и привязку C.004, как до введения R7.*
 
-2. `Структурная потребность — первый контракт подключения по потребности`
-   *VPN-экземпляр требуется только тогда, когда Device включен и используется хотя бы одним включенным Profile. Первый пакет, время простоя и иная активация по фактическому трафику этим Manager не выводятся.*
+2. `Потребность задается warm-конфигурацией, а не трафиком`
+   *A.012 использует A.013 для вычисления structural warm demand и absent ordinary/reserve candidates по свежему C.004 presence. `warm_paths` считает только ordinary memberships; payload, idle и availability outcome не являются входами structural lifecycle demand. Выбор сохраняемых present managed instances и разрешение на retirement принадлежат отдельной reclaim projection A.012 и не подменяют этот demand.*
 
 3. `Поколение базовой реализации задано явно`
    *Manager различает желаемое поколение конфигурации и подтвержденное D.001 поколение фактической реализации. Команда запуска или сам факт существования службы не превращаются в подтвержденное поколение.*
@@ -2238,7 +2311,7 @@ Architectural decisions
    *Успешная реализация D.001 лишь позволяет VPN-endpoint появиться. C.004 независимо заново наблюдает и подтверждает `PathBinding`; для WireGuard по R8 D.002 дополнительно подтверждает реализацию выбранного пира. Manager не подменяет ни одну из этих границ.*
 
 5. `VPN-экземпляр удаляется после зависимостей`
-   *При исчезновении структурной потребности политика полезного трафика должна перестать использовать Device, а специфичное для VPN динамическое состояние должно быть снято до подтвержденного удаления базовой реализации D.001. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей.*
+   *Только после авторизации retirement по reclaim projection либо по явной disable/remove/global stop/safety semantics политика полезного трафика перестает использовать retiring Device, а специфичное для VPN динамическое состояние снимается до подтвержденного удаления базовой реализации D.001. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей. Само исчезновение structural demand не разрешает retirement.*
 
 6. `Общая остановка продукта сохраняет единственного владельца`
    *A.001 при общей остановке задает отсутствие потребности во всех управляемых Devices и ожидает подтвержденного A.012 отсутствия до уничтожения Private network. Это не превращает A.001 во второго владельца состояния и не делает A.012 глобальным Manager жизненного цикла.*
@@ -2249,19 +2322,70 @@ Architectural decisions
 8. `Правдивое текущее состояние`
    *A.012 передает A.008 желаемое и подтвержденное поколения, а также problem-state. Для внешне управляемого Device отсутствие состояния A.012 не изображается как результат управляемого жизненного цикла.*
 
-**Evidence:** `EV-00080`, `EV-00090`.
+9. `Один Device агрегирует потребность всех Profiles`
+   *Один физический Device учитывается один раз при lifecycle actuation; structural ordinary/reserve demand объединяется по Profiles. Снятие reserve-потребности одним Profile не разрешает физическую остановку, если Device требуется либо защищен ordinary-use в другом Profile. Reclaim survivor selection является shared-aware: per-Profile structural capacity vectors и mandatory obligations объединяются до решения о retirement, а не после независимого выбора минимальных наборов.*
 
-**Материализация:** `ManagedDeviceManager` вычисляет потребность только для явно
-управляемых Devices из `CurrentConfig.structural.active_device_ids`, получает
-`desired_generation` через D.001 до мутации, принимает только совпадающее подтвержденное
-поколение D.001, переводит ошибки lifecycle в problem-state и не вызывает
-`converge_absent`, пока caller не включил Device в `dependency_free_device_ids`.
-Если управление Device удалено из новой конфигурации после прежнего владения, Manager
-сохраняет этот Device в текущем наборе очистки до подтвержденного отсутствия.
+10. `Regular before reserve; reserve before release`
+   *Один reconciliation сначала получает fresh presence, вычисляет ordinary demand через A.013 и converges недостающие ordinary managed Devices через D.001, не снимая уже действующий reserve только из-за промежуточной фазы. После fresh повторного C.004 observation A.013 заново вычисляет regular deficit и окончательный reserve exception. Только этот второй verdict может добавить reserve либо снять его demand. Поэтому startup не будит reserve одновременно с еще не испробованным regular, а recovery не выключает reserve до подтверждения ordinary replacement.*
 
-Alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
-portal, но до первого fresh C.004/VPN-path observation; каждый normal reconciliation снова
-начинается с A.012 fresh convergence до зависимой path/policy observation. При общей остановке
+11. `Независимый отказ кандидата не запрещает reserve fallback`
+   *Problem одного ordinary managed candidate остается диагностикой этого Device и не превращается в глобальный запрет продолжить fresh reconciliation для остальных candidates и reserve exception. Успех каждого D.001 действия по-прежнему требует собственного подтвержденного postcondition.*
+
+12. `Careful reclaim по умолчанию; strict по явному выбору`
+   *После bounded ordinary/reserve convergence и fresh C.004/D.001 observation A.012 отделяет mandatory present support от optional present ordinary candidates. Careful защищает exact current realization, подтвержденно используемую хотя бы одним enabled Profile как ordinary path; ее capacity учитывается при выборе остальных survivors, чтобы не держать одновременно лишний baseline Device. Подтвержденная защита не создает absent-start/restart demand. Unknown/stale use или generation не является разрешением retirement: affected decision откладывается, выполняется fresh re-observation/containment в пределах действующих safety rules, не GC-driven actuation. При подтвержденной возможности освобождения освобождаются ненужные ordinary Devices. Явное disable/remove/global stop и более сильная safety/ownership semantics имеют приоритет. Reserve-only use не защищает instance от снятия reserve demand по R7.R3.R3; если иной Profile требует/защищает тот же физический Device, снимается только reserve presence demand, а разрешенные Profile memberships остаются под существующей policy.*
+
+13. `Strict reclaim preserves attainable coverage`
+   *Для каждого enabled Profile resolved numeric ordinary target берется из A.013 (включая нормализованное all). Fresh eligible ordinary capacity до retirement включает внешние пути и подтвержденные текущие managed contributions; это structural binding/presence eligibility, не availability verdict. Coverage floor равен min(resolved_ordinary_target, fresh_eligible_capacity_before). Один physical Device дает per-Profile contribution vector; reserve не уменьшает ordinary deficit. Удерживаются обязательные non-GC obligations и достигаемая обычная избыточность. Strict не защищает active-only surplus: каждый успешно согласованный retained ordinary set должен быть single-removal irreducible относительно всех floors/mandatory constraints. Для изолированного Profile применим точный minimum Device count с предпочтением current-use при том же count; для общих Devices — deterministic shared-aware marginal coverage selection и prune, с возможным bounded 2->1 improvement / same-count use preference. Глобальный set-cover optimum и глобальный sticky optimum не обещаются; cap improvement не отменяет обязательный single-removal check. Выбор касается лишь подтвержденно present candidates, не запускает отсутствующие Devices для identity/footprint rebalance.*
+
+14. `Retention observation и retirement authorization предшествуют policy exclusion`
+   *Перед исключением Device из payload/probe policy A.012 должен получить допустимый reclaim verdict с exact retiring identity/generation и survivor context. Retained Device без structural demand подтверждается через D.001 confirm_present без мутации; converge_present не используется для GC protection. При unknown relevant use/presence/generation нельзя предположить removability. После normal replacement policy и D.003 cleanup перед exact D.001 retirement свежо сверяются исходная retirement plan, непропущенные structural observations, coverage floors, mandatory constraints, protection и exact binding/base generations; уже pruned effective policy не становится более слабой исходной емкостью. Drift/неподтвержденный prerequisite отменяет stale retirement. D.001 guard сам проверяет ожидаемую identity/generation непосредственно на своей mutation boundary. После D.003 touch или retirement attempt применяется F2 fresh normal convergence, не рекурсивный release. Эти правила не утверждают атомарность относительно неподдерживаемой root out-of-band mutation.*
+
+15. `Раздельные truthful projections`
+   *A.012 не изображает GC-retained surplus как structural demand или waiting_for_dependencies. Отдельно публикуются accepted survivor intent, exact confirmed realization, confirmed current-use protection, retirement candidate/reason и unknown/problem; A.013 per-Profile target/presence/deficit остается отдельным owner projection. При нескольких равноценных structural covers не утверждается уникальный per-Device structural owner.*
+
+**F1 materialization frontier:** common owned lifecycle, confirmed generation и existing F2 dependency-drain/re-observation ниже уже реализованы. A.002 предоставляет normalized careful/strict policy, A.013 — structural contribution facts, A.004 — pure confirmed-current-use projection, D.001 — exact non-mutating confirmation и exact retirement operations. В A.012 материализована pure `project_reclaim`: принимает полный caller-admitted snapshot enabled Profiles (membership, ordinary target/presence, external capacity, managed contribution rows), managed inventory, exact D.001 observations, mandatory support и A.004 use facts. Сам projector не наблюдает свежесть; проверяет внутренние cross-links и выдает exact survivors, retirement candidates, scoped deferred/reasons и исходные floors. Careful protection учитывается в capacity cover; strict использует exact minimum count/current-use preference в изолированных residual components и deterministic shared selection/prune с bounded same-count use improvement. Не меняет A.013 demand и не выполняет lifecycle mutation. Unit evidence исходного pure-code SHA `8b1afff627f7b66d84bb06daa4a422f7d03ba08b`: run `46086816144`, unit job `140798273844`, 1007 tests OK, включая 23 directed/property reclaim tests. Это evidence только pure projection, не runtime behavior. Pure projection сама по себе не исчерпывает локальные обязанности A.012 по R7.R4/R1/R2. Runtime admission/invalidation и read-only pre-reclaim evidence теперь материализованы отдельно: полный C.004 inventory до normal policy exclusion передается A.013 без eligibility pruning; exact D.001 presence/generation подтверждается через Manager без converge/start/restart, несовпадающие C.004/D.001 facts остаются unresolved. A.004 use берется из exact intersection captured accepted и fresh bindings. В принятой реализации #41 эти факты потребляются единым startup/periodic prepare → replacement → exact retirement → F2 контуром. Runtime call sites материализованы, интеграционное evidence и независимая терминальная приемка #41 зафиксированы в EV-00310. Raw pre-prune A.013 contribution/floor snapshot сохранен; для lifecycle obligations A.012 применяет тот же A.013 project_final к external bindings и exact C.004/D.001-confirmed managed bindings. Эта exact-capacity проекция определяет mandatory reserve, independent eligibility, recovery, pre/post-retirement reserve guard и публикуемый A.013 status. Неподтвержденный одноименный ordinary link не снимает обязательный reserve. Локальные обязанности A.012 по R7.R4/R1/R2 материализованы полностью (`full`): selection, admission, replacement, guarded exact retirement, bounded batch и F2. Архитектурное закрытие всех трех требований принято отдельным review #48 (EV-00310). Существующее EV-00300 подтверждает только pre-F1 behavior и неизмененный dependency-drain subcontract, не приемку новых reclaim requirements.
+
+**Evidence:** `EV-00080`, `EV-00090`, `EV-00300`, `EV-00310`.
+
+**Материализация:** `ManagedDeviceManager` принимает явный `desired_device_ids`.
+`converge_managed_device_presence` связывает A.013 с bounded D.001 attempts и fresh
+наблюдением через переданную функцию; failed candidate не считается подтвержденной
+managed capacity, а следующий candidate может быть рассмотрен в том же trigger.
+Промежуточные фазы не снимают зависимости и не останавливают Devices. Alpha использует
+эту композицию при startup и normal reconciliation; прежнее правило referenced managed
+Devices больше не является источником lifecycle demand. Локальная обязанность A.012 по R7.R3
+материализована полностью [`full`]: lifecycle actuation по принятому structural demand,
+shared Device aggregation, dependency-safe release и truthful realization. A.002/A.013/C.004/D.001
+предоставляют собственные входы и нижние операции (EV-00300/EV-00310).
+
+В уже реализованной части A.012 получает `desired_generation` через D.001 до мутации,
+принимает только совпадающее подтвержденное поколение D.001, переводит ошибки lifecycle в
+problem-state и не вызывает `converge_absent`, пока caller не включил Device в
+`dependency_free_device_ids`. Если управление Device удалено из новой конфигурации после
+прежнего владения, Manager сохраняет этот Device в текущем наборе очистки до подтвержденного
+отсутствия.
+
+Текущая alpha composition вызывает A.012 после создания и проверки Private network/ordinary-side
+portal. Startup и normal reconciliation используют двухфазную последовательность:
+fresh C.004 endpoint observation с tentative projection без commit binding state →
+A.013 ordinary-demand projection → bounded ordinary A.012/D.001 convergence с удержанием
+существующего reserve → fresh C.004 observation → A.013 final reserve-exception
+projection → bounded reserve A.012/D.001 convergence → еще одно fresh C.004 observation и
+обычная binding projection. Каждому managed candidate предоставляется не более одной
+попытки за trigger; ошибка не прерывает попытки независимых candidates. В normal binding принятой реализации #41 принимается точная идентичность управляемого пути по
+structural demand, подтвержденному reclaim survivor либо независимо сохраненному exact
+предыдущему участию deferred path, за исключением retirement candidates; external endpoints
+сохраняют прежний contract.
+
+При selective release normal C.001 payload/probe policy и D.002 reconciliation сначала
+исключают retiring Device. D.003 затем подтверждает отсутствие dynamic payload ownership
+при сохранении permanent peer-probe /32. Перед разрешением D.001 exact retirement свежо сверяются исходный неизменный план,
+точные поколения, затронутые floors, mandatory support и replacement policy/D.003. Отказ
+останавливает дальнейший batch; после ошибки либо изменения нижнего состояния выполняется
+один нерекурсивный F2. Текущая проекция статуса строится отдельно по final accepted generation. Managed lifecycle
+problem публикуется отдельно и не отменяет подтвержденную unrelated policy.
+
+При общей остановке
 A.001 сначала закрывает forwarding и подтвержденно снимает product-owned payload policy и
 return-affinity dependencies, затем передает все управляемые Devices как
 `dependency_free_device_ids`, требует confirmed A.012 absence и только после этого начинает
@@ -2269,8 +2393,80 @@ return-affinity dependencies, затем передает все управля�
 teardown Private network не начинается и stop остается failed/unconfirmed. Текущая alpha не
 имеет hot config reload: изменение конфигурации применяется через product restart, поэтому
 тот же stop/start path является текущей materialization restart semantics. Current
-`ManagedDeviceRealization` передается A.008. Kernel integration EV-00090 подтверждает этот
-порядок на production D.001 WireGuard Adapter.
+`ManagedDeviceRealization` передается A.008. Kernel integration EV-00090 подтверждает global stop/start порядок; EV-00300 подтверждает
+selective ordinary/reserve lifecycle на production D.001 WireGuard Adapter.
+
+## [A.013] ManagedDeviceDemandCalculator
+
+Pure Calculator конфигурационно заданной востребованности managed Devices. Он получает
+normalized `warm_paths`, Profile-local ordinary/reserve membership roles, fresh current
+PathBinding/presence и ownership mode Devices и возвращает per-Profile warm deficit плюс
+детерминированные ordinary/reserve managed-Device demands. Он не запускает VPN, не наблюдает
+Linux самостоятельно и не владеет lifecycle.
+
+**Implements:**
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
+
+API
+
+    @project_regular(config, fresh_presence) — вернуть per-Profile ordinary target/presence/deficit и aggregate ordinary managed Device demand без reserve actuation.
+    @project_final(config, fresh_presence) — после ordinary convergence вернуть тот же ordinary demand плюс минимальный reserve-exception demand для сохраняющегося regular deficit.
+    <ManagedDeviceDemandProjection> — immutable result: per-Profile resolved ordinary target, fresh ordinary presence/deficit, external and per-Device eligible ordinary contributions, ordered absent ordinary candidates and aggregate required reserve support; any per-Profile baseline present cover is diagnostic, not retirement authorization.
+
+Architectural decisions
+
+1. `Warm считает только ordinary paths`
+   *Для Profile regular target равен numeric `warm_paths` либо суммарной configured capacity ordinary enabled memberships при `"all"`. Reserve memberships не входят ни в target, ни в regular-present count.*
+
+2. `Fresh external и managed presence равноправны для удовлетворения warm`
+   *Fresh current ordinary PathBinding любого ownership mode уменьшает regular deficit. Ownership влияет только на возможность actuation: Calculator никогда не превращает external Device в managed subject.*
+
+3. `Numeric target не означает proactive rebalance`
+   *Если текущие ordinary paths уже удовлетворяют resolved target, отсутствующий более предпочтительный ordinary managed Device не запускается только ради замены живого lower-baseline path. Calculator передает observed per-Device ordinary contribution vectors; при избытке present memberships выбор survivor identity не является structural demand decision и принадлежит A.012 reclaim projection. Baseline present cover может быть diagnostic/start preference, но не разрешает retirement.*
+
+4. `Дефицит заполняется baseline-порядком`
+   *Если ordinary presence меньше target, уже присутствующие ordinary managed Devices сохраняют demand, затем отсутствующие managed ordinary memberships выбираются в `Profile.device_order -> Device.expected_interfaces` baseline до покрытия недостающей configured capacity. Один Device может неизбежно дать capacity больше точного дефицита; lifecycle granularity остается Device-level.*
+
+5. `Reserve — exception, а не warm`
+   *Final projection рассматривает reserve только при сохраняющемся после ordinary convergence regular deficit. Уже присутствующие reserve paths могут покрывать аварийную reserve-support потребность, но никогда не уменьшают regular deficit. Недостающие managed reserve memberships выбираются baseline-порядком только до configured capacity, достаточной для этого дефицита.*
+
+6. `Regular recovery demand сохраняется одновременно с reserve`
+   *Появление reserve path не снимает ordinary demand. Поэтому более предпочтительный regular Device продолжает восстанавливаться обычным lifecycle, а после его появления следующий final projection естественно снимает ставший лишним reserve demand без отдельной failback state machine.*
+
+7. `Shared Device агрегируется через OR`
+   *Per-Profile structural ordinary и reserve demands объединяются по Device. Роль Device остается Profile-local: один Device может быть ordinary в одном Profile и reserve в другом. Calculator не объединяет независимые per-Profile present-survivor selections в окончательную retirement policy; A.012 получает совместимые contribution vectors и обязательные structural demands.*
+
+8. `Availability и payload отсутствуют во входном контракте`
+   *Calculator не получает packet activity, idle timers или availability verdicts. Его current-state input ограничен конфигурацией и fresh structural presence.*
+
+9. `Impossible numeric target rejected earlier`
+   *A.013 вправе считать accepted config корректной: A.002 отклоняет numeric `warm_paths`, превышающий суммарную configured ordinary path capacity enabled memberships. Runtime absence такой capacity является deficit/problem, а не config error.*
+
+Implementation
+
+    design/NG3/code/python/rou/managed_device_demand.py — чистые проекции ordinary demand и final reserve exception.
+
+**Evidence:** `EV-00300`
+
+**Материализация:** Calculator и current-surface нормализация реализованы; direct unit
+tests проверяют их отдельно от Linux. A.012 использует обе проекции при bounded
+ordinary/reserve convergence, подтвержденной kernel integration. Локальные обязанности A.013
+по R7.R3 и R7.R3.R3 материализованы полностью [`full`]: ordinary target/presence/deficit,
+missing ordinary demand, reserve exception и сохранение ordinary recovery demand. A.013 не
+выполняет actuation либо dependency release — это обязанности A.012 и нижних компонентов
+(EV-00300/EV-00310).
+
+F1 materialization: A.013 дополнительно публикует `external_ordinary_present` и упорядоченный
+по ordinary membership вектор `managed_ordinary_contributions` из `ManagedOrdinaryContribution`
+(включая нулевые `fresh_path_count`). Оба вклада вычисляются из той же дедуплицированной
+`LogicalPathId`-проекции, что и `regular_present`, с сохранением Profile-local membership.
+Raw all-interface наблюдения служат диагностическим pre-prune contribution/floor input. Для lifecycle obligation и current status A.012 вызывает тот же A.013 project_final над external и exact C.004/D.001 managed bindings. Baseline selection A.013 остается неизменным и не разрешает retirement. A.013 не получает reclaim
+policy, current-use, payload или availability; выбор survivor/reclaim остается за A.012,
+подтвержденный current-use — за A.004. Локальная обязанность A.013 по R7.R4.R2 — точные structural contribution/floor inputs без изменения structural demand — материализована полностью (`full`); ее использование normal reclaim подтверждено EV-00310.
 
 # Annex B. Ordinary-side transition components
 
@@ -2545,6 +2741,9 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 - `VPNG-U001-R1.R3.R4.R3` — [`full`]
 - `VPNG-U001-R1.R3.R4.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R4.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 - `VPNG-D001-R1.R1.R3` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
 
@@ -2584,6 +2783,20 @@ Architectural decisions
 
 10. `Binding is not route realization`
    *`VPNPathAdapter` доказывает current concrete endpoint, но не угадывает Linux `gateway/onlink`. Exact route realization предоставляет отдельная capability supported integration contract в `VPN external ends`; generic `NetworkPolicyAdapter` только потребляет этот уже доказанный lower fact. Direct-device realization является одной explicit integration capability, а не универсальным свойством bound interface.*
+
+11. `Fresh presence observation может предшествовать lifecycle demand`
+   *`observe_device_endpoints(...)` может использоваться как свежий read-only вход для расчета числа уже присутствующих Profile-eligible endpoints до A.012. Такое наблюдение не создает `PathBinding`, не меняет retained binding state и не становится lifecycle owner; после возможной D.001 mutation обычный binding postcondition подтверждается новым observation.*
+
+**Evidence:** `EV-00300`
+
+**Материализация:** C.004 получает fresh inventory как для обычного binding, так и для
+read-only demand observation до A.012 и между ordinary/reserve attempts. Alpha использует
+tentative binding projection, не сохраняя ее next state; normal binding после lifecycle
+mutation выполняется заново. Release guard сверяет exact current binding generations с
+подтвержденной replacement policy. Локальные обязанности C.004 по R7.R3 и его R2/R3
+материализованы полностью [`full`]: fresh structural endpoint observation и exact binding
+identity/generation до и после lifecycle mutation. Выбор и actuation demand принадлежат
+A.013/A.012; использование наблюдений подтверждено EV-00300/EV-00310.
 
 ## [C.005] ForwardingGate
 
@@ -2846,6 +3059,10 @@ Direct Adapter от нормализованного намерения упра
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 
 API
 
@@ -2853,6 +3070,8 @@ API
     @converge_absent(device_id) — остановить и удалить только принадлежащую VPN-GATE реализацию и свежим наблюдением подтвердить ее отсутствие.
     @desired_generation(device_id, desired_base) — свежо проверить входные secret references и вычислить непрозрачный токен желаемого базового поколения без сетевой мутации.
     @observe(device_id) — заново наблюдать принадлежащую VPN-GATE базовую реализацию либо доказанное отсутствие/problem, не принимая под управление внешний экземпляр.
+    @confirm_present(device_id, desired_base) — read-only fresh verification exact owned base realization; вернуть confirmed generation + InterfaceIdentity либо unconfirmed/problem без repair/start/stop.
+    @retire_exact(device_id, expected_identity, expected_generation, desired_base) — selective retirement только указанной freshly confirmed реализации после upper dependency authorization; mismatch/unconfirmed не удаляет replacement.
 
 Implementation
 
@@ -2893,6 +3112,14 @@ Architectural decisions
 11. `Диспетчер служб остается свойством конкретной VPN-интеграции`
    *OpenVPN/OpenConnect/L2TP могут использовать systemd или другой service lifecycle, если это требуется их полным нижним контрактом. Совпадение команды `systemctl` не вводит универсальный `SystemdDriver` и не заставляет WireGuard становиться службой.*
 
+12. `Read-only exact base confirmation для GC retention`
+   *confirm_present повторно проверяет desired secret references и prepared base generation локально, fresh-observes точный ownership/kind/ifname/ifindex, проверяет base configuration и permanent peer-probe /32, затем повторно сверяет identity. Не изменяет сеть и не выводит секреты. Совпадение возвращает exact confirmed generation/identity, отсутствие, mismatch или observation failure — unconfirmed/problem; никакого converge_present repair/start/restart/delete для одного retention verdict. Контракт использует текущую verification machinery D.001, но является отдельной read-only операцией.*
+
+13. `Selective retire bound to expected generation`
+   *Для A.012 selective reclaim D.001 принимает exact expected InterfaceIdentity и confirmed base generation. Непосредственно внутри D.001 ownership/delete guard повторно подтверждается именно эта реализация и действующее поколение; отсутствие или замена не позволяют удалить другой экземпляр, даже с тем же ownership marker. После actuation свежо подтверждается требуемый postcondition; replacement/drift не изображается как подтвержденное отсутствие. Не заявляется атомарная compare-delete вне принятой operating boundary. Broad owner-wide converge_absent остается отдельным explicit/global cleanup contract и не используется вместо exact selective retire.*
+
+**F1 materialization frontier:** D.001 реализует отдельный read-only `confirm_present` и exact generation/identity-bound `retire_exact`. Локальные обязанности D.001 по R7.R4/R1/R2 материализованы полностью (`full`): exact confirmation и selective retirement. Careful/strict survivor selection, A.004 current-use protection и A.012 reclaim authorization/runtime integration принадлежат другим компонентам. Existing evidence ниже не является F1 acceptance; интеграционная приемка reclaim зафиксирована в EV-00310.
+
 **Evidence:** `EV-00050`, `EV-00060`, `EV-00070`.
 
 **Материализация:** Рабочий `LinuxManagedWireGuardAdapter` реализует выбранную
@@ -2903,6 +3130,23 @@ WireGuard-границу D.001: перед изменением проверяе
 подтвержденное отсутствие старого интерфейса. Порядок пиров не входит в D.001 base generation,
 поскольку является политикой D.002. Для daemon-based VPN нижняя service realization остается
 integration-specific; существующие внешние VPN-службы остаются во внешнем управлении.
+Локальные обязанности D.001 по R7.R3 и R7.R3.R3 материализованы полностью [`full`] в принятой
+managed-WireGuard границе: exact owned base realization, fresh confirmation и removal по
+принятому lifecycle demand. Ordinary/reserve selection принадлежит верхним компонентам;
+EV-00300/EV-00310 подтверждают использование нижней границы в lifecycle.
+
+F1 exact confirmation/retirement: `confirm_present` однократно подготавливает desired base,
+дважды свежо проверяет точную принадлежащую реализацию (identity/ownership/kind и base-state)
+и возвращает confirmed generation + `InterfaceIdentity` без network mutation. `retire_exact`
+связывает expected generation и identity с той же prepared base, дважды проверяет реализацию,
+выполняет существующий guarded delete не более одного раза без retry и подтверждает отсутствие
+только по свежему валидированному inventory. Все exact inventory reads проверяют также unrelated
+rows, duplicate names/indices и aliases до выводов об отношении или отсутствии; mismatch,
+неоднозначность, malformed observation и replacement не превращаются в success. Broad cleanup
+остается отдельным контрактом; атомарный compare-delete против произвольной root mutation не
+заявляется. F1 evidence: implementation `846d8893a7191dfcc5e63388e070f6de94dbade8`,
+NG3 Python run `45880822577` (25/25 jobs, 971 unit tests, real WireGuard exact confirm/retire PASS).
+Исторические EV-00050/60/70 не заменяют это F1 evidence.
 
 ## [D.002] WireGuardPeerManager
 
@@ -3017,8 +3261,9 @@ generation смысловой realization.
 
 **Implements:**
 - `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 
-**Evidence:** `EV-00050`, `EV-00100`, `EV-00190`
+**Evidence:** `EV-00050`, `EV-00100`, `EV-00190`, `EV-00300`
 
 API
 
@@ -3047,7 +3292,13 @@ unexpected/incomplete peer set, применяет один полный `wg set
 postcondition. Kernel acceptance EV-00190 подтверждает эту форму не только для transfer одного
 bundle, но и для simultaneous exact split двух independent group bundles между разными peers
 при сохранении permanent peer-probe /32 и неизменного ifindex общего `wg0`. Поэтому lower
-D.003 contribution к generalized R8 materialized [`full`].
+D.003 contribution к generalized R8 materialized [`full`]. Для selective release
+managed Device тот же exact Enforcer подтверждает probe-only projection без dynamic payload
+ownership до D.001 stop; EV-00300 проверяет failure gate и фактические AllowedIPs перед
+удалением. Локальная обязанность D.003 по R7.R3.R3 материализована полностью [`full`]:
+exact removal/confirmation dynamic payload ownership при сохранении permanent probe /32
+до selective release. Reserve demand и итоговую готовность к release определяют верхние
+компоненты; использование нижней границы подтверждено EV-00300/EV-00310.
 
 # Annex E. VPN-GATE-managed host state components
 

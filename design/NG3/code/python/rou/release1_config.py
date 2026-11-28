@@ -7,7 +7,7 @@ Lower runtime materializers consume typed results; they do not parse user string
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import base64
 import ipaddress
@@ -15,7 +15,7 @@ from pathlib import PurePosixPath
 from types import MappingProxyType
 import re
 import tomllib
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 from .config import ConfigError, _parse_structural_root
 from .ip_port import IP_PORT_MAX, IP_PORT_MIN, is_ip_port
@@ -167,6 +167,11 @@ class Release1Config:
     log_level: OperationalLogLevel = OperationalLogLevel.INFO
 
 
+class ManagedReclaimPolicy(str, Enum):
+    CAREFUL = "careful"
+    STRICT = "strict"
+
+
 class ManagedVpnKind(str, Enum):
     WIREGUARD = "wireguard"
 
@@ -206,6 +211,19 @@ class ManagedWireGuardGroupConfig:
     availability_check: AvailabilityCheckConfig | None = None
 
 
+WarmPaths = int | Literal["all"]
+
+
+def _ordinary_path_capacity(base: Release1Config, profile_id: str) -> int:
+    profile = base.structural.profiles[profile_id]
+    reserves = base.profiles[profile_id].reserve_device_ids
+    return sum(
+        base.structural.devices[device_id].path_capacity
+        for device_id in profile.device_order
+        if base.structural.devices[device_id].enabled and device_id not in reserves
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CurrentConfig:
     base: Release1Config
@@ -214,6 +232,19 @@ class CurrentConfig:
         tuple[str, str],
         ManagedWireGuardGroupConfig,
     ] = MappingProxyType({})
+    warm_paths: Mapping[str, WarmPaths] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+
+    managed_reclaim: ManagedReclaimPolicy = ManagedReclaimPolicy.CAREFUL
+
+    def warm_target(self, profile_id: str) -> int:
+        value = self.warm_paths.get(profile_id, "all")
+        return (
+            _ordinary_path_capacity(self.base, profile_id)
+            if value == "all"
+            else value
+        )
 
     @property
     def structural(self) -> StructuralConfig:
@@ -253,6 +284,10 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
         raise CurrentConfigError("profile must be a TOML table")
 
     transformed = dict(raw)
+    raw_reclaim = transformed.pop("managed_reclaim", "careful")
+    if not isinstance(raw_reclaim, str) or raw_reclaim not in ("careful", "strict"):
+        raise CurrentConfigError('managed_reclaim must be "careful" or "strict"')
+    managed_reclaim = ManagedReclaimPolicy(raw_reclaim)
     transformed_devices: dict[str, Any] = {}
     managed_bases: dict[str, ManagedWireGuardConfig] = {}
 
@@ -262,6 +297,10 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
             continue
 
         body = dict(raw_body)
+        if "managed_reclaim" in body:
+            raise CurrentConfigError(
+                f"device.{device_id}.managed_reclaim is a domain-level field"
+            )
         if body.get("enabled") is True and "managed_vpn" in body:
             where = f"device.{device_id}"
             if "expected_interfaces" in body:
@@ -293,12 +332,25 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
     # Release-1 parser so the older structural contract remains strict.
     transformed_profiles: dict[str, Any] = {}
     membership_details: dict[str, Mapping[str, Any]] = {}
+    warm_paths: dict[str, WarmPaths] = {}
     for profile_id, raw_body in raw_profiles.items():
         if not isinstance(raw_body, dict):
             transformed_profiles[profile_id] = raw_body
             continue
         body = dict(raw_body)
+        if "managed_reclaim" in body:
+            raise CurrentConfigError(
+                f"profile.{profile_id}.managed_reclaim is a domain-level field"
+            )
         details = body.pop("device_membership", None)
+        warm = body.pop("warm_paths", "all")
+        if body.get("enabled") is True:
+            if not (warm == "all" or (type(warm) is int and warm >= 0)):
+                raise CurrentConfigError(
+                    f"profile.{profile_id}.warm_paths must be a nonnegative "
+                    'integer or "all"'
+                )
+            warm_paths[profile_id] = warm
         if body.get("enabled") is True and details is not None:
             if not isinstance(details, dict):
                 raise CurrentConfigError(
@@ -314,6 +366,14 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
         base = _parse_release1_raw(transformed)
     except Release1ConfigError as exc:
         raise CurrentConfigError(str(exc)) from None
+
+    for profile_id, warm in warm_paths.items():
+        capacity = _ordinary_path_capacity(base, profile_id)
+        if warm != "all" and warm > capacity:
+            raise CurrentConfigError(
+                f"profile.{profile_id}.warm_paths {warm} exceeds configured "
+                f"ordinary path capacity {capacity}"
+            )
 
     managed: dict[str, ManagedWireGuardConfig] = dict(managed_bases)
     for device_id, intent in managed.items():
@@ -389,6 +449,8 @@ def _parse_current_raw(raw: Any) -> CurrentConfig:
         base=base,
         managed_vpns=MappingProxyType(managed),
         wireguard_groups=MappingProxyType(groups),
+        warm_paths=MappingProxyType(warm_paths),
+        managed_reclaim=managed_reclaim,
     )
 
 

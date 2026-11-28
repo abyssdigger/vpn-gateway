@@ -12,12 +12,15 @@ from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
 from rou.managed_device_manager import (
     ManagedDeviceDesiredState,
+    ManagedDeviceIntentBasis,
     ManagedDeviceRealization,
 )
 from rou.managed_wireguard_adapter import ManagedWireGuardState
 from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
-from rou.release1_config import parse_release1_config
+from rou.release1_config import parse_current_config, parse_release1_config
+from rou.managed_device_demand import project_final
+from rou.managed_reclaim_projection import ReclaimDecision, ReclaimProjection, ReclaimReason
 from rou.wireguard_peer_manager import (
     WireGuardGroupOwnershipRecord,
     WireGuardPeerRealization,
@@ -80,6 +83,111 @@ class RuntimeStatusTests(unittest.TestCase):
         self.assertEqual(profile.destinations, ("10.253.0.0/24",))
         self.assertEqual(profile.device_order, ("ovpn",))
         self.assertIsNone(profile.availability_check)
+
+    def test_current_status_preserves_configured_warm_target_and_observed_demand(self):
+        config = parse_current_config(CONFIG + "warm_paths = 2\n")
+        agent = RuntimeStatusAgent(build_configured_intent_status(config))
+        self.assertEqual(agent.snapshot().configured_intent.profiles[0].warm_paths, 2)
+        self.assertIsNone(agent.snapshot().managed_profile_demands)
+        observed = PathBinding(LogicalPathId("ovpn", 0, 0), InterfaceIdentity("vpn0", 11))
+        agent.confirm_managed_demand(project_final(config, (observed,)))
+        encoded = json.loads(json.dumps(agent.snapshot().to_dict()))
+        demand = encoded["managed_profile_demands"][0]
+        self.assertEqual(demand["regular_target"], 2)
+        self.assertEqual(demand["regular_present"], 1)
+        self.assertEqual(demand["regular_deficit"], 1)
+        self.assertEqual(demand["ordinary_device_ids"], [])
+        self.assertEqual(demand["external_ordinary_present"], 1)
+        self.assertEqual(demand["managed_ordinary_contributions"], [])
+        agent.confirm_managed_demand(None)
+        self.assertIsNone(agent.snapshot().managed_profile_demands)
+
+    def test_status_carries_ordered_observed_managed_contributions(self):
+        devices = "".join(f"""
+[device.{name}]
+enabled = true
+use_outbound_nat = true
+[device.{name}.managed_vpn]
+kind = "wireguard"
+interface = "wg{index}"
+address = "10.200.0.{index}/32"
+private_key_file = "/secret/{name}.key"
+[[device.{name}.managed_vpn.peers]]
+id = "peer"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.{index}:51820"
+probe_target = "10.201.0.{index}"
+""" for name, index in (("a", 1), ("b", 2)))
+        config = parse_current_config(devices + CONFIG.replace(
+            'device_order = ["ovpn"]', 'device_order = ["b", "ovpn", "a"]'
+        ) + "warm_paths = 2\n")
+        agent = RuntimeStatusAgent(build_configured_intent_status(config))
+        agent.confirm_managed_demand(project_final(config, (
+            PathBinding(LogicalPathId("a", 0, 0), InterfaceIdentity("wg1", 12)),
+            PathBinding(LogicalPathId("ovpn", 0, 0), InterfaceIdentity("vpn0", 11)),
+        )))
+        demand = json.loads(json.dumps(agent.snapshot().to_dict()))["managed_profile_demands"][0]
+        self.assertEqual(demand["regular_present"], 2)
+        self.assertEqual(demand["external_ordinary_present"], 1)
+        self.assertEqual(demand["managed_ordinary_contributions"], [
+            {"device_id": "b", "fresh_path_count": 0},
+            {"device_id": "a", "fresh_path_count": 1},
+        ])
+        self.assertEqual(demand["ordinary_device_ids"], ["a"])
+
+    def test_external_only_reclaim_is_not_applicable(self):
+        agent = RuntimeStatusAgent(build_configured_intent_status(parse_current_config(CONFIG)))
+        agent.confirm_effective((), ())
+        snapshot = agent.snapshot()
+        self.assertEqual(snapshot.configured_intent.managed_reclaim, "careful")
+        self.assertFalse(snapshot.configured_intent.managed_reclaim_applicable)
+        self.assertIsNone(snapshot.managed_reclaim_projection)
+        self.assertEqual(snapshot.unknown_or_unconfirmed_fields, ())
+        self.assertNotIn("Managed reclaim:", render_runtime_status_text(snapshot))
+
+    def test_current_reclaim_status_separates_intent_projection_and_realization(self):
+        managed = """
+[device.a]
+enabled = true
+use_outbound_nat = true
+[device.a.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/secret/a.key"
+[[device.a.managed_vpn.peers]]
+id = "peer"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.1:51820"
+probe_target = "10.201.0.1"
+"""
+        config = parse_current_config(managed + CONFIG.replace(
+            'device_order = ["ovpn"]', 'device_order = ["a", "ovpn"]'
+        ))
+        agent = RuntimeStatusAgent(build_configured_intent_status(config))
+        self.assertEqual(agent.snapshot().configured_intent.managed_reclaim, "careful")
+        self.assertIn("projection: unconfirmed", render_runtime_status_text(agent.snapshot()))
+        endpoint = InterfaceIdentity("wg0", 7)
+        retained = ReclaimDecision("a", endpoint, "base-a", ReclaimReason.CURRENT_USE)
+        projection = ReclaimProjection((retained,), (), (), (("alpha", 1),))
+        agent.confirm_managed_reclaim(projection)
+        agent.confirm_managed_devices((ManagedDeviceRealization(
+            "a", ManagedDeviceDesiredState.PRESENT, "base-a",
+            ManagedWireGuardState.PRESENT, "base-a",
+            confirmed_interface=endpoint,
+            intent_basis=ManagedDeviceIntentBasis.RECLAIM_RETENTION,
+            payload_eligible=True,
+        ),))
+        snapshot = agent.snapshot()
+        self.assertEqual(snapshot.managed_reclaim_projection, projection)
+        encoded = json.loads(json.dumps(snapshot.to_dict()))
+        self.assertEqual(encoded["managed_reclaim_projection"]["survivors"][0]["reason"], "current_use")
+        self.assertEqual(encoded["managed_device_realizations"][0]["intent_basis"], "reclaim_retention")
+        self.assertIn("survivor (current_use) wg0@7", render_runtime_status_text(snapshot))
+        self.assertIn("intent=reclaim_retention payload-eligible=yes", render_runtime_status_text(snapshot))
+        agent.mark_unconfirmed(readiness=RuntimeReadiness.DEGRADED, problem="drift")
+        self.assertIsNone(agent.snapshot().managed_reclaim_projection)
+        self.assertIn("managed_reclaim_projection", agent.snapshot().unknown_or_unconfirmed_fields)
 
     def test_status_exposes_scoped_helper_routing_intent(self):
         configured = build_configured_intent_status(

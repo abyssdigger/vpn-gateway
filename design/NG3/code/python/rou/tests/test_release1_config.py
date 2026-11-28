@@ -7,7 +7,9 @@ from rou.operational_log import OperationalLogLevel
 from rou.release1_config import (
     HelperRoutingPolicy,
     HelperRoutingSelectorKind,
+    CurrentConfig,
     CurrentConfigError,
+    ManagedReclaimPolicy,
     ManagedVpnKind,
     Release1ConfigError,
     parse_current_config,
@@ -17,6 +19,78 @@ from rou.release1_config import (
 
 
 class Release1ConfigTests(unittest.TestCase):
+    def test_managed_reclaim_current_surface_default_and_exact_values(self):
+        self.assertIs(
+            parse_current_config("").managed_reclaim,
+            ManagedReclaimPolicy.CAREFUL,
+        )
+        for value, expected in (
+            ("careful", ManagedReclaimPolicy.CAREFUL),
+            ("strict", ManagedReclaimPolicy.STRICT),
+        ):
+            with self.subTest(value=value):
+                config = parse_current_config(f'managed_reclaim = "{value}"')
+                self.assertIs(config.managed_reclaim, expected)
+                self.assertEqual(config.base, parse_release1_config(""))
+
+    def test_managed_reclaim_rejects_noncanonical_values_and_types(self):
+        for literal in (
+            '"CAREFUL"', '"Strict"', '"strict "', '""', '"other"',
+            'true', 'false', '1', '1.5', '["strict"]', '{ mode = "strict" }',
+            '1979-05-27',
+        ):
+            with self.subTest(literal=literal):
+                with self.assertRaisesRegex(CurrentConfigError, "managed_reclaim"):
+                    parse_current_config(f"managed_reclaim = {literal}")
+
+    def test_managed_reclaim_frozen_release1_surface_rejects_extension(self):
+        for value in ("careful", "strict"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(Release1ConfigError, "managed_reclaim"):
+                    parse_release1_config(f'managed_reclaim = "{value}"')
+
+    def test_managed_reclaim_rejects_local_overrides_even_when_disabled(self):
+        for kind in ("device", "profile"):
+            for enabled in ("true", "false"):
+                with self.subTest(kind=kind, enabled=enabled):
+                    with self.assertRaisesRegex(
+                        CurrentConfigError, rf"{kind}\.local\.managed_reclaim"
+                    ):
+                        parse_current_config(
+                            f'[{kind}.local]\nenabled = {enabled}\n'
+                            'managed_reclaim = "careful"'
+                        )
+
+    def test_current_config_positional_constructor_keeps_careful_default(self):
+        base = parse_release1_config("")
+        config = CurrentConfig(base, {})
+        self.assertIs(config.base, base)
+        self.assertEqual(config.managed_vpns, {})
+        self.assertIs(config.managed_reclaim, ManagedReclaimPolicy.CAREFUL)
+
+    def test_managed_reclaim_does_not_change_warm_target_or_release1_base(self):
+        release_text = """
+[device.external-wg]
+enabled = true
+expected_interfaces = ["wg0"]
+use_outbound_nat = true
+allow_vpn_client = "udp>198.51.100.10:51820"
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["external-wg"]
+"""
+        for value in ("careful", "strict"):
+            with self.subTest(value=value):
+                current = parse_current_config(
+                    f'managed_reclaim = "{value}"\n' + release_text + "warm_paths = 1\n"
+                )
+                self.assertEqual(current.base, parse_release1_config(release_text))
+                self.assertEqual(current.warm_target("corp"), 1)
+                self.assertEqual(current.managed_vpns, {})
+
     def test_operational_log_level_defaults_to_info_and_is_strict(self):
         self.assertIs(
             parse_release1_config("").log_level,

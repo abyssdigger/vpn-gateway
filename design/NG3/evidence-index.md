@@ -646,3 +646,78 @@ line following an inline `Constrained by` heading. The canonical grammar now per
 list-form `Implements` and `Constrained by` blocks and rejects trace-looking lines outside
 those blocks. No second/parallel validation script was introduced.
 
+## EV-00300 — configuration-driven managed presence and safe reserve release
+
+**Status:** accepted (evaluation-branch internal implementation review)  
+**Scope:** current-only warm normalization; A.013 deterministic ordinary/reserve demand,
+Profile-local roles and OR aggregation; explicit A.012 desired set; fresh observations
+between bounded D.001 attempts; selective dependency-confirmed reserve release and
+truthful A.008 diagnostic projection.  
+**Requirements:** `VPNG-U001-R1.R3.R7.R3` and R1–R4 children.  
+**Architecture:** A.001, A.002, A.008, A.012, A.013, C.004, D.001, D.003.  
+**Review:** `design/reviews/NG3-2026-11-25-warm-presence-evaluation-implementation-review.md`.  
+**Reviewed implementation baseline:** `74bfb5e3a5116cc998c6aa4578728d2bdca8ffee`.  
+**Executable evidence:** GitHub Actions [NG3 Python run 45645208959](https://github.com/abyssdigger/vpn-gateway/actions/runs/45645208959)
+— **25/25 jobs PASS**, unit job 139314335682 — **940/940 tests PASS**;
+`linux-managed-device-runtime` job 139314334848 — PASS;
+Actual main lineage guard run 45645208720 — PASS.
+
+The kernel integration uses the production WireGuard Adapter, real network namespace,
+normal C.001/probe convergence and D.003. It induces a primary-interface loss and a
+separately enforced D.001 secret-permission failure, confirms reserve activation, restores
+the primary with reserve still present, checks the release gate, confirms removal of
+dynamic payload AllowedIPs immediately before real D.001 deletion, and checks post-release
+binding and status. Stale replacement identity and D.003 failure are explicit injected
+negative observations; the successful stop and kernel AllowedIPs observations are real.
+No remote peer availability or payload-through-reserve claim is made by this experiment.
+
+This evidence is isolated on the evaluation branch. It does not record a main snapshot,
+release decision or projectholder acceptance of the implementation.
+
+## EV-00310 — normal managed Device reclaim activation and exact reserve admission
+
+**Status:** verified development result; independent terminal review ACCEPT for #41.  
+**Scope:** A.002/A.004/A.008/A.012/A.013/D.001–D.003 composition; careful/strict,
+exact lifecycle reserve obligation, bounded exact retirement and non-recursive F2.  
+**Requirements:** `VPNG-U001-R1.R3.R7.R4`, R1/R2; preserve R7.R3 reserve behavior.  
+**Task/review:** [#41](https://github.com/abyssdigger/vpn-gateway/issues/41),
+[exact-capacity disposition](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239014269),
+[kernel/status review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239034859),
+[independent terminal ACCEPT #41/7239133255](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255).  
+**Verified implementation/test baseline:** `a5472336c89e54b8b20a2042cc9e7171da43b317`.  
+**Executable evidence:** [NG3 Python 46143230434](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434)
+— 25/25 jobs PASS; [unit 140973642680](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434/job/140973642680)
+— 1061/1061 PASS; [linux-managed-device-runtime 140973642829](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434/job/140973642829)
+— PASS; lineage guard 46143230499 PASS.
+
+The shared normal startup/periodic path exercises the immutable plan, replacement policy,
+exact dependency cleanup/retirement, F2 and final status. The focused regression proves
+that careful can retire an A.013 baseline-selected Device while retaining another exact
+used survivor. Cold-start fallback, foreign same-name ordinary link and reserve withdrawal
+after ordinary recovery exercise real Linux lifecycle and policy without injected positive
+peer replies. Careful retained D.002, strict partial and remaining batch scenarios use
+real kernel interfaces, AllowedIPs, C.001 and D.001/D.003 operations with **injected technical
+peer replies**; they do not establish remote end-to-end reachability.
+
+The red test-only baseline `e689ec3c5c34dc726ace5fe362bd3a6862d796ae` failed on missing
+mandatory reserve ([unit job](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143061397/job/140973110632)).
+The correction `97a40135e45a46e46fb1d5dead1c0355bb445e29` keeps raw #40 contribution/floor
+evidence separate from exact-capacity A.013 lifecycle demand. The foreign-link regression
+confirms preserved reserve and truthful DEGRADED status. No accepted pure A.013, A.004
+or reclaim selection contract changed.
+
+**Independently accepted task candidate:** [`52c2da248269b42ac1be757981a3a8fbfe488dc7`](https://github.com/abyssdigger/vpn-gateway/commit/52c2da248269b42ac1be757981a3a8fbfe488dc7).
+The terminal review binds the documentation and architecture/trace reconciliation to this exact
+candidate. Exact-candidate [NG3 Python 46143677980](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143677980)
+— 25/25 jobs PASS; unit 1061/1061 PASS; affected linux-managed-device-runtime PASS;
+[actual-main lineage 46143678005](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143678005) — PASS.
+The implementation/test baseline and limitations above are unchanged.
+
+The #41 task acceptance alone did not close R7.R4/R1/R2. Final documentation/trace-only
+reconciliation was independently accepted at [`28e92477b1b9b6ec4746de52d3ad2e4d021601ba`](https://github.com/abyssdigger/vpn-gateway/commit/28e92477b1b9b6ec4746de52d3ad2e4d021601ba)
+([#41 final review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239352505),
+[NG3 Python 46145226957](https://github.com/abyssdigger/vpn-gateway/actions/runs/46145226957) — 25/25 jobs PASS).
+The separate [independent #48 requirement closure review](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239178657)
+accepted R7.R4/R1/R2 architecture closure on the established evidence; its [local-edge review](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239328302)
+reconciles component materialization according to architecture §2.9. Evidence limits above remain unchanged.
+Neither review authorizes main publication or claims released 0.1.0 support.

@@ -257,6 +257,127 @@ class LinuxManagedWireGuardAdapter:
             state=ManagedWireGuardState.ABSENT,
         )
 
+    def confirm_present(
+        self,
+        device_id: str,
+        desired_base: ManagedWireGuardConfig,
+    ) -> ManagedWireGuardObservation:
+        """Confirm the exact current managed base without converging it."""
+        prepared = self._prepare(device_id, desired_base)
+        first = self._exact_owned_link(prepared)
+        if first is None:
+            raise ManagedWireGuardError("managed WireGuard base is absent")
+        if not self._matches_prepared(first, prepared):
+            raise ManagedWireGuardError("managed WireGuard base does not match")
+        current = self._recheck_exact_base(prepared, _identity(first))
+        return self._confirmed_observation(current, prepared)
+
+    def retire_exact(
+        self,
+        device_id: str,
+        expected_identity: InterfaceIdentity,
+        expected_generation: str,
+        desired_base: ManagedWireGuardConfig,
+    ) -> ManagedWireGuardObservation:
+        """Delete only the reverified identity and base generation, at most once.
+
+        This is not an atomic kernel compare-delete against external mutation.
+        """
+        if not isinstance(expected_identity, InterfaceIdentity):
+            raise ValueError("expected_identity must be InterfaceIdentity")
+        if not isinstance(expected_generation, str) or not expected_generation:
+            raise ValueError("expected_generation must be non-empty text")
+        prepared = self._prepare(device_id, desired_base)
+        if expected_generation != prepared.generation:
+            raise ManagedWireGuardError("managed WireGuard base generation changed")
+        if expected_identity.ifname != prepared.config.interface:
+            raise ManagedWireGuardError("expected interface name differs from desired base")
+
+        first = self._exact_owned_link(prepared, expected_identity)
+        if first is not None:
+            if not self._matches_prepared(first, prepared):
+                raise ManagedWireGuardError("managed WireGuard base does not match")
+            current = self._recheck_exact_base(prepared, expected_identity)
+            try:
+                self._delete_owned(current, prepared.marker)
+            except ValueError as exc:
+                # An invalid identity in the final by-name observation is
+                # an observation failure, not a caller argument error.
+                raise ManagedWireGuardError(
+                    "invalid managed WireGuard identity before delete"
+                ) from exc
+            if self._exact_owned_link(prepared, expected_identity) is not None:
+                raise ManagedWireGuardError(
+                    "managed WireGuard exact instance remains after delete"
+                )
+
+        return ManagedWireGuardObservation(
+            device_id=device_id,
+            state=ManagedWireGuardState.ABSENT,
+        )
+
+    def _recheck_exact_base(
+        self,
+        prepared: _PreparedBase,
+        identity: InterfaceIdentity,
+    ) -> dict[str, object]:
+        current = self._exact_owned_link(prepared, identity)
+        if current is None or not self._matches_prepared(current, prepared):
+            raise ManagedWireGuardError(
+                "managed WireGuard base changed during exact verification"
+            )
+        return current
+
+    def _exact_owned_link(
+        self,
+        prepared: _PreparedBase,
+        expected: InterfaceIdentity | None = None,
+    ) -> dict[str, object] | None:
+        """Validate the whole inventory before any relation/absence decision."""
+        inventory: list[tuple[InterfaceIdentity, dict[str, object]]] = []
+        names: set[str] = set()
+        indices: set[int] = set()
+        for row in self._link_rows():
+            try:
+                identity = _identity(row)
+            except ValueError as exc:
+                raise ManagedWireGuardError(
+                    "invalid identity in exact managed-link inventory"
+                ) from exc
+            if identity.ifname in names or identity.ifindex in indices:
+                raise ManagedWireGuardError(
+                    "duplicate identity in exact managed-link inventory"
+                )
+            alias = row.get("ifalias")
+            if alias is not None and not isinstance(alias, str):
+                raise ManagedWireGuardError(
+                    "invalid alias in exact managed-link inventory"
+                )
+            names.add(identity.ifname)
+            indices.add(identity.ifindex)
+            inventory.append((identity, row))
+
+        related = [
+            (identity, row)
+            for identity, row in inventory
+            if row.get("ifalias") == prepared.marker
+            or identity.ifname == prepared.config.interface
+            or (expected is not None and identity.ifindex == expected.ifindex)
+        ]
+        if not related:
+            return None
+        if len(related) != 1:
+            raise ManagedWireGuardError("ambiguous exact managed WireGuard relation")
+        identity, row = related[0]
+        if (
+            row.get("ifalias") != prepared.marker
+            or identity.ifname != prepared.config.interface
+            or _link_kind(row) != "wireguard"
+            or (expected is not None and identity != expected)
+        ):
+            raise ManagedWireGuardError("managed WireGuard exact identity or ownership changed")
+        return row
+
     def _prepare(
         self,
         device_id: str,
@@ -390,6 +511,10 @@ class LinuxManagedWireGuardAdapter:
         if not isinstance(rows, list) or len(rows) != 1:
             raise ManagedWireGuardError(
                 "managed WireGuard address inventory is not singular"
+            )
+        if not isinstance(rows[0], dict):
+            raise ManagedWireGuardError(
+                "managed WireGuard address inventory row is not an object"
             )
         info = rows[0].get("addr_info", [])
         if not isinstance(info, list):

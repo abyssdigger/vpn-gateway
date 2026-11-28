@@ -13,9 +13,11 @@ from typing import Iterable
 
 from .binding import LogicalPathId, PathBinding
 from .managed_device_manager import ManagedDeviceRealization
+from .managed_device_demand import ManagedDeviceDemandProjection, ProfileManagedDeviceDemand
+from .managed_reclaim_projection import ReclaimProjection
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
-from .release1_config import Release1Config, render_helper_routing_interfaces
+from .release1_config import CurrentConfig, Release1Config, WarmPaths, render_helper_routing_interfaces
 from .wireguard_peer_manager import WireGuardPeerRealization
 
 
@@ -55,6 +57,7 @@ class ConfiguredProfileStatus:
     destinations: tuple[str, ...]
     device_order: tuple[str, ...]
     availability_check: str | None
+    warm_paths: WarmPaths | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +66,8 @@ class ConfiguredIntentStatus:
     helper_routing_policy: str
     devices: tuple[ConfiguredDeviceStatus, ...]
     profiles: tuple[ConfiguredProfileStatus, ...]
+    managed_reclaim: str | None = None
+    managed_reclaim_applicable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +103,9 @@ class RuntimeStatusSnapshot:
     readiness: RuntimeReadiness
     blocking_problems: tuple[str, ...]
     unknown_or_unconfirmed_fields: tuple[str, ...]
+    # A.013 diagnostic projection from the last confirmed normal binding, not actuation.
+    managed_profile_demands: tuple[ProfileManagedDeviceDemand, ...] | None = None
+    managed_reclaim_projection: ReclaimProjection | None = None
 
     def to_dict(self) -> dict[str, object]:
         value = asdict(self)
@@ -122,6 +130,8 @@ class RuntimeStatusAgent:
         self._configured = configured_intent
         self._effective: tuple[EffectiveProfileStatus, ...] | None = None
         self._managed_devices: tuple[ManagedDeviceRealization, ...] = ()
+        self._managed_demands: tuple[ProfileManagedDeviceDemand, ...] | None = None
+        self._managed_reclaim: ReclaimProjection | None = None
         self._wireguard_peers: tuple[WireGuardPeerRealization, ...] = ()
         self._availability = tuple(
             AvailabilityProfileStatus(
@@ -168,6 +178,20 @@ class RuntimeStatusAgent:
         self._managed_devices = tuple(
             sorted(current, key=lambda item: item.device_id)
         )
+
+    def confirm_managed_demand(
+        self, projection: ManagedDeviceDemandProjection | None
+    ) -> None:
+        if projection is not None and not isinstance(projection, ManagedDeviceDemandProjection):
+            raise ValueError("projection must be ManagedDeviceDemandProjection or None")
+        self._managed_demands = None if projection is None else projection.profiles
+
+    def confirm_managed_reclaim(self, projection: ReclaimProjection | None) -> None:
+        if projection is not None and not isinstance(projection, ReclaimProjection):
+            raise ValueError("projection must be ReclaimProjection or None")
+        if projection is not None and not self._configured.managed_reclaim_applicable:
+            raise ValueError("current reclaim requires current configuration")
+        self._managed_reclaim = projection
 
     def confirm_wireguard_peers(
         self,
@@ -245,6 +269,7 @@ class RuntimeStatusAgent:
         fields = tuple(sorted(set(unknown_fields)))
         if any(not isinstance(item, str) or not item for item in fields):
             raise ValueError("unknown fields must be non-empty text")
+        self._managed_reclaim = None
         self._readiness = RuntimeReadiness.DEGRADED
         self._problems = (problem,)
         self._unknown = fields
@@ -268,6 +293,7 @@ class RuntimeStatusAgent:
         if any(not isinstance(item, str) or not item for item in fields):
             raise ValueError("unknown fields must be non-empty text")
         self._effective = None
+        self._managed_reclaim = None
         self._availability = tuple(
             AvailabilityProfileStatus(
                 profile.profile_id,
@@ -285,9 +311,11 @@ class RuntimeStatusAgent:
         self._unknown = fields
 
     def mark_stopping(self) -> None:
+        self._managed_reclaim = None
         self._readiness = RuntimeReadiness.STOPPING
 
     def mark_stopped(self) -> None:
+        self._managed_reclaim = None
         self._readiness = RuntimeReadiness.STOPPED
         self._effective = None
         self._unknown = ("confirmed_effective_state",)
@@ -302,7 +330,13 @@ class RuntimeStatusAgent:
             availability_state=self._availability,
             readiness=self._readiness,
             blocking_problems=self._problems,
-            unknown_or_unconfirmed_fields=self._unknown,
+            unknown_or_unconfirmed_fields=tuple(sorted(set(self._unknown) | (
+                {"managed_reclaim_projection"}
+                if self._configured.managed_reclaim_applicable and self._managed_reclaim is None
+                else set()
+            ))),
+            managed_profile_demands=self._managed_demands,
+            managed_reclaim_projection=self._managed_reclaim,
         )
 
 
@@ -318,9 +352,14 @@ def read_release_version(path: Path) -> str:
     return version
 
 
-def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentStatus:
+def build_configured_intent_status(
+    config: Release1Config | CurrentConfig,
+) -> ConfiguredIntentStatus:
+    current = config if isinstance(config, CurrentConfig) else None
+    if current is not None:
+        config = current.base
     if not isinstance(config, Release1Config):
-        raise ValueError("config must be Release1Config")
+        raise ValueError("config must be Release1Config or CurrentConfig")
 
     devices = []
     for device_id in sorted(config.structural.devices):
@@ -383,6 +422,10 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
                     item.with_prefixlen for item in structural.destinations
                 ),
                 device_order=structural.device_order,
+                warm_paths=(
+                    current.warm_paths.get(profile_id, "all")
+                    if current is not None and structural.enabled else None
+                ),
                 availability_check=(
                     "default"
                     if semantic.availability_uses_device_default
@@ -402,6 +445,8 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
         config.helper_routing_policy.value,
         tuple(devices),
         tuple(profiles),
+        None if current is None else current.managed_reclaim.value,
+        current is not None and bool(current.managed_vpns),
     )
 
 
@@ -509,6 +554,46 @@ def render_runtime_status_text(snapshot: RuntimeStatusSnapshot) -> str:
                 check,
             )
             lines.append(f"        {index:02d}. {path.ifname} {state}")
+
+    if snapshot.configured_intent.managed_reclaim_applicable:
+        lines.append(f"Managed reclaim: {snapshot.configured_intent.managed_reclaim}")
+        projection = snapshot.managed_reclaim_projection
+        if projection is None:
+            lines.append("    projection: unconfirmed")
+        else:
+            for profile_id, floor in projection.floors:
+                lines.append(f"    {profile_id}: fixed ordinary floor {floor}")
+            for label, rows in (
+                ("survivor", projection.survivors),
+                ("retirement candidate", projection.retirement_candidates),
+                ("deferred", projection.deferred),
+            ):
+                for row in rows:
+                    identity = ("unknown" if row.interface is None else
+                                f"{row.interface.ifname}@{row.interface.ifindex}")
+                    lines.append(
+                        f"    {row.device_id}: {label} ({row.reason.value}) "
+                        f"{identity} generation={row.generation or 'unknown'}"
+                    )
+        demand = snapshot.managed_profile_demands
+        if demand is None:
+            lines.append("    structural demand: unconfirmed")
+        else:
+            for row in demand:
+                ordinary = ",".join(row.ordinary_device_ids) or "-"
+                reserve = ",".join(row.reserve_device_ids) or "-"
+                lines.append(f"    {row.profile_id}: structural ordinary={ordinary} reserve={reserve} "
+                             f"present={row.regular_present}/{row.regular_target}")
+        for row in snapshot.managed_device_realizations:
+            basis = row.intent_basis.value if row.intent_basis is not None else "unclassified"
+            actual = row.confirmed_state.value if row.confirmed_state is not None else "unknown"
+            eligible = ("unknown" if row.payload_eligible is None else
+                        "yes" if row.payload_eligible else "no")
+            identity = ("unknown" if row.confirmed_interface is None else
+                        f"{row.confirmed_interface.ifname}@{row.confirmed_interface.ifindex}")
+            lines.append(f"    {row.device_id}: base={actual} {identity} "
+                         f"generation={row.confirmed_generation or 'unknown'} "
+                         f"intent={basis} payload-eligible={eligible}")
 
     return "\n".join(lines)
 

@@ -186,6 +186,13 @@ def main() -> None:
                 raise AssertionError("D.001 removed D.002-owned shared prefix")
             print("D001_WG_DYNAMIC_ALLOWEDIPS_IGNORED=PASS")
 
+            exact = adapter.confirm_present("wg-main", desired)
+            if exact != with_dynamic:
+                raise AssertionError("exact confirmation differs from current base")
+            if "10.77.0.0/24" not in ns("wg", "show", "wg0", "allowed-ips"):
+                raise AssertionError("exact confirmation mutated dynamic shared prefix")
+            print("D001_WG_EXACT_CONFIRM=PASS")
+
             private_path.chmod(0o640)
             try:
                 adapter.converge_present("wg-main", desired)
@@ -214,6 +221,34 @@ def main() -> None:
                 raise AssertionError("base restart retained dynamic shared-prefix owner")
             print("D001_WG_CHANGED_SECRET_RESTART=PASS")
 
+            assert changed.confirmed_generation is not None
+            assert first.confirmed_generation is not None
+            try:
+                adapter.retire_exact(
+                    "wg-main", changed.interface, first.confirmed_generation, desired
+                )
+            except ManagedWireGuardError:
+                pass
+            else:
+                raise AssertionError("stale base generation permitted exact retirement")
+            if adapter.confirm_present("wg-main", desired) != changed:
+                raise AssertionError("stale retirement mutated current base")
+            ns("ip", "link", "add", "unrelated0", "type", "dummy")
+            exact_absent = adapter.retire_exact(
+                "wg-main", changed.interface, changed.confirmed_generation, desired
+            )
+            if exact_absent.state is not ManagedWireGuardState.ABSENT:
+                raise AssertionError("exact retirement did not confirm absence")
+            if adapter.observe("wg-main").state is not ManagedWireGuardState.ABSENT:
+                raise AssertionError("exact retirement left managed WireGuard")
+            ns("ip", "link", "show", "dev", "unrelated0")
+            if adapter.retire_exact(
+                "wg-main", changed.interface, changed.confirmed_generation, desired
+            ) != exact_absent:
+                raise AssertionError("already absent retirement did not converge")
+            print("D001_WG_EXACT_RETIRE=PASS")
+
+            adapter.converge_present("wg-main", desired)
             absent = adapter.converge_absent("wg-main")
             if absent.state is not ManagedWireGuardState.ABSENT:
                 raise AssertionError("managed WireGuard stop was not confirmed")
@@ -222,6 +257,14 @@ def main() -> None:
             print("D001_WG_STOP_CONFIRMED=PASS")
 
             ns("ip", "link", "add", "wg0", "type", "dummy")
+            try:
+                adapter.retire_exact(
+                    "wg-main", changed.interface, changed.confirmed_generation, desired
+                )
+            except ManagedWireGuardError:
+                pass
+            else:
+                raise AssertionError("foreign same-name link permitted exact retirement")
             absent_foreign = adapter.converge_absent("wg-main")
             if absent_foreign.state is not ManagedWireGuardState.ABSENT:
                 raise AssertionError("foreign interface changed managed absence")

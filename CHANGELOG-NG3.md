@@ -5,6 +5,23 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-28 — Managed Device reclaim activated in the verified development candidate
+
+The #41 normal lifecycle uses domain-wide `managed_reclaim = "careful" | "strict"`
+(default careful). It separates structural demand, retained/retiring/deferred decisions and
+exact realization eligibility, preserves mandatory reserve on exact lifecycle capacity,
+and replaces legacy ordinary-GC authorization with dependency-confirmed exact retirement
+and non-recursive F2 recovery. Current operator status and paired EN/RU documentation
+describe this distinction.
+
+The implementation/test baseline passed integrated verification (EV-00310); [independent
+terminal acceptance of #41](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239133255) is recorded at `52c2da248269b42ac1be757981a3a8fbfe488dc7`.
+The separate [independent #48 closure review](https://github.com/abyssdigger/vpn-gateway/issues/48#issuecomment-7239178657)
+accepted architecture closure of R7.R4/R1/R2; final #41 documentation reconciliation and
+local component materialization accounting are recorded in EV-00310. No released 0.1.0 capability
+or main publication is implied.
+
+
 ## 2026-11-25 — Generalized managed-WireGuard recovery requirement family closed
 
 The complete `VPNG-U001-R1.R3.R8*` family is now accepted as architecture-closed. The

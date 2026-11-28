@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address, IPv4Network
+from dataclasses import replace
 import unittest
 
 from rou.binding import LogicalPathId
@@ -153,6 +154,19 @@ class MemoryBackend:
 
 
 class ProbeRoutingConvergenceTests(unittest.TestCase):
+    def test_detached_rule_is_withdrawn_before_route_rebuild(self):
+        desired = desired_state()
+        rule = observe_rule(desired.rules[0])
+        detached = replace(rule, egress=None, detached_egress_name="gone0")
+        backend = MemoryBackend(desired, rules=(detached,))
+        result = converge_probe_routing(backend, desired, NG3_LINUX_POLICY_PLATFORM)
+        self.assertTrue(result.confirmed)
+        self.assertEqual(backend.actions[0], ("delete_rule", detached))
+        self.assertEqual(
+            [name for name, _ in backend.actions],
+            ["delete_rule", "add_route", "add_route", "add_rule"],
+        )
+
     def test_empty_state_converges_guard_path_rule(self):
         desired = desired_state()
         backend = MemoryBackend(desired)

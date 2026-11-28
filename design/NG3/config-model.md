@@ -107,6 +107,45 @@ Exact log line punctuation and journald metadata are not configuration semantics
 - `VPNG-M001-R2.R3.R1`
 - `VPNG-M001-R2.R3.R2`
 
+## 1.3. Managed Device reclaim policy
+
+The top-level TOML field `managed_reclaim` selects one domain-wide release policy:
+
+```toml
+managed_reclaim = "careful"
+```
+
+Accepted values are exactly `"careful"` and `"strict"`; omission means `"careful"`.
+This is a release policy for already-present surplus managed ordinary VPN Devices,
+not a Profile-local knob, not a new presence obligation, and not a modification of
+`warm_paths` or its ordinary/reserve calculation.
+
+Careful protects an exact already-present ordinary realization confirmed as currently
+used by at least one enabled Profile. Unknown/stale evidence does not authorize
+retirement. Strict considers the joint contribution of each physical Device to all
+enabled Profiles and preserves for each affected Profile the smaller of its resolved
+ordinary target and fresh pre-release eligible ordinary capacity. Among equally valid
+choices, retaining current use is preferred; it is not an independent obligation in
+strict mode. Successful strict reconciliation is single-removal irreducible, not
+necessarily a globally minimum set.
+
+Neither policy starts or restarts an absent Device for reclaim optimization. Explicit
+disable/remove, product stop, stronger safety obligations and mandatory reserve
+presence remain governed separately. Withdrawal of reserve demand after ordinary
+recovery remains governed by R7.R3.R3 and safe dependency release; ordinary
+membership of the same Device in another Profile must still be considered.
+
+**Implementation state:** normalized configuration, helper/model boundaries and normal
+lifecycle call sites are implemented in the accepted #41 development result; integrated
+baseline verification and exact-candidate independent acceptance are recorded in EV-00310. An unconfirmed managed
+same-name link does not count as lifecycle capacity or withdraw required reserve.
+The canonical semantics do not imply released support.
+
+**Requirements:**
+- `VPNG-U001-R1.R3.R7.R4`;
+- `VPNG-U001-R1.R3.R7.R4.R1`;
+- `VPNG-U001-R1.R3.R7.R4.R2`.
+
 # 2. Current human-facing representation
 
 The human-facing surface uses TOML root policy plus named Device/Profile tables. The optional
@@ -985,6 +1024,11 @@ reserve path currently occupies the active position and a more-preferred usable 
 recovered. For ordinary membership, a recovered path returns to its baseline position among
 standby paths but does not preempt a still-usable active path.
 
+For managed Device presence, `:reserve` has an additional and deliberately orthogonal meaning:
+it is excluded from `warm_paths`. A reserve Device may be brought up temporarily only while
+ordinary warm capacity is deficient after ordinary convergence; its presence does not satisfy
+the warm target and therefore cannot suppress continued recovery of ordinary Devices.
+
 Newly appearing runtime endpoints must not arbitrarily reorder surviving already-bound
 endpoints.
 
@@ -995,6 +1039,80 @@ endpoints.
 - `VPNG-U003-R3.R4.R1.R1`
 - `VPNG-U003-R3.R8`
 - `VPNG-U003-R3.R8.R1`
+
+## 5.4 warm_paths
+
+Current canonical Profile surface may select the number of **ordinary** paths that should be
+kept warm independently from payload activity:
+
+```toml
+[profile.corp]
+warm_paths = 2
+```
+
+Accepted values:
+
+```text
+0
+positive integer N
+"all"
+```
+
+Omitted `warm_paths` means `"all"`.
+
+The target counts only enabled ordinary Device memberships. A `:reserve` membership is
+explicitly excluded from warm capacity and from current warm satisfaction. Therefore:
+
+```text
+warm_paths = N
+regular_present = R
+
+regular_deficit = max(0, N - R)
+```
+
+For `"all"`, N is the sum of configured path capacity of all enabled ordinary memberships.
+A finite N larger than that configured ordinary capacity is a configuration error even when
+reserve capacity exists: reserve is not allowed to make an impossible warm target look valid.
+
+Fresh current ordinary paths from externally prepared and explicitly managed Devices both
+satisfy the target. The ownership difference begins only at actuation: VPN-GATE may start or
+stop only explicitly managed Devices.
+
+A numeric target is cardinality, not proactive identity rebalance. If enough ordinary paths
+are already present, an absent higher-baseline ordinary managed Device is not started merely
+to replace a present lower-baseline ordinary path. If ordinary paths are missing, additional
+managed ordinary Devices are selected deterministically by the existing baseline hierarchy.
+
+Reserve is a separate exception:
+
+```text
+ordinary convergence
+    -> fresh regular_deficit > 0
+        -> temporarily demand enough reserve capacity for the deficit
+        -> keep ordinary recovery demand unchanged
+    -> fresh regular_deficit == 0
+        -> reserve exception no longer creates Device demand
+```
+
+Already-present reserve paths may satisfy the temporary reserve-support amount, but they never
+reduce `regular_deficit`. This is what guarantees natural recovery: bringing reserve up does
+not make the missing ordinary Device cease to be demanded.
+
+A Device shared by multiple Profiles is structurally demanded when at least one Profile demands it.
+The same Device may be ordinary in one Profile and reserve in another; membership role remains
+Profile-local. Structural demand alone does not determine exact physical presence or authorize
+retirement: see the separate domain-wide reclaim policy in §1.3.
+
+Payload activity, first packet, idle time and availability outcome do not participate in
+`warm_paths` demand. Availability retains its separate role as an effective-order modifier
+of existing paths.
+
+**Requirements:**
+- `VPNG-U001-R1.R3.R7.R3`;
+- `VPNG-U001-R1.R3.R7.R3.R1`;
+- `VPNG-U001-R1.R3.R7.R3.R2`;
+- `VPNG-U001-R1.R3.R7.R3.R3`;
+- `VPNG-U001-R1.R3.R7.R3.R4`.
 
 # 6. Profile runtime normalization
 

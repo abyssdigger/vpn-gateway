@@ -109,13 +109,13 @@ class ManagedDeviceManagerTests(unittest.TestCase):
     def test_external_device_is_outside_manager_scope(self):
         lifecycle = FakeLifecycle()
         manager = ManagedDeviceManager(lifecycle)
-        self.assertEqual(manager.reconcile(external_config()), ())
+        self.assertEqual(manager.reconcile(external_config(), desired_device_ids=frozenset()), ())
         self.assertEqual(lifecycle.calls, [])
 
-    def test_structurally_demanded_managed_device_is_confirmed_present(self):
+    def test_explicitly_demanded_managed_device_is_confirmed_present(self):
         lifecycle = FakeLifecycle()
         manager = ManagedDeviceManager(lifecycle)
-        result = manager.reconcile(managed_config())
+        result = manager.reconcile(managed_config(), desired_device_ids=frozenset({"wg-main"}))
         self.assertEqual(len(result), 1)
         item = result[0]
         self.assertIs(item.desired_state, ManagedDeviceDesiredState.PRESENT)
@@ -128,6 +128,24 @@ class ManagedDeviceManagerTests(unittest.TestCase):
             [("generation", "wg-main"), ("present", "wg-main")],
         )
 
+    def test_explicit_empty_demand_does_not_start_active_managed_device(self):
+        lifecycle = FakeLifecycle()
+        manager = ManagedDeviceManager(lifecycle)
+        result = manager.reconcile(
+            managed_config(), desired_device_ids=frozenset()
+        )
+        self.assertIs(result[0].desired_state, ManagedDeviceDesiredState.ABSENT)
+        self.assertEqual(lifecycle.calls, [("observe", "wg-main")])
+
+    def test_external_device_cannot_enter_explicit_demand(self):
+        lifecycle = FakeLifecycle()
+        manager = ManagedDeviceManager(lifecycle)
+        with self.assertRaisesRegex(ValueError, "active managed"):
+            manager.reconcile(
+                external_config(), desired_device_ids=frozenset({"external"})
+            )
+        self.assertEqual(lifecycle.calls, [])
+
     def test_undemanded_present_device_waits_for_dependency_release(self):
         lifecycle = FakeLifecycle()
         lifecycle.state["wg-main"] = ManagedWireGuardObservation(
@@ -136,7 +154,7 @@ class ManagedDeviceManagerTests(unittest.TestCase):
             interface=InterfaceIdentity("wg0", 7),
         )
         manager = ManagedDeviceManager(lifecycle)
-        item = manager.reconcile(managed_config(referenced=False))[0]
+        item = manager.reconcile(managed_config(referenced=False), desired_device_ids=frozenset())[0]
         self.assertIs(item.desired_state, ManagedDeviceDesiredState.ABSENT)
         self.assertTrue(item.waiting_for_dependencies)
         self.assertEqual(lifecycle.calls, [("observe", "wg-main")])
@@ -146,6 +164,7 @@ class ManagedDeviceManagerTests(unittest.TestCase):
         manager = ManagedDeviceManager(lifecycle)
         item = manager.reconcile(
             managed_config(referenced=False),
+            desired_device_ids=frozenset(),
             dependency_free_device_ids=frozenset({"wg-main"}),
         )[0]
         self.assertIs(item.confirmed_state, ManagedWireGuardState.ABSENT)
@@ -155,10 +174,10 @@ class ManagedDeviceManagerTests(unittest.TestCase):
     def test_removed_management_is_retained_until_owned_instance_is_absent(self):
         lifecycle = FakeLifecycle()
         manager = ManagedDeviceManager(lifecycle)
-        manager.reconcile(managed_config())
+        manager.reconcile(managed_config(), desired_device_ids=frozenset({"wg-main"}))
         lifecycle.calls.clear()
 
-        pending = manager.reconcile(external_config())
+        pending = manager.reconcile(external_config(), desired_device_ids=frozenset())
         self.assertEqual(len(pending), 1)
         self.assertTrue(pending[0].waiting_for_dependencies)
         self.assertEqual(lifecycle.calls, [("observe", "wg-main")])
@@ -166,19 +185,20 @@ class ManagedDeviceManagerTests(unittest.TestCase):
         lifecycle.calls.clear()
         removed = manager.reconcile(
             external_config(),
+            desired_device_ids=frozenset(),
             dependency_free_device_ids=frozenset({"wg-main"}),
         )
         self.assertIs(removed[0].confirmed_state, ManagedWireGuardState.ABSENT)
         self.assertEqual(lifecycle.calls, [("absent", "wg-main")])
 
         lifecycle.calls.clear()
-        self.assertEqual(manager.reconcile(external_config()), ())
+        self.assertEqual(manager.reconcile(external_config(), desired_device_ids=frozenset()), ())
         self.assertEqual(lifecycle.calls, [])
 
     def test_lifecycle_failure_is_problem_not_false_confirmation(self):
         lifecycle = FakeLifecycle()
         lifecycle.fail_present = True
-        item = ManagedDeviceManager(lifecycle).reconcile(managed_config())[0]
+        item = ManagedDeviceManager(lifecycle).reconcile(managed_config(), desired_device_ids=frozenset({"wg-main"}))[0]
         self.assertIsNone(item.confirmed_state)
         self.assertEqual(item.desired_generation, "gen-a")
         self.assertIn("present failed", item.problem or "")
@@ -199,7 +219,7 @@ class ManagedDeviceManagerTests(unittest.TestCase):
             )
 
         lifecycle.converge_present = mismatched
-        item = ManagedDeviceManager(lifecycle).reconcile(managed_config())[0]
+        item = ManagedDeviceManager(lifecycle).reconcile(managed_config(), desired_device_ids=frozenset({"wg-main"}))[0]
         self.assertIsNone(item.confirmed_state)
         self.assertIn("differs from desired", item.problem or "")
 
