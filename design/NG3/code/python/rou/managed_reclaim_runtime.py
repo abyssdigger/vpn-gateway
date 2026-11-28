@@ -5,12 +5,13 @@ Architecture: A.012 ManagedDeviceManager.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 from .accepted_effective_state import AcceptedEffectiveState, PreReclaimEvidence
 from .binding import PathBinding
 from .interface_identity import InterfaceIdentity
 from .managed_device_demand import project_final
-from .managed_reclaim_projection import ReclaimProfile, ReclaimProjection, project_reclaim
+from .managed_reclaim_projection import ReclaimDecision, ReclaimProfile, ReclaimProjection, project_reclaim
 from .managed_wireguard_adapter import ManagedWireGuardState
 from .release1_config import CurrentConfig
 
@@ -216,6 +217,8 @@ def structural_retirement_precondition(
     retired = {row.device_id for row in plan.projection.retirement_candidates}
     if not already_retired <= retired:
         return False
+    if any(b.path_id.device_id in retired for b in replacement_bindings):
+        return False
     # Only the deletion of already-confirmed retired identities is expected.
     original = frozenset(plan.evidence.bindings)
     expected = frozenset(b for b in original if b.path_id.device_id not in already_retired)
@@ -256,3 +259,51 @@ def structural_retirement_precondition(
         if len(paths) < floors[profile.profile_id]:
             return False
     return True
+
+
+@dataclass(frozen=True, slots=True)
+class ReclaimBatchOutcome:
+    retired: frozenset[str]
+    dependencies_touched: bool
+    retirement_attempted: bool
+    problem: str | None
+
+    @property
+    def requires_recovery(self) -> bool:
+        return self.dependencies_touched or self.retirement_attempted
+
+
+def execute_reclaim_batch(
+    plan: RuntimeReclaimPlan,
+    *,
+    verify: Callable[[ReclaimDecision, frozenset[str]], bool],
+    cleanup: Callable[[ReclaimDecision], bool],
+    retire: Callable[[ReclaimDecision], None],
+) -> ReclaimBatchOutcome:
+    """Bounded ordering only; caller provides complete exact guards and operations.
+
+    verify must include fresh replacement-policy/dependency, structural and
+    protected peer realization checks. retire must raise unless exact absence
+    has been confirmed. Caller must run one F2 recovery after any touch.
+    """
+    retired: set[str] = set()
+    touched = attempted = False
+    problem = None
+    for candidate in plan.projection.retirement_candidates:
+        try:
+            if candidate.interface is None or not candidate.generation:
+                raise RuntimeError("retirement decision lacks exact identity")
+            if not verify(candidate, frozenset(retired)):
+                raise RuntimeError("pre-cleanup retirement guard failed")
+            touched = True
+            if not cleanup(candidate):
+                raise RuntimeError("dependency cleanup unconfirmed")
+            if not verify(candidate, frozenset(retired)):
+                raise RuntimeError("post-cleanup retirement guard failed")
+            attempted = True
+            retire(candidate)
+            retired.add(candidate.device_id)
+        except Exception as exc:
+            problem = f"{candidate.device_id}: {type(exc).__name__}: {exc}"
+            break
+    return ReclaimBatchOutcome(frozenset(retired), touched, attempted, problem)

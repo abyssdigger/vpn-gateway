@@ -22,6 +22,7 @@ from .managed_wireguard_adapter import (
     ManagedWireGuardState,
 )
 from .release1_config import CurrentConfig, ManagedWireGuardConfig
+from .managed_reclaim_projection import ReclaimDecision, ReclaimReason
 
 
 class ManagedDeviceDesiredState(str, Enum):
@@ -89,6 +90,12 @@ class ManagedDeviceLifecycleAdapter(Protocol):
     def converge_absent(self, device_id: str) -> ManagedWireGuardObservation:
         """Remove owned base realization and freshly confirm absence."""
 
+    def retire_exact(
+        self, device_id: str, expected_identity: InterfaceIdentity,
+        expected_generation: str, desired_base: ManagedWireGuardConfig,
+    ) -> ManagedWireGuardObservation:
+        """Retire the exact already-confirmed managed base realization."""
+
 
 @dataclass(slots=True)
 class ManagedDeviceManager:
@@ -151,6 +158,27 @@ class ManagedDeviceManager:
                 or confirmed.confirmed_generation != expected):
             raise RuntimeError("D.001 exact base confirmation changed or mismatched")
         return expected, confirmed
+
+    def retire_reclaim_candidate(
+        self, config: CurrentConfig, candidate: ReclaimDecision,
+    ) -> ManagedWireGuardObservation:
+        """Execute exact D.001 retirement after caller-confirmed dependency guards."""
+        if (not isinstance(candidate, ReclaimDecision)
+                or candidate.reason is not ReclaimReason.SURPLUS
+                or not isinstance(candidate.interface, InterfaceIdentity)
+                or not candidate.generation):
+            raise ValueError("exact surplus retirement decision required")
+        self._validate_desired(config, frozenset({candidate.device_id}))
+        result = self.lifecycle.retire_exact(
+            candidate.device_id, candidate.interface, candidate.generation,
+            config.managed_vpns[candidate.device_id],
+        )
+        if (result.device_id != candidate.device_id
+                or result.state is not ManagedWireGuardState.ABSENT
+                or result.interface is not None
+                or result.confirmed_generation is not None):
+            raise RuntimeError("D.001 exact retirement did not confirm absence")
+        return result
 
     def converge_present(
         self, config: CurrentConfig, device_id: str
