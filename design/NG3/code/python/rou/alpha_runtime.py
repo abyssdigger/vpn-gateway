@@ -948,6 +948,38 @@ def refresh_alpha_managed_demand_status(
     )
 
 
+def refresh_alpha_managed_reclaim_status(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    agent: RuntimeStatusAgent,
+) -> None:
+    """Publish only a fresh, read-only projection of the final accepted state.
+
+    The trigger-local actionable plan is never a source of current status.
+    Neither this observation nor the resulting projection authorizes release.
+    """
+    agent.confirm_managed_reclaim(None)
+    config = prepared.current_config
+    accepted = prepared.accepted_effective_state
+    if accepted is None or not config.managed_vpns:
+        return
+    try:
+        evidence = observe_alpha_pre_reclaim(
+            prepared, domain_spec, runner, manager, accepted,
+        )
+        projection = build_runtime_reclaim_plan(config, evidence, accepted).projection
+    except Exception:
+        return
+    # Normal triggers are serialized, but never publish a result across a
+    # changed configuration or effective-generation boundary.
+    if prepared.current_config is not config or prepared.accepted_effective_state is not accepted:
+        return
+    agent.confirm_managed_demand(evidence.demand)
+    agent.confirm_managed_reclaim(projection)
+
+
 def _release_alpha_managed_device_dependencies(
     desired: PayloadNetworkPolicyDesiredState,
     domain_spec: ManagedNetworkDomainSpec,
