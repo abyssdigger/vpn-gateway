@@ -1205,18 +1205,20 @@ A collaborative handoff adds to the generic/work-mode handoff:
 - ordinary project-task Issue refs, current task/specification and review/rework frontier, and exact
   published WIP/candidate/accepted result refs relevant to continuation, when the ordinary-Issue
   pilot is in use;
-- current durable journal epoch and task/journal room identities, when the typed journal is in use;
-- current signal room identity;
-- processed canonical journal/holder frontier;
-- open obligations and blockers;
-- derived readiness/waiting reason per role;
+- when the typed v1 journal/holder projection is in use: current durable journal epoch and
+  task/journal room identities, processed canonical journal/holder frontier, open v1 obligations and
+  blockers, and derived v1 readiness/waiting reason per role;
+- when a signal room is actually configured and in use: current signal room identity and relevant
+  signal diagnostics, unresolved ambiguous delivery/GC operations, and exact GC candidates only
+  when they matter to continuation, clearly marked as non-authority;
+- any separately applicable external-holder processed frontier required for continuation;
 - exact artifact/result/review refs;
-- current signal diagnostics and unresolved ambiguous delivery/GC operations, when any;
-- exact GC candidates only when they matter to continuation, clearly marked as non-authority;
 - holder decisions or authority gates genuinely required; product/project decisions use
   `EXECUTION-LOOP.md` §8.1;
 - current command-registry cycle key when projectholder commands matter.
 
 Do not duplicate large payloads in the handoff when exact durable refs suffice. The ordinary task
-Issue and published artifact refs own the ordinary task frontier. Do not treat SIGNAL history as the
-typed journal semantic handoff frontier; canonical journal/holder state owns that boundary.
+Issue and published artifact refs own the ordinary task frontier. In ordinary-Issue-only operation,
+that frontier does not require invented journal, signal or v1 readiness placeholders. Do not treat
+SIGNAL history as the typed journal semantic handoff frontier; canonical journal/holder state owns
+that boundary when the typed projection is in use.
