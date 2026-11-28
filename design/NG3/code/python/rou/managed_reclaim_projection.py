@@ -1,5 +1,7 @@
 """A.012 pure reclaim selection over a caller-admitted current snapshot.
 
+Architecture: A.012 ManagedDeviceManager.
+
 No observation, actuation, dependency release or structural-demand mutation.
 The caller owns freshness/completeness of the admitted Profile and realization
 inventory, including A.004's effective-policy/peer-generation evidence.
