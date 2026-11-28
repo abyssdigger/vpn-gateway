@@ -9,7 +9,9 @@ from rou.alpha_runtime import AlphaPreparedPolicy
 from rou.managed_device_manager import ManagedDeviceManager
 from rou.managed_reclaim_runtime import (
     build_runtime_reclaim_plan, exact_survivor_bindings,
-    previously_admitted_deferred_bindings,
+    previously_admitted_deferred_bindings, replacement_managed_interfaces,
+    recovery_eligibility_seed, recovery_managed_interfaces,
+    structural_retirement_precondition,
 )
 from rou.release1_config import ManagedReclaimPolicy
 
@@ -83,3 +85,45 @@ class RuntimeReclaimPlanTests(TestCase):
                     replace(e, bindings=(A,))):
             with self.assertRaises(ValueError):
                 build_runtime_reclaim_plan(self.cfg, bad, self.previous)
+
+    def test_startup_unknown_allows_independent_exact_structural_demand(self):
+        e = self.evidence(previous=False, bindings=(A,))
+        plan = build_runtime_reclaim_plan(self.cfg, e, None)
+        self.assertIn("a", e.demand.desired_device_ids)
+        self.assertFalse(plan.projection.retirement_candidates)
+        self.assertEqual(replacement_managed_interfaces(plan), frozenset({A.endpoint}))
+
+    def test_startup_surplus_deferred_has_no_exposure(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(previous=False), None)
+        self.assertEqual(replacement_managed_interfaces(plan), frozenset())
+
+    def test_recovery_preserves_survivor_only_on_matching_generation(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        seed = recovery_eligibility_seed(plan)
+        self.assertEqual(recovery_managed_interfaces(self.cfg, self.evidence(), seed),
+                         frozenset({A.endpoint}))
+        self.adapter.desired_generation.return_value = "base-new"
+        self.adapter.confirm_present.return_value = replace(PRESENT, confirmed_generation="base-new")
+        self.assertFalse(recovery_managed_interfaces(self.cfg, self.evidence(), seed))
+
+    def test_cancelled_retirement_reenters_only_via_structural_demand(self):
+        cfg = replace(self.cfg, managed_reclaim=ManagedReclaimPolicy.STRICT)
+        plan = build_runtime_reclaim_plan(cfg, self.evidence(cfg), self.previous)
+        seed = recovery_eligibility_seed(plan)
+        self.assertFalse(seed)
+        self.assertFalse(recovery_managed_interfaces(cfg, self.evidence(cfg), seed))
+        self.assertEqual(recovery_managed_interfaces(
+            cfg, self.evidence(cfg, bindings=(A,)), seed), frozenset({A.endpoint}))
+
+    def test_structural_guard_rejects_drift_and_unavailable_replacement(self):
+        cfg = replace(self.cfg, managed_reclaim=ManagedReclaimPolicy.STRICT)
+        e = self.evidence(cfg)
+        plan = build_runtime_reclaim_plan(cfg, e, self.previous)
+        kwargs = dict(already_retired=frozenset(), replacement_bindings=frozenset({EXT}))
+        self.assertTrue(structural_retirement_precondition(plan, cfg, e, **kwargs))
+        self.assertFalse(structural_retirement_precondition(
+            plan, cfg, self.evidence(cfg, bindings=(A,)), **kwargs))
+        self.assertFalse(structural_retirement_precondition(
+            plan, cfg, e, already_retired=frozenset(), replacement_bindings=frozenset()))
+        self.assertFalse(structural_retirement_precondition(
+            plan, replace(cfg), e, **kwargs))

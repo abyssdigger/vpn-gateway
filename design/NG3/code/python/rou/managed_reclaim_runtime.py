@@ -128,3 +128,131 @@ def previously_admitted_deferred_bindings(
                 and peer.interface_ifindex == binding.endpoint.ifindex):
             result.add(binding)
     return frozenset(result)
+
+
+@dataclass(frozen=True, slots=True)
+class ExactEligibility:
+    binding: PathBinding
+    generation: str
+
+
+def _exact_bindings(evidence: PreReclaimEvidence) -> frozenset[ExactEligibility]:
+    """Require unique positive D.001 evidence cross-linked to the fresh C.004 path."""
+    expected = dict(evidence.expected_base_generations)
+    result = set()
+    for binding in evidence.bindings:
+        device_id = binding.path_id.device_id
+        rows = [o for o in evidence.managed_base_observations if o.device_id == device_id]
+        if device_id in evidence.unconfirmed_devices or len(rows) != 1:
+            continue
+        row = rows[0]
+        if (row.state is ManagedWireGuardState.PRESENT
+                and row.interface == binding.endpoint
+                and row.confirmed_generation
+                and row.confirmed_generation == expected.get(device_id)):
+            # A conflicting physical realization is not exact eligibility.
+            if any(o.device_id != device_id and o.interface is not None
+                   and (o.interface.ifname == binding.endpoint.ifname
+                        or o.interface.ifindex == binding.endpoint.ifindex)
+                   for o in evidence.managed_base_observations):
+                continue
+            result.add(ExactEligibility(binding, row.confirmed_generation))
+    return frozenset(result)
+
+
+def recovery_eligibility_seed(plan: RuntimeReclaimPlan) -> frozenset[ExactEligibility]:
+    allowed = exact_survivor_bindings(plan) | previously_admitted_deferred_bindings(plan)
+    return frozenset(row for row in _exact_bindings(plan.evidence) if row.binding in allowed)
+
+
+def replacement_managed_interfaces(plan: RuntimeReclaimPlan) -> frozenset[InterfaceIdentity]:
+    """v1.3: independent structural eligibility plus retained exact identities."""
+    assert plan.evidence.demand is not None
+    structural = plan.evidence.demand.desired_device_ids
+    retiring = {r.device_id for r in plan.projection.retirement_candidates}
+    exact = _exact_bindings(plan.evidence)
+    allowed = recovery_eligibility_seed(plan) | frozenset(
+        row for row in exact if row.binding.path_id.device_id in structural
+    )
+    return frozenset(row.binding.endpoint for row in allowed
+                     if row.binding.path_id.device_id not in retiring)
+
+
+def recovery_managed_interfaces(
+    config: CurrentConfig,
+    evidence: PreReclaimEvidence,
+    seed: frozenset[ExactEligibility],
+) -> frozenset[InterfaceIdentity]:
+    """Fresh eligibility only; does not compute or replay a retirement plan."""
+    _validate_inventory(config, evidence)
+    assert evidence.demand is not None
+    demanded = evidence.demand.desired_device_ids
+    return frozenset(
+        row.binding.endpoint for row in _exact_bindings(evidence)
+        if row.binding.path_id.device_id in demanded or row in seed
+    )
+
+
+def structural_retirement_precondition(
+    plan: RuntimeReclaimPlan,
+    config: CurrentConfig,
+    fresh: PreReclaimEvidence,
+    *,
+    already_retired: frozenset[str],
+    replacement_bindings: frozenset[PathBinding],
+) -> bool:
+    """Check the preserved original inventory and eligible retained capacity.
+
+    This is only the C.004/D.001/structural half of the guard. The caller must
+    independently verify current replacement policy, dependencies and protected
+    peer-owner evidence before and after D.003 cleanup.
+    """
+    try:
+        _validate_inventory(config, fresh)
+    except ValueError:
+        return False
+    if config is not plan.config:
+        return False
+    retired = {row.device_id for row in plan.projection.retirement_candidates}
+    if not already_retired <= retired:
+        return False
+    # Only the deletion of already-confirmed retired identities is expected.
+    original = frozenset(plan.evidence.bindings)
+    expected = frozenset(b for b in original if b.path_id.device_id not in already_retired)
+    if frozenset(fresh.bindings) != expected:
+        return False
+    if fresh.unconfirmed_devices != plan.evidence.unconfirmed_devices:
+        return False
+    old = plan.evidence.managed_base_observations
+    new = fresh.managed_base_observations
+    if frozenset(o for o in old if o.device_id not in already_retired) != frozenset(
+        o for o in new if o.device_id not in already_retired
+    ):
+        return False
+    for device_id in already_retired:
+        observations = [o for o in new if o.device_id == device_id]
+        if (len(observations) != 1 or observations[0].state is not ManagedWireGuardState.ABSENT
+                or observations[0].interface is not None
+                or observations[0].confirmed_generation is not None):
+            return False
+    if dict(fresh.expected_base_generations) != {
+        d: generation for d, generation in plan.evidence.expected_base_generations
+        if d not in already_retired
+    }:
+        return False
+    assert fresh.demand is not None
+    if fresh.demand.reserve_device_ids != plan.mandatory_device_ids:
+        return False
+    # Every retained managed contribution counted toward the floor must have
+    # an exact confirmed identity and be present in the replacement policy.
+    # A physical hold by itself supplies no policy capacity.
+    exact = {row.binding for row in _exact_bindings(fresh)}
+    eligible = {b for b in replacement_bindings & expected
+                if b.path_id.device_id not in config.managed_vpns or b in exact}
+    floors = dict(plan.projection.floors)
+    for profile in plan.profiles:
+        members = profile.managed_ordinary_ids | profile.external_ordinary_ids
+        paths = {b.path_id for b in eligible if b.path_id.device_id in members}
+        if len(paths) < floors[profile.profile_id]:
+            return False
+    return True
