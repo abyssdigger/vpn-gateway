@@ -352,11 +352,19 @@ def project_reclaim(
                - sum(vectors[p].get(d, 0) for d in hard))
         for p, floor in floors.items()
     }
-    # If an unresolved observation makes the floor unprovable, every known
-    # contributor was deferred above. Do not let that component contaminate
-    # unrelated Profiles' choices.
-    residuals = {p: n for p, n in residuals.items()
-                 if n and n <= sum(vectors[p].get(d, 0) for d in optional)}
+    # Unprovable floors stay in the public result. They can leave the
+    # optimization problem only after every exact positive contributor has
+    # been made non-retirable above. Never silently drop an impossible floor
+    # while an optional contributor remains.
+    for p, n in tuple(residuals.items()):
+        if not n:
+            del residuals[p]
+            continue
+        available = sum(vectors[p].get(d, 0) for d in optional)
+        if n > available:
+            if available:
+                raise ValueError("unresolved floor has optional contributors")
+            del residuals[p]
     # Split the residual bipartite graph into independent components.
     pending = set(residuals)
     selected: set[str] = set()
