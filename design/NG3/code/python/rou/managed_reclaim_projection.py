@@ -269,10 +269,65 @@ def project_reclaim(
                 deferred[d] = ReclaimReason.IDENTITY
                 present.pop(d, None)
 
+    reason_priority = {
+        ReclaimReason.USE: 0,
+        ReclaimReason.COVERAGE: 1,
+        ReclaimReason.STRUCTURE: 2,
+        ReclaimReason.IDENTITY: 3,
+    }
+
     def defer(ids: frozenset[str] | set[str], reason: ReclaimReason) -> None:
         for d in ids:
-            if d not in absent:
-                deferred.setdefault(d, reason)
+            if d not in absent and (
+                d not in deferred
+                or reason_priority[reason] > reason_priority[deferred[d]]
+            ):
+                deferred[d] = reason
+
+    # Cross-check positive A.004 claims across the admitted snapshot. One
+    # physical endpoint cannot belong to another logical Device, and D.002
+    # generation is Device-wide (the Profile-local peer owner may differ).
+    # This detects contradictions, not freshness of an isolated claim.
+    bad_use_profiles: set[str] = set()
+    use_by_device: dict[str, list[ConfirmedCurrentUse]] = {}
+    for row in profiles:
+        members = row.managed_ordinary_ids
+        if (not _ids(members) or not members <= managed_device_ids
+                or not _ids(row.external_ordinary_ids)
+                or row.external_ordinary_ids & managed_device_ids):
+            raise ValueError("unidentifiable Profile membership")
+        u = row.current_use
+        if (not isinstance(u, ConfirmedCurrentUse)
+                or u.profile_id != row.profile_id
+                or u.state is not CurrentUseState.CONFIRMED
+                or not isinstance(u.path_id, LogicalPathId)
+                or not _text(u.path_id.device_id)
+                or not isinstance(u.endpoint, InterfaceIdentity)):
+            continue
+        d = u.path_id.device_id
+        aliases = (names.get(u.endpoint.ifname, set())
+                   | indices.get(u.endpoint.ifindex, set())) - {d}
+        if aliases:
+            bad_use_profiles.add(row.profile_id)
+            defer(aliases, ReclaimReason.USE)
+        if d in managed_device_ids:
+            if d in absent:
+                absent.remove(d)
+                deferred[d] = ReclaimReason.IDENTITY
+            if d not in members:
+                bad_use_profiles.add(row.profile_id)
+                defer({d}, ReclaimReason.USE)
+            o = present.get(d)
+            if (o is not None and o.interface == u.endpoint
+                    and o.confirmed_generation == u.managed_base_generation
+                    and _text(u.wireguard_generation)
+                    and _count(u.path_id.selector_index)
+                    and _count(u.path_id.slot_index)):
+                use_by_device.setdefault(d, []).append(u)
+    for d, claims in use_by_device.items():
+        if len({(u.path_id, u.wireguard_generation) for u in claims}) > 1:
+            bad_use_profiles.update(u.profile_id for u in claims)
+            defer({d}, ReclaimReason.USE)
 
     vectors: dict[str, dict[str, int]] = {}
     floors: dict[str, int] = {}
@@ -280,10 +335,6 @@ def project_reclaim(
     used: set[str] = set()
     for row in sorted(profiles, key=lambda p: p.profile_id):
         members = row.managed_ordinary_ids
-        if (not _ids(members) or not members <= managed_device_ids
-                or not _ids(row.external_ordinary_ids)
-                or row.external_ordinary_ids & managed_device_ids):
-            raise ValueError("unidentifiable Profile membership")
         counts: dict[str, int] = {}
         valid = (isinstance(row.contributions, tuple)
                  and all(_count(x) for x in (
@@ -315,17 +366,8 @@ def project_reclaim(
         external[p] = row.external_ordinary_present
         vectors[p] = {d: n for d, n in counts.items() if d in present and n}
         ok, selected = _current_use(row, present, counts)
-        if not ok:
+        if not ok or p in bad_use_profiles:
             # A.004 UNKNOWN is per Profile, not per global inventory.
-            # A claimed current use of an absent member is contradictory.
-            use = row.current_use
-            if (isinstance(use, ConfirmedCurrentUse)
-                    and use.state is CurrentUseState.CONFIRMED
-                    and isinstance(use.path_id, LogicalPathId)
-                    and use.path_id.device_id in members & absent):
-                d = use.path_id.device_id
-                absent.remove(d)
-                deferred[d] = ReclaimReason.IDENTITY
             defer(members, ReclaimReason.USE)
         elif selected is not None:
             used.add(selected)
