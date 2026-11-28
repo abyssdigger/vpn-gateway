@@ -80,6 +80,7 @@ A current executable reference unit without a normal requirement path may appear
 ## Trace: `A.012`
 
 - `design/NG3/code/python/rou/managed_device_manager.py`
+- `design/NG3/code/python/rou/managed_reclaim_projection.py`
 
 ## Trace: `A.013`
 
