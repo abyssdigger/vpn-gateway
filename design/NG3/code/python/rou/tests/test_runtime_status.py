@@ -12,6 +12,7 @@ from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
 from rou.managed_device_manager import (
     ManagedDeviceDesiredState,
+    ManagedDeviceIntentBasis,
     ManagedDeviceRealization,
 )
 from rou.managed_wireguard_adapter import ManagedWireGuardState
@@ -19,6 +20,7 @@ from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
 from rou.release1_config import parse_current_config, parse_release1_config
 from rou.managed_device_demand import project_final
+from rou.managed_reclaim_projection import ReclaimDecision, ReclaimProjection, ReclaimReason
 from rou.wireguard_peer_manager import (
     WireGuardGroupOwnershipRecord,
     WireGuardPeerRealization,
@@ -132,6 +134,33 @@ probe_target = "10.201.0.{index}"
             {"device_id": "a", "fresh_path_count": 1},
         ])
         self.assertEqual(demand["ordinary_device_ids"], ["a"])
+
+    def test_current_reclaim_status_separates_intent_projection_and_realization(self):
+        config = parse_current_config(CONFIG)
+        agent = RuntimeStatusAgent(build_configured_intent_status(config))
+        self.assertEqual(agent.snapshot().configured_intent.managed_reclaim, "careful")
+        self.assertIn("projection: unconfirmed", render_runtime_status_text(agent.snapshot()))
+        endpoint = InterfaceIdentity("wg0", 7)
+        retained = ReclaimDecision("a", endpoint, "base-a", ReclaimReason.CURRENT_USE)
+        projection = ReclaimProjection((retained,), (), (), (("alpha", 1),))
+        agent.confirm_managed_reclaim(projection)
+        agent.confirm_managed_devices((ManagedDeviceRealization(
+            "a", ManagedDeviceDesiredState.PRESENT, "base-a",
+            ManagedWireGuardState.PRESENT, "base-a",
+            confirmed_interface=endpoint,
+            intent_basis=ManagedDeviceIntentBasis.RECLAIM_RETENTION,
+            payload_eligible=True,
+        ),))
+        snapshot = agent.snapshot()
+        self.assertEqual(snapshot.managed_reclaim_projection, projection)
+        encoded = json.loads(json.dumps(snapshot.to_dict()))
+        self.assertEqual(encoded["managed_reclaim_projection"]["survivors"][0]["reason"], "current_use")
+        self.assertEqual(encoded["managed_device_realizations"][0]["intent_basis"], "reclaim_retention")
+        self.assertIn("survivor (current_use) wg0@7", render_runtime_status_text(snapshot))
+        self.assertIn("intent=reclaim_retention payload-eligible=yes", render_runtime_status_text(snapshot))
+        agent.mark_unconfirmed(readiness=RuntimeReadiness.DEGRADED, problem="drift")
+        self.assertIsNone(agent.snapshot().managed_reclaim_projection)
+        self.assertIn("managed_reclaim_projection", agent.snapshot().unknown_or_unconfirmed_fields)
 
     def test_status_exposes_scoped_helper_routing_intent(self):
         configured = build_configured_intent_status(
