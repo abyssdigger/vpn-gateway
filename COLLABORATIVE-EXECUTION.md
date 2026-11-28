@@ -570,9 +570,9 @@ A documentation pass is complete when the checked current-work frontier has eith
 - a bounded documentation candidate produced for independent review; or
 - each remaining gap truthfully routed/recorded with its unresolved dependency.
 
-Do not repeatedly rescan the same unchanged documentation frontier inside one productive-WAIT slice
-after such a conclusion. Re-run only after a relevant task/commit/documentation source changes or a
-new ordinary work item becomes available.
+Do not repeatedly rescan the same reconciled documentation frontier within or across productive-WAIT
+slices. Reopen only for a materially relevant change not already consumed by the completed pass,
+as defined in §6.3.
 
 ### 6.2. Idle documentation pass without an existing WAIT relation
 
@@ -585,8 +585,8 @@ the generic `EXEC_NEXT` gate. Admit that candidate only when fresh observations 
 1. no ordinary READY, assigned, holder-directed, peer-delivered or otherwise runnable work exists;
 2. no applicable bounded `WAIT` can observe an unresolved dependency inside the remaining execution
    window;
-3. the current documentation frontier has not already been reconciled since the latest relevant
-   task/commit/documentation-source change;
+3. the current documentation frontier is not already reconciled under the shared frontier rule in
+   §6.3;
 4. a bounded documentation-reconciliation operation fits the remaining session-safety window.
 
 The operation first performs the documentation-reconciliation pass above. If it finds a mechanically
@@ -600,14 +600,30 @@ candidate is no longer runnable; if no other `WORK` or `WAIT` exists, the generi
 documentation scans, invent documentation tasks, or use this rule to defeat the generic stop/final
 gates.
 
-Ordinary work or an applicable bounded wait always wins over this no-WAIT idle pass. A newly changed
-task/commit/documentation source reopens the documentation frontier for a later bounded pass.
+Ordinary work or an applicable bounded wait always wins over this no-WAIT idle pass. Only a
+materially relevant change not already consumed by the completed pass reopens its documentation
+frontier (§6.3).
 
 ### 6.3. Shared maintenance safeguards
 
 The following safeguards govern both productive WAIT (§6.1) and no-WAIT idle documentation (§6.2).
 The original WAIT relation and slice-specific rules apply only when there is such a relation;
 the no-WAIT path remains exactly one bounded WORK operation under §6.2.
+
+**Reconciled documentation frontier.** At completion record the checked source frontier and the
+pass's own verified resulting candidate/documentation head and task/result records as one reconciled
+frontier. Its own commit or documentation mutation does not by itself reopen that frontier. This
+record covers only changes actually consumed or produced and verified by the pass; it must not
+mask independent concurrent changes or treat failed/ambiguous publication as reconciliation.
+Reopen only after a materially relevant change not already consumed, such as an independent review
+or rework outcome, another ordinary task/result changing the owning semantics, a holder/specification
+decision, or an independently changed documentation source/baseline. A produced candidate awaiting
+independent review preserves its normal review dependency; it is not a reason to rescan.
+
+For example, with a reconciled source F0 and a candidate C1 produced by one no-WAIT pass, returning
+to `EXEC_NEXT` without any independent relevant change leaves no new idle documentation candidate.
+If no ordinary `WORK` or applicable `WAIT` remains, use the generic stop basis normally. The same
+frontier rule prevents repeated self-triggered productive-WAIT maintenance slices.
 
 Before creating a narrow maintenance task, check the current ordinary task inventory for existing compatible work. Identify the gap by Requirement ID, affected object and gap class as coordination metadata, not authority. Reuse compatible work and ordinary branch/lease coordination. An inventory check is not an atomic reservation; revalidate before implementation if overlapping tasks were discovered concurrently. On a later slice revalidate the accepted Requirement and source baseline; preserve partial state only within the still-applicable scope.
 
