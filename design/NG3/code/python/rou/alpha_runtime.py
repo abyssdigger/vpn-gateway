@@ -1599,6 +1599,92 @@ def complete_alpha_reclaim_reconciliation(
     return AlphaReclaimCompletion(final, batch, problem)
 
 
+def finish_alpha_normal_replacement(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    plan: RuntimeReclaimPlan | None,
+    realizations: tuple[ManagedDeviceRealization, ...],
+    payload: AlphaReconcileResult,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> AlphaReclaimCompletion:
+    """Complete the same D.002/A.007 → batch → F2 path for both callers."""
+    availability = wireguard = error = None
+    if payload.ready:
+        try:
+            availability, wireguard, error = reconcile_alpha_availability_wireguard_once(
+                prepared, realizations, coordinator, runner, probe_driver, ownership,
+            )
+        except Exception as exc:
+            # The replacement may already be installed. A failed observation
+            # cannot authorize cleanup or bypass F2 when candidates were pruned.
+            error = f"replacement confirmation failed: {type(exc).__name__}: {exc}"
+    return complete_alpha_reclaim_reconciliation(
+        prepared, domain_spec, runner, manager, plan, coordinator, probe_driver,
+        ownership, AlphaPostReleaseResult(realizations, payload, availability, wireguard, error),
+    )
+
+
+def _contain_alpha_normal_failure(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    diagnostic: str,
+) -> AlphaReconcileResult:
+    prepared.confirmed_managed_interfaces = frozenset()
+    prepared.begin_effective_transition()
+    try:
+        containment = converge_forwarding_gate_once(
+            LinuxForwardingGateDriver(runner, domain_spec.namespace),
+            ForwardingGateState.DISABLED,
+        )
+        diagnostic += f"; containment confirmed={containment.confirmed}"
+    except Exception as exc:
+        diagnostic += f"; containment failed: {exc}"
+    return AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic=diagnostic)
+
+
+def reconcile_alpha_normal_once(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> tuple[AlphaReclaimCompletion, tuple[ManagedDeviceRealization, ...]]:
+    """Periodic/protective-release normal trigger, under the caller's lock.
+
+    On globally invalid preparation, do not converge a reclaim-pruned policy
+    or attempt any candidate cleanup. The caller publishes the final status.
+    """
+    try:
+        convergence, plan, realizations = prepare_alpha_normal_reconciliation(
+            prepared, domain_spec, runner, manager,
+        )
+    except Exception as exc:
+        failed = _contain_alpha_normal_failure(
+            prepared, domain_spec, runner,
+            f"managed presence/reclaim admission failed: {type(exc).__name__}: {exc}",
+        )
+        return AlphaReclaimCompletion(AlphaPostReleaseResult((), failed, None, None, None)), ()
+    try:
+        payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
+    except Exception as exc:
+        payload = _contain_alpha_normal_failure(
+            prepared, domain_spec, runner,
+            f"replacement policy failed: {type(exc).__name__}: {exc}",
+        )
+    completion = finish_alpha_normal_replacement(
+        prepared, domain_spec, runner, manager, plan, realizations, payload,
+        coordinator, probe_driver, ownership,
+    )
+    return completion, convergence.attempt_problems
+
+
 def publish_alpha_normal_status(
     prepared: AlphaPreparedPolicy,
     domain_spec: ManagedNetworkDomainSpec,
@@ -2083,27 +2169,11 @@ def run_alpha_runtime(
             )
             return host_cleanup, None, stopped
 
-        (
-            availability_start,
-            wireguard_start,
-            wireguard_start_error,
-        ) = reconcile_alpha_availability_wireguard_once(
-            prepared,
-            managed_realizations_holder["current"],
-            wireguard_peer_runtime,
-            runner,
-            probe_driver,
-            wireguard_peer_ownership,
-        )
-        startup_completion = complete_alpha_reclaim_reconciliation(
+        startup_completion = finish_alpha_normal_replacement(
             prepared, domain_spec, runner, managed_device_manager,
-            reclaim_plan_holder.pop("current"), wireguard_peer_runtime, probe_driver,
-            wireguard_peer_ownership,
-            AlphaPostReleaseResult(
-                managed_realizations_holder["current"],
-                AlphaReconcileResult(AlphaReconcileStatus.EXACT, startup.session.desired),
-                availability_start, wireguard_start, wireguard_start_error,
-            ),
+            reclaim_plan_holder.pop("current"), managed_realizations_holder["current"],
+            AlphaReconcileResult(AlphaReconcileStatus.EXACT, startup.session.desired),
+            wireguard_peer_runtime, probe_driver, wireguard_peer_ownership,
         )
         startup_final = startup_completion.final
         availability_start, wireguard_start = startup_final.availability, startup_final.wireguard
@@ -2183,48 +2253,13 @@ def run_alpha_runtime(
 
         def reconcile_normal_once_unlocked():
             status_agent.confirm_managed_reclaim(None)
-            try:
-                convergence, plan, managed_realizations = prepare_alpha_normal_reconciliation(
-                    prepared, domain_spec, runner, managed_device_manager,
-                )
-            except Exception as exc:
-                diagnostic = f"managed presence/reclaim admission failed: {type(exc).__name__}: {exc}"
-                prepared.confirmed_managed_interfaces = frozenset()
-                prepared.begin_effective_transition()
-                try:
-                    containment = converge_forwarding_gate_once(
-                        LinuxForwardingGateDriver(runner, domain_spec.namespace),
-                        ForwardingGateState.DISABLED,
-                    )
-                    diagnostic += f"; containment confirmed={containment.confirmed}"
-                except Exception as containment_exc:
-                    diagnostic += f"; containment failed: {containment_exc}"
-                completion = AlphaReclaimCompletion(AlphaPostReleaseResult(
-                    (), AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic=diagnostic),
-                    None, None, None,
-                ))
-            else:
-                for problem in convergence.attempt_problems:
-                    log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
-                        device_id=problem.device_id, diagnostic=problem.problem)
-                result = reconcile_alpha_payload_once(prepared, domain_spec, runner)
-                if result.ready:
-                    availability_result, wireguard_result, wireguard_error = (
-                        reconcile_alpha_availability_wireguard_once(
-                            prepared, managed_realizations, wireguard_peer_runtime, runner,
-                            probe_driver, wireguard_peer_ownership,
-                        )
-                    )
-                else:
-                    availability_result = wireguard_result = wireguard_error = None
-                completion = complete_alpha_reclaim_reconciliation(
-                    prepared, domain_spec, runner, managed_device_manager, plan,
-                    wireguard_peer_runtime, probe_driver, wireguard_peer_ownership,
-                    AlphaPostReleaseResult(
-                        managed_realizations, result, availability_result,
-                        wireguard_result, wireguard_error,
-                    ),
-                )
+            completion, attempt_problems = reconcile_alpha_normal_once(
+                prepared, domain_spec, runner, managed_device_manager, wireguard_peer_runtime,
+                probe_driver, wireguard_peer_ownership,
+            )
+            for problem in attempt_problems:
+                log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
+                    device_id=problem.device_id, diagnostic=problem.problem)
             final = completion.final
             managed_realizations_holder["current"] = final.realizations
             publish_alpha_normal_status(
@@ -2426,7 +2461,7 @@ def run_alpha_runtime(
                     prepared.last_profiles,
                 )
                 last_problem_owners = current_problem_owners
-    
+
             changed_result = (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic

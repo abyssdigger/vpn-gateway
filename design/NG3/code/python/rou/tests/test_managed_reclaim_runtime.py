@@ -1,4 +1,4 @@
-"""Non-exposing runtime plan composition tests for #41."""
+"""Runtime reclaim plan and normal trigger composition tests for #41."""
 from dataclasses import replace
 from ipaddress import IPv4Address, IPv4Network
 from unittest import TestCase
@@ -11,7 +11,9 @@ from rou.alpha_runtime import (
     capture_reclaim_replacement_evidence, reclaim_replacement_policy_exact,
     release_alpha_reclaim_batch, _managed_device_problem,
     refresh_alpha_managed_reclaim_status, complete_alpha_reclaim_reconciliation,
-    AlphaPostReleaseResult,
+    AlphaPostReleaseResult, AlphaReclaimCompletion,
+    prepare_alpha_normal_reconciliation, reconcile_alpha_normal_once,
+    finish_alpha_normal_replacement, publish_alpha_normal_status,
 )
 from rou.forwarding_gate import ForwardingGateState
 from rou.interface_identity import InterfaceIdentity
@@ -32,6 +34,8 @@ from rou.managed_reclaim_projection import ReclaimReason
 from rou.managed_device_demand import ManagedOrdinaryContribution
 from rou.managed_wireguard_adapter import ManagedWireGuardObservation, ManagedWireGuardState
 from rou.wireguard_peer_ownership import WireGuardPeerOwnershipObservation
+from rou.wireguard_peer_runtime import WireGuardPeerRuntimeResult
+from rou.runtime_status import RuntimeReadiness, RuntimeStatusAgent, build_configured_intent_status
 
 from test_accepted_effective_state import A, EXT, CONFIG, PRESENT, peer, request, availability
 
@@ -509,6 +513,132 @@ warm_paths = 1
         batch.assert_not_called()
         recover.assert_called_once()
         self.assertEqual(recover.call_args.kwargs["recovery_seed"], frozenset())
+
+    def test_normal_prepare_retains_current_nonstructural_use(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG, local_address=IPv4Address("198.19.255.2"))
+        prepared.accepted_effective_state = self.previous
+        with patch("rou.alpha_runtime._observe_presence_bindings", return_value=(A, EXT)):
+            convergence, plan, realizations = prepare_alpha_normal_reconciliation(
+                prepared, Mock(), Mock(), self.manager)
+        self.assertIsNone(prepared.accepted_effective_state)
+        self.assertIs(plan.previous_accepted, self.previous)
+        self.assertNotIn("a", convergence.projection.desired_device_ids)
+        self.assertEqual(prepared.confirmed_managed_interfaces, frozenset({A.endpoint}))
+        row, = realizations
+        self.assertIs(row.intent_basis, ManagedDeviceIntentBasis.RECLAIM_RETENTION)
+        self.assertTrue(row.payload_eligible)
+        self.adapter.converge_present.assert_not_called()
+        self.adapter.retire_exact.assert_not_called()
+
+    def test_global_preparation_failure_never_applies_policy_or_release(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG, local_address=IPv4Address("198.19.255.2"))
+        prepared.accepted_effective_state = self.previous
+        with patch("rou.alpha_runtime.prepare_alpha_normal_reconciliation",
+                   side_effect=ValueError("ambiguous inventory")), \
+             patch("rou.alpha_runtime.converge_forwarding_gate_once",
+                   return_value=SimpleNamespace(confirmed=True)) as contain, \
+             patch("rou.alpha_runtime.reconcile_alpha_payload_once") as payload, \
+             patch("rou.alpha_runtime.complete_alpha_reclaim_reconciliation") as complete:
+            outcome, attempts = reconcile_alpha_normal_once(
+                prepared, SimpleNamespace(namespace="ns"), Mock(), self.manager,
+                Mock(), Mock(), Mock())
+        self.assertFalse(outcome.final.payload.ready)
+        self.assertIn("ambiguous inventory", outcome.final.payload.diagnostic)
+        self.assertIsNone(prepared.accepted_effective_state)
+        self.assertEqual(prepared.confirmed_managed_interfaces, frozenset())
+        self.assertEqual(attempts, ())
+        contain.assert_called_once()
+        payload.assert_not_called()
+        complete.assert_not_called()
+
+    def test_normal_trigger_orders_prepare_policy_confirmation_batch_recovery(self):
+        plan = self.strict_plan()
+        prepared = SimpleNamespace(current_config=plan.config)
+        convergence = SimpleNamespace(attempt_problems=())
+        payload = AlphaReconcileResult(AlphaReconcileStatus.EXACT, None)
+        events = []
+        recovered = AlphaPostReleaseResult((), payload, Mock(), None, None)
+        batch_result = ReclaimBatchOutcome(frozenset({"a"}), True, True, "later failure")
+
+        def record(label, value):
+            def call(*args, **kwargs):
+                events.append(label)
+                return value
+            return call
+
+        with patch("rou.alpha_runtime.prepare_alpha_normal_reconciliation",
+                   side_effect=record("prepare", (convergence, plan, ()))), \
+             patch("rou.alpha_runtime.reconcile_alpha_payload_once",
+                   side_effect=record("payload", payload)), \
+             patch("rou.alpha_runtime.reconcile_alpha_availability_wireguard_once",
+                   side_effect=record("confirm", (Mock(), None, None))), \
+             patch("rou.alpha_runtime.capture_reclaim_replacement_evidence",
+                   side_effect=record("capture", Mock())), \
+             patch("rou.alpha_runtime.release_alpha_reclaim_batch",
+                   side_effect=record("batch", batch_result)), \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   side_effect=record("F2", recovered)), \
+             patch("rou.alpha_runtime.release_alpha_undemanded_devices") as legacy:
+            outcome, _ = reconcile_alpha_normal_once(
+                prepared, Mock(), Mock(), self.manager, Mock(), Mock(), Mock())
+        self.assertEqual(events, ["prepare", "payload", "confirm", "capture", "batch", "F2"])
+        self.assertIs(outcome.final, recovered)
+        self.assertIs(outcome.batch, batch_result)
+        self.assertEqual(outcome.problem, "later failure")
+        legacy.assert_not_called()
+
+    def test_replacement_confirmation_exception_cannot_skip_f2(self):
+        plan = self.strict_plan()
+        prepared = SimpleNamespace(current_config=plan.config)
+        payload = AlphaReconcileResult(AlphaReconcileStatus.EXACT, None)
+        recovered = AlphaPostReleaseResult((), payload, Mock(), None, None)
+        with patch("rou.alpha_runtime.reconcile_alpha_availability_wireguard_once",
+                   side_effect=RuntimeError("read failed")), \
+             patch("rou.alpha_runtime.release_alpha_reclaim_batch") as batch, \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   return_value=recovered) as f2:
+            outcome = finish_alpha_normal_replacement(
+                prepared, Mock(), Mock(), self.manager, plan, (), payload, Mock(), Mock(), Mock())
+        batch.assert_not_called()
+        f2.assert_called_once()
+        self.assertIs(outcome.final, recovered)
+        self.assertIsNotNone(outcome.problem)
+
+    def test_final_status_admits_recovered_state_and_keeps_batch_problem(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG, local_address=IPv4Address("198.19.255.2"))
+        prepared.last_bindings = (A, EXT)
+        prepared.last_profiles = self.previous.profiles
+        payload = AlphaReconcileResult(AlphaReconcileStatus.EXACT, None)
+        avail = availability(self.previous.profiles)
+        avail.observation.projection.problem_owners = ()
+        final = AlphaPostReleaseResult(
+            (), payload, avail, WireGuardPeerRuntimeResult((peer(),)), None)
+        agent = RuntimeStatusAgent(build_configured_intent_status(prepared.current_config))
+        with patch("rou.alpha_runtime._observe_presence_bindings", return_value=(A, EXT)):
+            publish_alpha_normal_status(
+                prepared, Mock(), Mock(), self.manager, agent,
+                AlphaReclaimCompletion(final, problem="pre-cleanup drift"))
+        snapshot = agent.snapshot()
+        self.assertIsNotNone(prepared.accepted_effective_state)
+        self.assertEqual(snapshot.readiness, RuntimeReadiness.DEGRADED)
+        self.assertEqual(snapshot.blocking_problems, ("pre-cleanup drift",))
+        self.assertIsNotNone(snapshot.confirmed_effective_state)
+        self.assertIsNotNone(snapshot.managed_reclaim_projection)
+        self.assertEqual([r.device_id for r in snapshot.managed_reclaim_projection.survivors], ["a"])
+
+        failed = AlphaPostReleaseResult(
+            (), AlphaReconcileResult(AlphaReconcileStatus.FAILED, None, diagnostic="failed"),
+            None, None, None)
+        publish_alpha_normal_status(
+            prepared, Mock(), Mock(), self.manager, agent, AlphaReclaimCompletion(failed))
+        snapshot = agent.snapshot()
+        self.assertIsNone(prepared.accepted_effective_state)
+        self.assertIsNone(snapshot.confirmed_effective_state)
+        self.assertIsNone(snapshot.managed_reclaim_projection)
+        self.assertIsNone(snapshot.managed_profile_demands)
 
     def test_alpha_batch_composes_fresh_guards_and_exact_retirement(self):
         plan = self.strict_plan()
