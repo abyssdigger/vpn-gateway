@@ -131,7 +131,9 @@ necessarily a globally minimum set.
 
 Neither policy starts or restarts an absent Device for reclaim optimization. Explicit
 disable/remove, product stop, stronger safety obligations and mandatory reserve
-presence remain governed separately.
+presence remain governed separately. Withdrawal of reserve demand after ordinary
+recovery remains governed by R7.R3.R3 and safe dependency release; ordinary
+membership of the same Device in another Profile must still be considered.
 
 **Implementation state:** normalized configuration and helper/model boundaries exist;
 normal lifecycle activation and integrated acceptance in #41 are pending. The field's

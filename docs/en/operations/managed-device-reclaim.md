@@ -6,7 +6,7 @@
 
 ## Purpose and configuration
 
-Reclaim automatically frees surplus, already-present managed ordinary VPN Devices. It does not manage external Devices and does not change structural presence demand. Explicit Device disable/remove, product shutdown and stronger safety-owned cleanup are separate lifecycle operations; reclaim protection does not prevent them. Required reserve presence is a separate mandatory obligation.
+Reclaim automatically frees surplus, already-present managed ordinary VPN Devices. It does not manage external Devices and does not change structural presence demand. Explicit Device disable/remove, product shutdown and stronger safety-owned cleanup are separate lifecycle operations; reclaim protection does not prevent them. Required reserve presence is a separate mandatory obligation. Once ordinary demand is satisfied, the reserve exception is withdrawn; safe release of an otherwise unnecessary reserve remains governed by that reserve lifecycle rule. If the same physical Device is also an ordinary member of another Profile, its ordinary contribution and protection must still be considered.
 
 Use the top-level TOML setting `managed_reclaim` for the whole managed domain:
 
