@@ -169,10 +169,11 @@ Canonical comment targets in human-facing COLLAB Markdown must identify the exac
 ### Project-task Issue — work plane
 
 For new implementation work tied to project Requirements/Constraints/architecture, the normal
-human-facing unit of work is one dedicated GitHub **project-task Issue** created/curated by SPEC.
+human-facing unit of work is one dedicated GitHub **project-task Issue** curated by the specification
+function.
 
-Its initial specification must be sufficient for BUILDER and GUARD to work without reconstructing
-the assignment from chat history. It contains, as applicable:
+Its initial specification must be sufficient for implementation and independent review without
+reconstructing the assignment from chat history. It contains, as applicable:
 
 - concise task objective and why it exists now;
 - exact normative basis: relevant Requirement/Constraint IDs and accepted product/project decisions;
@@ -183,10 +184,11 @@ the assignment from chat history. It contains, as applicable:
 - documentation/traceability obligations;
 - known dependencies/blockers and any decision that still belongs to PROJECTHOLDER.
 
-After SPEC declares the Issue ready, the shared COLLAB coordination room receives only a short
-routing notice containing the Issue number/ref and readiness/assignee information. From that point,
-**task-specific substantive communication lives in the project-task Issue**: clarification,
-implementation plan, technical findings, rework, evidence, review findings and acceptance.
+After the specification function determines that the task is executable, the shared COLLAB
+coordination room may receive a short routing notice containing the Issue number/ref and only the
+service information needed to route the work. From that point, **task-specific substantive
+communication lives in the project-task Issue**: clarification, implementation plan, technical
+findings, rework, evidence, review findings and acceptance.
 
 Changes to the accepted task meaning must remain visible in that Issue. SPEC may clarify an
 unambiguous specification; a material product/scope choice still requires its owning decision source.
