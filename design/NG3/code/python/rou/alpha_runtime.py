@@ -101,7 +101,7 @@ from .managed_reclaim_runtime import (
     build_runtime_reclaim_plan, replacement_managed_interfaces,
     project_managed_reclaim_realizations, structural_retirement_precondition,
     replacement_peer_ownership_exact, cleanup_ownership_desired,
-    execute_reclaim_batch, recovery_managed_interfaces,
+    execute_reclaim_batch, recovery_eligibility_seed, recovery_managed_interfaces,
 )
 from .managed_device_manager import (
     ManagedDeviceConvergence,
@@ -1502,6 +1502,74 @@ def reconcile_alpha_after_managed_release(
             None,
             None,
         )
+
+
+
+@dataclass(frozen=True, slots=True)
+class AlphaReclaimCompletion:
+    final: AlphaPostReleaseResult
+    batch: ReclaimBatchOutcome | None = None
+    problem: str | None = None
+
+
+def complete_alpha_reclaim_reconciliation(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    plan: RuntimeReclaimPlan,
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+    replacement_result: AlphaPostReleaseResult,
+) -> AlphaReclaimCompletion:
+    """Complete one already-attempted replacement; no second reclaim plan.
+
+    This boundary does not admit the effective generation or publish status.
+    Startup and periodic callers own final admission (including startup host
+    checks). Preserve retirement diagnostics independently of the F2 result.
+    """
+    if (prepared.current_config is plan.config
+            and not plan.projection.retirement_candidates):
+        return AlphaReclaimCompletion(replacement_result)
+
+    # Freeze the recovery eligibility before any candidate cleanup/retirement.
+    # A changed configuration cannot inherit the old plan's positive seed.
+    seed = frozenset()
+    batch = None
+    problem = None
+    if prepared.current_config is not plan.config:
+        problem = "reclaim configuration changed before retirement"
+    else:
+        try:
+            seed = recovery_eligibility_seed(plan)
+            replacement = capture_reclaim_replacement_evidence(
+                prepared, replacement_result.payload, replacement_result.availability,
+                replacement_result.wireguard, replacement_result.wireguard_error,
+            )
+            if replacement is None:
+                # Exclusion may already have been applied even if a later
+                # replacement confirmation failed. Do not leave the attempted
+                # pruning as the final state or authorize cleanup from it.
+                problem = "reclaim replacement confirmation unavailable"
+            else:
+                batch = release_alpha_reclaim_batch(
+                    prepared, domain_spec, runner, manager, plan, replacement,
+                    replacement_result.wireguard, ownership,
+                )
+                problem = batch.problem
+        except Exception as exc:
+            problem = f"reclaim completion failed: {type(exc).__name__}: {exc}"
+
+    final = replacement_result
+    if problem is not None or (batch is not None and batch.requires_recovery):
+        if prepared.current_config is not plan.config:
+            seed = frozenset()
+        final = reconcile_alpha_after_managed_release(
+            prepared, domain_spec, runner, manager, coordinator, probe_driver,
+            ownership, recovery_seed=seed,
+        )
+    return AlphaReclaimCompletion(final, batch, problem)
 
 
 def complete_alpha_normal_reconciliation(

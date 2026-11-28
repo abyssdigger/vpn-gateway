@@ -10,7 +10,8 @@ from rou.alpha_runtime import (
     AlphaPreparedPolicy, AlphaReconcileResult, AlphaReconcileStatus,
     capture_reclaim_replacement_evidence, reclaim_replacement_policy_exact,
     release_alpha_reclaim_batch, _managed_device_problem,
-    refresh_alpha_managed_reclaim_status,
+    refresh_alpha_managed_reclaim_status, complete_alpha_reclaim_reconciliation,
+    AlphaPostReleaseResult,
 )
 from rou.forwarding_gate import ForwardingGateState
 from rou.interface_identity import InterfaceIdentity
@@ -24,7 +25,7 @@ from rou.managed_reclaim_runtime import (
     recovery_eligibility_seed, recovery_managed_interfaces,
     structural_retirement_precondition, execute_reclaim_batch,
     replacement_peer_ownership_exact, cleanup_ownership_desired,
-    project_managed_reclaim_realizations,
+    project_managed_reclaim_realizations, ReclaimBatchOutcome,
 )
 from rou.release1_config import ManagedReclaimPolicy
 from rou.managed_reclaim_projection import ReclaimReason
@@ -430,6 +431,84 @@ warm_paths = 1
         self.assertFalse(structural_retirement_precondition(
             plan, cfg, evidence, candidate_id="a", already_retired=frozenset(),
             replacement_bindings=frozenset()))
+
+    def complete_reclaim(self, plan, initial, prepared=None):
+        prepared = prepared or SimpleNamespace(current_config=plan.config)
+        return complete_alpha_reclaim_reconciliation(
+            prepared, Mock(), Mock(), self.manager, plan, Mock(), Mock(),
+            Mock(), initial,
+        )
+
+    def test_completion_no_candidates_does_not_release_or_recover(self):
+        plan = build_runtime_reclaim_plan(self.cfg, self.evidence(), self.previous)
+        initial = AlphaPostReleaseResult((), Mock(), None, None, None)
+        with patch("rou.alpha_runtime.capture_reclaim_replacement_evidence") as capture, \
+             patch("rou.alpha_runtime.release_alpha_reclaim_batch") as batch, \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release") as recover:
+            out = self.complete_reclaim(plan, initial)
+        self.assertIs(out.final, initial)
+        self.assertIsNone(out.batch)
+        self.assertIsNone(out.problem)
+        capture.assert_not_called()
+        batch.assert_not_called()
+        recover.assert_not_called()
+
+    def test_completion_missing_replacement_recovers_without_retirement(self):
+        plan = self.strict_plan()
+        initial = AlphaPostReleaseResult((), Mock(), None, None, "unconfirmed")
+        recovered = AlphaPostReleaseResult((), Mock(), Mock(), None, None)
+        with patch("rou.alpha_runtime.capture_reclaim_replacement_evidence", return_value=None), \
+             patch("rou.alpha_runtime.release_alpha_reclaim_batch") as batch, \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   return_value=recovered) as recover:
+            out = self.complete_reclaim(plan, initial)
+        self.assertIs(out.final, recovered)
+        self.assertIsNone(out.batch)
+        self.assertIsNotNone(out.problem)
+        batch.assert_not_called()
+        recover.assert_called_once()
+        self.assertEqual(recover.call_args.kwargs["recovery_seed"], recovery_eligibility_seed(plan))
+
+    def test_completion_recovers_once_and_keeps_batch_outcome(self):
+        plan = self.strict_plan()
+        initial = AlphaPostReleaseResult((), Mock(), Mock(), None, None)
+        recovered = AlphaPostReleaseResult((), Mock(), Mock(), None, None)
+        for batch_outcome in (
+            ReclaimBatchOutcome(frozenset(), False, False, "pre-cleanup drift"),
+            ReclaimBatchOutcome(frozenset({"a"}), True, True, None),
+            ReclaimBatchOutcome(frozenset({"a"}), True, True, "later candidate failed"),
+        ):
+            with self.subTest(batch=batch_outcome), \
+                 patch("rou.alpha_runtime.capture_reclaim_replacement_evidence", return_value=Mock()), \
+                 patch("rou.alpha_runtime.release_alpha_reclaim_batch",
+                       return_value=batch_outcome) as batch, \
+                 patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                       return_value=recovered) as recover, \
+                 patch("rou.alpha_runtime.publish_alpha_accepted_effective") as publish:
+                out = self.complete_reclaim(plan, initial)
+            self.assertIs(out.final, recovered)
+            self.assertIs(out.batch, batch_outcome)
+            self.assertEqual(out.problem, batch_outcome.problem)
+            batch.assert_called_once()
+            recover.assert_called_once()
+            self.assertEqual(recover.call_args.kwargs["recovery_seed"],
+                             recovery_eligibility_seed(plan))
+            publish.assert_not_called()
+
+    def test_completion_changed_config_does_not_reuse_seed_or_release(self):
+        plan = self.strict_plan()
+        initial = AlphaPostReleaseResult((), Mock(), Mock(), None, None)
+        recovered = AlphaPostReleaseResult((), Mock(), Mock(), None, None)
+        with patch("rou.alpha_runtime.release_alpha_reclaim_batch") as batch, \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   return_value=recovered) as recover:
+            out = self.complete_reclaim(
+                plan, initial, SimpleNamespace(current_config=self.cfg))
+        self.assertIs(out.final, recovered)
+        self.assertIsNotNone(out.problem)
+        batch.assert_not_called()
+        recover.assert_called_once()
+        self.assertEqual(recover.call_args.kwargs["recovery_seed"], frozenset())
 
     def test_alpha_batch_composes_fresh_guards_and_exact_retirement(self):
         plan = self.strict_plan()
