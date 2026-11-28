@@ -1680,7 +1680,7 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R5` — [`full`]
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`full`]
@@ -1759,12 +1759,14 @@ typed `CurrentConfig.wireguard_groups` напрямую, поэтому преж
 между A.002 и D.002 больше нет. Дальнейшие gaps принадлежат D.002/C.001/runtime composition,
 а не configuration normalization.
 
-По `VPNG-U001-R1.R3.R7.R3` вклад A.002 остается [`partial`], а архитектурный контракт
-`VPNG-U001-R1.R3.R7.R3.R1` закрыт полностью: current surface использует `warm_paths = 0 | N | "all"`,
+По `VPNG-U001-R1.R3.R7.R3` локальная обязанность A.002 по нормализации и проверке
+конфигурационного намерения материализована полностью [`full`], как и вклад в R7.R3.R1: current surface использует `warm_paths = 0 | N | "all"`,
 при этом frozen Release-1 parser не обязан приобретать новое поле. Current ConfigurationAdapter
 снимает `warm_paths` до вызова historical Release-1 normalization и публикует
 нормализованный `CurrentConfig.warm_paths` с проверкой ordinary capacity и
-вычисляемым `CurrentConfig.warm_target(profile_id)`.
+вычисляемым `CurrentConfig.warm_target(profile_id)`. Расчет текущего presence/deficit и
+lifecycle actuation принадлежат A.013 и A.012; использование нормализованного намерения
+подтверждено EV-00300.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -1828,7 +1830,7 @@ policy.
 - `VPNG-U004-R4` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
@@ -1888,11 +1890,12 @@ Architectural decisions
 
 **Материализация:** По generalized R8 A.004 полностью материализует собственную обязанность:
 он получает уже current A.007 availability projection после D.002-generation synchronization
-и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` вклад теперь [`partial`]:
-текущий Manager умеет сохранять structural membership и участвовать в dependency release,
-но отдельная конфигурационная проекция требуемого присутствия Devices принадлежит A.013,
-материализована его Calculator и используется в normal lifecycle A.012. A.004 поставляет
-отдельные подтвержденные факты current-use для reclaim и не владеет structural demand.
+и сходится только по этой projection. По `VPNG-U001-R1.R3.R7.R3` локальная обязанность A.004
+материализована полностью [`full`]: Manager сохраняет structural membership и зависимое
+payload state для безопасного dependency release; packet activity/availability не создают
+presence demand. Отдельная конфигурационная проекция требуемого присутствия Devices
+принадлежит A.013 и используется в normal lifecycle A.012. A.004 поставляет отдельные
+подтвержденные факты current-use для reclaim и не владеет structural demand (EV-00300/EV-00310).
 
 По `VPNG-U001-R1.R3.R7.R4.R1` и `VPNG-U001-R1.R3.R7.R4.R2` локальный вклад A.004 [`full`]:
 pure confirmed-current-use projector дополнен runtime admission. В начале normal trigger
@@ -2271,7 +2274,7 @@ Manager текущей базовой VPN-реализации только дл
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
@@ -2350,9 +2353,10 @@ Architectural decisions
 managed capacity, а следующий candidate может быть рассмотрен в том же trigger.
 Промежуточные фазы не снимают зависимости и не останавливают Devices. Alpha использует
 эту композицию при startup и normal reconciliation; прежнее правило referenced managed
-Devices больше не является источником lifecycle demand. Вклад A.012 в составное R7.R3
-остается [`partial`] по распределению ответственности между A.002/A.013/C.004/D.001,
-а не из-за отсутствия этой композиции.
+Devices больше не является источником lifecycle demand. Локальная обязанность A.012 по R7.R3
+материализована полностью [`full`]: lifecycle actuation по принятому structural demand,
+shared Device aggregation, dependency-safe release и truthful realization. A.002/A.013/C.004/D.001
+предоставляют собственные входы и нижние операции (EV-00300/EV-00310).
 
 В уже реализованной части A.012 получает `desired_generation` через D.001 до мутации,
 принимает только совпадающее подтвержденное поколение D.001, переводит ошибки lifecycle в
@@ -2401,9 +2405,9 @@ PathBinding/presence и ownership mode Devices и возвращает per-Profi
 Linux самостоятельно и не владеет lifecycle.
 
 **Implements:**
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3.R4` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
 
@@ -2450,9 +2454,11 @@ Implementation
 
 **Материализация:** Calculator и current-surface нормализация реализованы; direct unit
 tests проверяют их отдельно от Linux. A.012 использует обе проекции при bounded
-ordinary/reserve convergence, подтвержденной kernel integration. A.013 не выполняет
-actuation либо dependency release: этим объясняются partial edges к составному R7.R3
-и R7.R3.R3; computation не является незавершенной частью lifecycle Manager.
+ordinary/reserve convergence, подтвержденной kernel integration. Локальные обязанности A.013
+по R7.R3 и R7.R3.R3 материализованы полностью [`full`]: ordinary target/presence/deficit,
+missing ordinary demand, reserve exception и сохранение ordinary recovery demand. A.013 не
+выполняет actuation либо dependency release — это обязанности A.012 и нижних компонентов
+(EV-00300/EV-00310).
 
 F1 materialization: A.013 дополнительно публикует `external_ordinary_present` и упорядоченный
 по ordinary membership вектор `managed_ordinary_contributions` из `ManagedOrdinaryContribution`
@@ -2735,9 +2741,9 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 - `VPNG-U001-R1.R3.R4.R3` — [`full`]
 - `VPNG-U001-R1.R3.R4.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R4.R4` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R3.R2` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 - `VPNG-D001-R1.R1.R3` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
 
@@ -2787,8 +2793,10 @@ Architectural decisions
 read-only demand observation до A.012 и между ordinary/reserve attempts. Alpha использует
 tentative binding projection, не сохраняя ее next state; normal binding после lifecycle
 mutation выполняется заново. Release guard сверяет exact current binding generations с
-подтвержденной replacement policy. Вклад C.004 в R7.R3 и его R2/R3 остается [`partial`],
-поскольку C.004 подтверждает observation/binding, но не выбирает и не актуирует demand.
+подтвержденной replacement policy. Локальные обязанности C.004 по R7.R3 и его R2/R3
+материализованы полностью [`full`]: fresh structural endpoint observation и exact binding
+identity/generation до и после lifecycle mutation. Выбор и actuation demand принадлежат
+A.013/A.012; использование наблюдений подтверждено EV-00300/EV-00310.
 
 ## [C.005] ForwardingGate
 
@@ -3050,8 +3058,8 @@ Direct Adapter от нормализованного намерения упра
 - `VPNG-U001-R1.R3.R7` — [`full`]
 - `VPNG-U001-R1.R3.R7.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4.R1` — [`full`]
 - `VPNG-U001-R1.R3.R7.R4.R2` — [`full`]
@@ -3122,6 +3130,10 @@ WireGuard-границу D.001: перед изменением проверяе
 подтвержденное отсутствие старого интерфейса. Порядок пиров не входит в D.001 base generation,
 поскольку является политикой D.002. Для daemon-based VPN нижняя service realization остается
 integration-specific; существующие внешние VPN-службы остаются во внешнем управлении.
+Локальные обязанности D.001 по R7.R3 и R7.R3.R3 материализованы полностью [`full`] в принятой
+managed-WireGuard границе: exact owned base realization, fresh confirmation и removal по
+принятому lifecycle demand. Ordinary/reserve selection принадлежит верхним компонентам;
+EV-00300/EV-00310 подтверждают использование нижней границы в lifecycle.
 
 F1 exact confirmation/retirement: `confirm_present` однократно подготавливает desired base,
 дважды свежо проверяет точную принадлежащую реализацию (identity/ownership/kind и base-state)
@@ -3249,7 +3261,7 @@ generation смысловой realization.
 
 **Implements:**
 - `VPNG-U001-R1.R3.R8` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3.R3` — [`partial`]
+- `VPNG-U001-R1.R3.R7.R3.R3` — [`full`]
 
 **Evidence:** `EV-00050`, `EV-00100`, `EV-00190`, `EV-00300`
 
@@ -3283,8 +3295,10 @@ bundle, но и для simultaneous exact split двух independent group bundl
 D.003 contribution к generalized R8 materialized [`full`]. Для selective release
 managed Device тот же exact Enforcer подтверждает probe-only projection без dynamic payload
 ownership до D.001 stop; EV-00300 проверяет failure gate и фактические AllowedIPs перед
-удалением. Вклад в R7.R3.R3 [`partial`]: D.003 снимает свою нижнюю зависимость, но не
-определяет reserve demand или полную готовность к lifecycle release.
+удалением. Локальная обязанность D.003 по R7.R3.R3 материализована полностью [`full`]:
+exact removal/confirmation dynamic payload ownership при сохранении permanent probe /32
+до selective release. Reserve demand и итоговую готовность к release определяют верхние
+компоненты; использование нижней границы подтверждено EV-00300/EV-00310.
 
 # Annex E. VPN-GATE-managed host state components
 
