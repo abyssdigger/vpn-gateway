@@ -11,7 +11,10 @@ import tempfile
 from unittest.mock import patch
 
 from rou.alpha_runtime import (
-    AlphaPreparedPolicy,
+    AlphaPreparedPolicy, AlphaReconcileResult, AlphaReconcileStatus,
+    AlphaPostReleaseResult, prepare_alpha_reclaim_plan,
+    complete_alpha_reclaim_reconciliation, publish_alpha_accepted_effective,
+    refresh_alpha_managed_reclaim_status,
     _managed_device_problem,
     _release_alpha_managed_device_dependencies,
     converge_alpha_managed_device_presence,
@@ -51,7 +54,7 @@ from rou.wireguard_peer_ownership import (
 )
 from rou.wireguard_peer_runtime import WireGuardPeerRuntimeCoordinator
 from rou.release1_config import CurrentConfig
-from rou.runtime_status import RuntimeStatusAgent, build_configured_intent_status
+from rou.runtime_status import RuntimeReadiness, RuntimeStatusAgent, build_configured_intent_status
 
 
 NS = "ng3-a012-runtime"
@@ -68,6 +71,122 @@ def run(*argv: str, input_text: str | None = None, check: bool = True) -> str:
         capture_output=True,
     )
     return completed.stdout
+
+
+
+def verify_cold_start_reserve_reclaim(config: str, runtime_dir: Path, key_path: Path) -> None:
+    """F4 direct cold start through the staged common A.012 boundaries.
+
+    This test composes the actual startup controller and kernel adapters.
+    It does not claim that run_alpha_runtime has switched its callers yet.
+    """
+    runtime_dir.mkdir(mode=0o700)
+    prepared = AlphaPreparedPolicy.from_text(config, local_address=IPv4Address("198.19.255.2"))
+    domain = ManagedNetworkDomainSpec(
+        namespace=NS, host_interface=HOST_IF, inner_interface=INNER_IF,
+        inner_address=IPv4Interface("198.19.255.2/32"),
+    )
+    runner = SubprocessNftRunner()
+    adapter = LinuxManagedWireGuardAdapter(runner, NS)
+    manager = ManagedDeviceManager(adapter)
+    ownership = WireGuardPeerOwnershipEnforcer(runner, NS, adapter)
+    coordinator = WireGuardPeerRuntimeCoordinator()
+    probe = LinuxIcmpProbeDriver(
+        runner=SubprocessProbeCommandRunner(), namespace=NS,
+        process_uid=NG3_PROBE_LOCAL_PLATFORM.process_uid,
+        execution_policy=IcmpProbeExecutionPolicy(1),
+    )
+    plan = None
+    realizations = ()
+
+    def prepare_private_network(candidate, current_domain):
+        nonlocal plan, realizations
+        assert candidate is prepared and current_domain == domain
+        previous = prepared.begin_effective_transition()
+        assert previous is None
+        convergence = converge_alpha_managed_device_presence(prepared, domain, runner, manager)
+        assert convergence.projection.desired_device_ids == {"wg-main", "wg-reserve"}
+        assert convergence.projection.profiles[0].regular_deficit == 1
+        assert {r.device_id for r in convergence.attempt_problems} == {"wg-main"}
+        plan, realizations = prepare_alpha_reclaim_plan(
+            prepared, domain, runner, manager, convergence, previous,
+        )
+        assert not plan.projection.retirement_candidates
+        assert plan.mandatory_device_ids == {"wg-reserve"}
+        assert _managed_device_problem(realizations) is not None
+
+    startup = None
+    # Fail the ordinary key before the first controller startup, not after READY.
+    key_path.chmod(0o644)
+    try:
+        startup = start_controller_once(
+            InstanceLockSpec(runtime_directory=runtime_dir, expected_owner_uid=os.getuid()),
+            domain, runner, NG3_LINUX_POLICY_PLATFORM, lambda: prepared,
+            prepare_private_network=prepare_private_network,
+            stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
+        )
+        assert startup.status is ControllerStartupStatus.READY, startup.diagnostic
+        assert startup.session is not None and plan is not None
+        assert adapter.observe("wg-main").state is ManagedWireGuardState.ABSENT
+        assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
+        assert not any(i.ifname == "wg0" for i in startup.session.interfaces)
+        assert any(i.ifname == "wg1" for i in startup.session.interfaces)
+        assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-reserve"}
+        with patch("rou.alpha_runtime.ALPHA_NAMESPACE", NS):
+            availability, wireguard, error = reconcile_alpha_availability_wireguard_once(
+                prepared, realizations, coordinator, runner, probe, ownership,
+            )
+            assert availability.confirmed, availability.diagnostic
+            assert error is None, error
+            completion = complete_alpha_reclaim_reconciliation(
+                prepared, domain, runner, manager, plan, coordinator, probe, ownership,
+                AlphaPostReleaseResult(
+                    realizations, AlphaReconcileResult(AlphaReconcileStatus.EXACT,
+                                                      startup.session.desired),
+                    availability, wireguard, error,
+                ),
+            )
+        assert completion.batch is None and completion.problem is None
+        final = completion.final
+        assert final.payload.ready and final.availability.confirmed
+        publish_alpha_accepted_effective(
+            prepared, payload_confirmed=final.payload.ready, availability=final.availability,
+            wireguard=final.wireguard, wireguard_error=final.wireguard_error,
+        )
+        assert prepared.accepted_effective_state is not None
+        status = RuntimeStatusAgent(build_configured_intent_status(prepared.current_config))
+        status.confirm_managed_devices(final.realizations)
+        status.confirm_effective(prepared.last_profiles, prepared.last_bindings)
+        problem = _managed_device_problem(final.realizations)
+        assert problem is not None and "wg-main" in problem
+        status.mark_degraded(problem=problem)
+        refresh_alpha_managed_reclaim_status(prepared, domain, runner, manager, status)
+        snapshot = status.snapshot()
+        assert snapshot.readiness is RuntimeReadiness.DEGRADED
+        assert snapshot.confirmed_effective_state is not None
+        assert snapshot.managed_profile_demands is not None
+        assert snapshot.managed_profile_demands[0].regular_deficit == 1
+        assert snapshot.managed_reclaim_projection is not None
+        assert not snapshot.managed_reclaim_projection.retirement_candidates
+        assert {row.device_id for row in snapshot.managed_reclaim_projection.survivors} == {"wg-reserve"}
+        print("A012_STAGED_COLD_START_RESERVE_RECLAIM=PASS")
+
+        _release_alpha_managed_device_dependencies(startup.session.desired, domain, runner)
+        shutdown = manager.reconcile(
+            CurrentConfig(prepared.config, {}), desired_device_ids=frozenset(),
+            dependency_free_device_ids=frozenset({"wg-main", "wg-reserve"}),
+        )
+        assert _managed_device_problem(shutdown, require_absent=True) is None
+        stopped = stop_controller_once(startup.session, domain, runner)
+        assert stopped.status is ControllerStopStatus.STOPPED, stopped.cleanup_error
+        assert not Path(f"/run/netns/{NS}").exists()
+    finally:
+        key_path.chmod(0o600)
+        if (startup is not None and startup.session is not None
+                and startup.session.lock.acquired):
+            startup.session.lock.release()
+        subprocess.run(("ip", "netns", "del", NS), check=False)
+        subprocess.run(("ip", "link", "del", HOST_IF), check=False)
 
 
 def main() -> None:
@@ -130,6 +249,7 @@ destinations = ["10.77.0.0/24"]
 device_order = ["wg-main", "wg-reserve:reserve"]
 warm_paths = 1
 """
+        verify_cold_start_reserve_reclaim(config, root / "cold-run", key_path)
         prepared = AlphaPreparedPolicy.from_text(
             config,
             local_address=IPv4Address("198.19.255.2"),
