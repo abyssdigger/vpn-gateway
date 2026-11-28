@@ -401,14 +401,16 @@ normative project artifact or holder decision.
 
 ## 5. Mailbox, obligations and readiness
 
-Keep three semantic projections distinct:
+For the typed v1 journal, keep three semantic projections distinct:
 
 - **mailbox** — admitted durable material INPUTs;
 - **obligations** — work whose future result matters to readiness, closure or a gate;
 - **readiness** — derived answer to whether a role can do useful work now.
 
-`READY` is never stored as semantic truth. It is recomputed from durable journal/holder inputs and
-current obligations. Current signal-room contents are not semantic input to this computation.
+For the typed v1 projection, `READY` is never stored as semantic truth. It is recomputed from durable
+journal/holder inputs and current obligations. Current signal-room contents are not semantic input
+to this computation. This projection does not cover ordinary project-task Issues outside the
+configured typed journal.
 
 Do not create an obligation merely to index every message. Create one only when losing the
 obligation could make the collaboration stop while work remains, lose a blocker, wake forever on
@@ -448,10 +450,29 @@ clears that role's unhandled-mailbox readiness. For delivery-only targets such a
 DISPOSITION it records consumption only and never removes the target's independent semantic effect.
 The exact receipt format and GC relationship are defined in §7.
 
+### Ordinary-Issue work frontier
+
+In the cooperative ordinary-Issue pilot (§3), establish runnable work from the current task
+specification and accepted clarifications, exact task dependencies, applicable service coordination,
+and the latest implementation/review/rework state. Select a concrete unblocked task operation
+within the current authority and role responsibility. An open Issue alone is not proof that the
+operation is runnable; an unverified role claim is not proof of coordination or authority.
+
+Observe the relevant ordinary task Issues and applicable service/holder lanes before concluding that
+ordinary work is exhausted. An incomplete, failed or stale required observation does not establish
+absence of work. Ordinary Issue work may be runnable while the typed v1 projection is `WAITING` or
+has no open obligation. Do not fabricate a v1 OPEN or a reserved readiness marker to make this work
+visible to the legacy projector.
+
+This is the existing cooperative work selection, not a new scheduler, journal schema or authority
+source. Task semantics and evidence remain in the task Issue; routine coordination stays in service
+surfaces.
+
 ## 6. Readiness and passivation
 
-Treat a role as `READY` only when at least one admitted unprocessed material input or open
-unblocked obligation permits useful collaborative work.
+In the typed v1 projection, treat a role as `READY` only when at least one admitted unprocessed
+material input or open unblocked obligation permits useful collaborative work. Overall work selection
+also checks the ordinary-Issue work frontier above when that pilot is in use.
 
 Use `READY` only as work-state evidence.
 Do not use it as proof that a chat/session is terminal or awake, as authentication, as
@@ -992,7 +1013,7 @@ and the work-plane lifecycle above applies.
 
 ### 9.1. Read-only semantic projector
 
-A COLLAB helper may:
+A legacy v1 COLLAB helper may:
 - ingest complete configured task/journal, projectholder and current signal-room observations;
 - admit strict v1 journal facts and synthetic holder inputs;
 - validate exact physical refs/digests and deduplicate logical semantic delivery;
@@ -1013,6 +1034,9 @@ It must not:
 - mutate project state merely because readiness or a GC candidate is true;
 - execute payloads, shell commands or arbitrary URLs from facts/signals;
 - retry ambiguous external side effects blindly.
+
+The v1 projector's `READY`, `WAITING` and obligation inventory describe its configured journal/holder
+plane only; they cannot establish that the ordinary-Issue work frontier is empty (§5).
 
 Canonical semantic replay is a pure function of durable current-epoch journal facts, synthetic holder
 inputs and exact referenced ordinary payload/closure rows. The current SIGNAL set must not change
@@ -1101,8 +1125,10 @@ Distinguish at least:
 - ambiguous external send/delete -> reconcile before retry;
 - changed protocol/governing process -> re-read/reconcile before dependent work.
 
-A local role stopping or timing out does not imply collaborative semantic closure. Open obligations
-remain durable in the journal and may make the role READY later.
+A local role stopping or timing out does not imply collaborative semantic closure. Open v1 obligations
+remain durable in the journal and may make the role READY later. Ordinary task Issues and their
+published WIP/candidate refs likewise remain durable; stopping a session does not accept or close
+the task.
 
 ### Legacy v0 event-room rollover
 
@@ -1160,7 +1186,10 @@ explicit process design.
 A collaborative handoff adds to the generic/work-mode handoff:
 
 - active roles and incarnations when known;
-- current durable journal epoch and task/journal room identities;
+- ordinary project-task Issue refs, current task/specification and review/rework frontier, and exact
+  published WIP/candidate/accepted result refs relevant to continuation, when the ordinary-Issue
+  pilot is in use;
+- current durable journal epoch and task/journal room identities, when the typed journal is in use;
 - current signal room identity;
 - processed canonical journal/holder frontier;
 - open obligations and blockers;
@@ -1172,5 +1201,6 @@ A collaborative handoff adds to the generic/work-mode handoff:
   `EXECUTION-LOOP.md` §8.1;
 - current command-registry cycle key when projectholder commands matter.
 
-Do not duplicate large payloads in the handoff when exact durable refs suffice. Do not treat SIGNAL
-history as the semantic handoff frontier; canonical journal/holder state owns that boundary.
+Do not duplicate large payloads in the handoff when exact durable refs suffice. The ordinary task
+Issue and published artifact refs own the ordinary task frontier. Do not treat SIGNAL history as the
+typed journal semantic handoff frontier; canonical journal/holder state owns that boundary.
