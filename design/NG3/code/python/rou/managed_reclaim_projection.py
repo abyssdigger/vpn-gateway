@@ -103,7 +103,10 @@ def _current_use(
         # A.004 external ordinary use has no managed generation proof.
         return (row.external_ordinary_present > 0
                 and all(x is None for x in proof)
-                and all(o.interface != use.endpoint for o in present.values())), None
+                and all(o.interface is not None
+                        and o.interface.ifname != use.endpoint.ifname
+                        and o.interface.ifindex != use.endpoint.ifindex
+                        for o in present.values())), None
     observation = present.get(d)
     if (d not in counts or counts[d] <= 0 or observation is None
             or observation.interface != use.endpoint
@@ -253,10 +256,13 @@ def project_reclaim(
     # Neither ifname nor ifindex may identify two different live Devices.
     names: dict[str, set[str]] = {}
     indices: dict[int, set[str]] = {}
-    for d, o in present.items():
-        assert o.interface is not None
-        names.setdefault(o.interface.ifname, set()).add(d)
-        indices.setdefault(o.interface.ifindex, set()).add(d)
+    for d, rows in grouped.items():
+        # Even an ambiguous/unconfirmed observation can contradict an otherwise
+        # valid identity; ignoring its endpoint would authorize the latter.
+        for o in rows:
+            if isinstance(o.interface, InterfaceIdentity):
+                names.setdefault(o.interface.ifname, set()).add(d)
+                indices.setdefault(o.interface.ifindex, set()).add(d)
     for group in (*names.values(), *indices.values()):
         if len(group) > 1:
             for d in group:
