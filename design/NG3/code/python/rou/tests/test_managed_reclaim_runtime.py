@@ -71,6 +71,50 @@ class RuntimeReclaimPlanTests(TestCase):
         self.adapter.converge_present.assert_not_called()
         self.adapter.retire_exact.assert_not_called()
 
+    def test_unconfirmed_ordinary_binding_cannot_withdraw_exact_reserve(self):
+        a_config = CONFIG[CONFIG.index("[device.a]"):CONFIG.index("[profile.corp]")]
+        b_config = (a_config.replace("device.a", "device.b")
+                    .replace("wg1", "wg2").replace("/secret/a.key", "/secret/b.key")
+                    .replace("10.200.0.1", "10.200.0.2")
+                    .replace("10.201.0.1", "10.201.0.2")
+                    .replace("198.51.100.1", "198.51.100.2"))
+        cfg = AlphaPreparedPolicy.from_text(
+            a_config + b_config + """
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.77.0.0/24"]
+device_order = ["a", "b:reserve"]
+warm_paths = 1
+""", local_address=IPv4Address("198.19.255.2")).current_config
+        b = binding("b", "wg2", 12)
+        b_present = ManagedWireGuardObservation(
+            "b", ManagedWireGuardState.PRESENT, b.endpoint, "base-b")
+        observed = {"a": PRESENT, "b": b_present}
+        self.adapter.observe.side_effect = lambda did: replace(
+            observed[did], confirmed_generation=None)
+        self.adapter.desired_generation.side_effect = lambda did, _: "base-" + did
+
+        def confirm(did, _):
+            if did == "a":
+                raise RuntimeError("ordinary base not exact")
+            return b_present
+
+        self.adapter.confirm_present.side_effect = confirm
+        evidence = observe_pre_reclaim(cfg, None, self.manager, lambda: (A, b))
+        self.assertEqual(evidence.unconfirmed_devices, ("a",))
+        # Raw C.004 diagnostic still sees the same-name ordinary link.
+        self.assertEqual(evidence.demand.profiles[0].regular_present, 1)
+        self.assertEqual(evidence.demand.reserve_device_ids, frozenset())
+        plan = build_runtime_reclaim_plan(cfg, evidence, None)
+        # Unconfirmed A cannot withdraw the required exact reserve, even
+        # though the raw diagnostic would consider ordinary demand satisfied.
+        self.assertEqual(plan.mandatory_device_ids, frozenset({"b"}))
+        self.assertNotIn("b", {r.device_id for r in plan.projection.retirement_candidates})
+        self.assertEqual(replacement_managed_interfaces(plan), frozenset({b.endpoint}))
+        self.assertEqual(recovery_managed_interfaces(cfg, evidence, frozenset()),
+                         frozenset({b.endpoint}))
+
     def test_careful_retirement_overrides_structural_baseline_cover(self):
         # Two exact present ordinary Devices; A.013 picks baseline a, but
         # the admitted effective generation uses b. A.012 must keep b and
