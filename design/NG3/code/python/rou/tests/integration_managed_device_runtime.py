@@ -151,7 +151,53 @@ def verify_cold_start_reserve_reclaim(config: str, runtime_dir: Path, key_path: 
         assert {row.device_id for row in snapshot.managed_reclaim_projection.survivors} == {"wg-reserve"}
         print("A012_NORMAL_COLD_START_RESERVE_RECLAIM=PASS")
 
-        _release_alpha_managed_device_dependencies(startup.session.desired, domain, runner)
+        # Exercise reserve-demand withdrawal through the activated normal
+        # caller, not the historical structural-demand release helper.
+        key_path.chmod(0o600)
+        original_retire = LinuxManagedWireGuardAdapter.retire_exact
+        retired = []
+
+        def checked_retire(instance, did, identity, generation, desired):
+            assert did == "wg-reserve", did
+            assert adapter.observe("wg-main").state is ManagedWireGuardState.PRESENT
+            observed = run("ip", "netns", "exec", NS, "wg", "show", "wg1", "allowed-ips")
+            assert "10.77.0.0/24" not in observed, observed
+            assert "10.201.0.2/32" in observed, observed
+            retired.append(did)
+            return original_retire(instance, did, identity, generation, desired)
+
+        with patch("rou.alpha_runtime.ALPHA_NAMESPACE", NS), \
+             patch.object(LinuxManagedWireGuardAdapter, "retire_exact", checked_retire), \
+             patch.object(LinuxManagedWireGuardAdapter, "converge_absent",
+                          side_effect=AssertionError("generic absence is not reclaim authority")), \
+             patch("rou.alpha_runtime.reconcile_alpha_after_managed_release",
+                   wraps=reconcile_alpha_after_managed_release) as recover:
+            completion, problems = reconcile_alpha_normal_once(
+                prepared, domain, runner, manager, coordinator, probe, ownership,
+            )
+            assert not problems, problems
+            assert completion.problem is None, completion.problem
+            assert completion.batch is not None and completion.batch.retired == {"wg-reserve"}
+            assert retired == ["wg-reserve"], retired
+            recover.assert_called_once()
+            assert completion.final.payload.ready, completion.final.payload.diagnostic
+            assert completion.final.availability is not None and completion.final.availability.confirmed
+            assert completion.final.wireguard_error is None, completion.final.wireguard_error
+            publish_alpha_normal_status(prepared, domain, runner, manager, status, completion)
+        assert adapter.observe("wg-main").state is ManagedWireGuardState.PRESENT
+        assert adapter.observe("wg-reserve").state is ManagedWireGuardState.ABSENT
+        assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-main"}
+        snapshot = status.snapshot()
+        assert snapshot.readiness is RuntimeReadiness.READY
+        assert snapshot.managed_profile_demands[0].regular_deficit == 0
+        assert snapshot.managed_profile_demands[0].reserve_present == 0
+        assert snapshot.managed_reclaim_projection is not None
+        assert not snapshot.managed_reclaim_projection.retirement_candidates
+        print("A012_NORMAL_RESERVE_WITHDRAWAL_F2_KERNEL=PASS")
+
+        final_payload = completion.final.payload
+        assert final_payload.desired is not None
+        _release_alpha_managed_device_dependencies(final_payload.desired, domain, runner)
         shutdown = manager.reconcile(
             CurrentConfig(prepared.config, {}), desired_device_ids=frozenset(),
             dependency_free_device_ids=frozenset({"wg-main", "wg-reserve"}),
