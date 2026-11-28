@@ -135,8 +135,35 @@ probe_target = "10.201.0.{index}"
         ])
         self.assertEqual(demand["ordinary_device_ids"], ["a"])
 
+    def test_external_only_reclaim_is_not_applicable(self):
+        agent = RuntimeStatusAgent(build_configured_intent_status(parse_current_config(CONFIG)))
+        agent.confirm_effective((), ())
+        snapshot = agent.snapshot()
+        self.assertEqual(snapshot.configured_intent.managed_reclaim, "careful")
+        self.assertFalse(snapshot.configured_intent.managed_reclaim_applicable)
+        self.assertIsNone(snapshot.managed_reclaim_projection)
+        self.assertEqual(snapshot.unknown_or_unconfirmed_fields, ())
+        self.assertNotIn("Managed reclaim:", render_runtime_status_text(snapshot))
+
     def test_current_reclaim_status_separates_intent_projection_and_realization(self):
-        config = parse_current_config(CONFIG)
+        managed = """
+[device.a]
+enabled = true
+use_outbound_nat = true
+[device.a.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/secret/a.key"
+[[device.a.managed_vpn.peers]]
+id = "peer"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.1:51820"
+probe_target = "10.201.0.1"
+"""
+        config = parse_current_config(managed + CONFIG.replace(
+            'device_order = ["ovpn"]', 'device_order = ["a", "ovpn"]'
+        ))
         agent = RuntimeStatusAgent(build_configured_intent_status(config))
         self.assertEqual(agent.snapshot().configured_intent.managed_reclaim, "careful")
         self.assertIn("projection: unconfirmed", render_runtime_status_text(agent.snapshot()))

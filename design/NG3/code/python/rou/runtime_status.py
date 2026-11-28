@@ -67,6 +67,7 @@ class ConfiguredIntentStatus:
     devices: tuple[ConfiguredDeviceStatus, ...]
     profiles: tuple[ConfiguredProfileStatus, ...]
     managed_reclaim: str | None = None
+    managed_reclaim_applicable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,7 +189,7 @@ class RuntimeStatusAgent:
     def confirm_managed_reclaim(self, projection: ReclaimProjection | None) -> None:
         if projection is not None and not isinstance(projection, ReclaimProjection):
             raise ValueError("projection must be ReclaimProjection or None")
-        if projection is not None and self._configured.managed_reclaim is None:
+        if projection is not None and not self._configured.managed_reclaim_applicable:
             raise ValueError("current reclaim requires current configuration")
         self._managed_reclaim = projection
 
@@ -331,7 +332,7 @@ class RuntimeStatusAgent:
             blocking_problems=self._problems,
             unknown_or_unconfirmed_fields=tuple(sorted(set(self._unknown) | (
                 {"managed_reclaim_projection"}
-                if self._configured.managed_reclaim is not None and self._managed_reclaim is None
+                if self._configured.managed_reclaim_applicable and self._managed_reclaim is None
                 else set()
             ))),
             managed_profile_demands=self._managed_demands,
@@ -445,6 +446,7 @@ def build_configured_intent_status(
         tuple(devices),
         tuple(profiles),
         None if current is None else current.managed_reclaim.value,
+        current is not None and bool(current.managed_vpns),
     )
 
 
@@ -553,7 +555,7 @@ def render_runtime_status_text(snapshot: RuntimeStatusSnapshot) -> str:
             )
             lines.append(f"        {index:02d}. {path.ifname} {state}")
 
-    if snapshot.configured_intent.managed_reclaim is not None:
+    if snapshot.configured_intent.managed_reclaim_applicable:
         lines.append(f"Managed reclaim: {snapshot.configured_intent.managed_reclaim}")
         projection = snapshot.managed_reclaim_projection
         if projection is None:
