@@ -24,7 +24,7 @@ from rou.managed_device_manager import (
 from rou.managed_reclaim_runtime import (
     build_runtime_reclaim_plan, exact_survivor_bindings,
     previously_admitted_deferred_bindings, replacement_managed_interfaces,
-    recovery_eligibility_seed, recovery_managed_interfaces,
+    recovery_eligibility_seed, recovery_managed_interfaces, exact_lifecycle_demand,
     structural_retirement_precondition, execute_reclaim_batch,
     replacement_peer_ownership_exact, cleanup_ownership_desired,
     project_managed_reclaim_realizations, ReclaimBatchOutcome,
@@ -109,11 +109,36 @@ warm_paths = 1
         plan = build_runtime_reclaim_plan(cfg, evidence, None)
         # Unconfirmed A cannot withdraw the required exact reserve, even
         # though the raw diagnostic would consider ordinary demand satisfied.
+        admitted = exact_lifecycle_demand(cfg, evidence)
+        self.assertEqual(admitted.profiles[0].regular_deficit, 1)
+        self.assertEqual(admitted.reserve_device_ids, frozenset({"b"}))
         self.assertEqual(plan.mandatory_device_ids, frozenset({"b"}))
         self.assertNotIn("b", {r.device_id for r in plan.projection.retirement_candidates})
         self.assertEqual(replacement_managed_interfaces(plan), frozenset({b.endpoint}))
         self.assertEqual(recovery_managed_interfaces(cfg, evidence, frozenset()),
                          frozenset({b.endpoint}))
+        rows = {r.device_id: r for r in project_managed_reclaim_realizations(
+            cfg, evidence, (), replacement_managed_interfaces(plan))}
+        self.assertFalse(rows["a"].payload_eligible)
+        self.assertIsNotNone(rows["a"].problem)
+        self.assertIs(rows["b"].intent_basis, ManagedDeviceIntentBasis.STRUCTURAL)
+        self.assertTrue(rows["b"].payload_eligible)
+        # Reserve was surplus when ordinary was exact. Losing its confirmation
+        # before cleanup must block that original candidate, even though the
+        # raw C.004 binding inventory has not changed.
+        self.adapter.confirm_present.side_effect = lambda did, _: observed[did]
+        original = observe_pre_reclaim(cfg, None, self.manager, lambda: (A, b))
+        original_plan = build_runtime_reclaim_plan(cfg, original, None)
+        self.assertEqual([r.device_id for r in original_plan.projection.retirement_candidates], ["b"])
+        self.assertTrue(structural_retirement_precondition(
+            original_plan, cfg, original, candidate_id="b", already_retired=frozenset(),
+            replacement_bindings=frozenset({A})))
+        self.assertFalse(structural_retirement_precondition(
+            original_plan, cfg, evidence, candidate_id="b", already_retired=frozenset(),
+            replacement_bindings=frozenset({A})))
+        self.adapter.converge_present.assert_not_called()
+        self.adapter.converge_absent.assert_not_called()
+        self.adapter.retire_exact.assert_not_called()
 
     def test_careful_retirement_overrides_structural_baseline_cover(self):
         # Two exact present ordinary Devices; A.013 picks baseline a, but

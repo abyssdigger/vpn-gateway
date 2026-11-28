@@ -12,7 +12,7 @@ from .accepted_effective_state import AcceptedEffectiveState, PreReclaimEvidence
 from .binding import PathBinding
 from .confirmed_current_use import CurrentUseState
 from .interface_identity import InterfaceIdentity
-from .managed_device_demand import project_final
+from .managed_device_demand import ManagedDeviceDemandProjection, project_final
 from .managed_device_manager import (
     ManagedDeviceDesiredState, ManagedDeviceIntentBasis, ManagedDeviceRealization,
 )
@@ -83,7 +83,7 @@ def build_runtime_reclaim_plan(
         ))
 
     # Reserve demand is the explicit non-GC presence obligation in this alpha.
-    mandatory = demand.reserve_device_ids
+    mandatory = exact_lifecycle_demand(config, evidence).reserve_device_ids
     # Only exact admitted observations may back positive decisions. Preserve
     # omission as uncertainty; never manufacture an ABSENT observation.
     expected = dict(evidence.expected_base_generations)
@@ -175,6 +175,23 @@ def _exact_bindings(evidence: PreReclaimEvidence) -> frozenset[ExactEligibility]
     return frozenset(result)
 
 
+def exact_lifecycle_demand(
+    config: CurrentConfig, evidence: PreReclaimEvidence,
+) -> ManagedDeviceDemandProjection:
+    """A.013 over independently admitted capacity, not raw managed names.
+
+    Keep evidence.demand unchanged as the pre-prune contribution/floor input.
+    A raw managed link with unknown D.001 generation cannot withdraw reserve
+    support or authorize lifecycle exposure.
+    """
+    _validate_inventory(config, evidence)
+    exact = {row.binding for row in _exact_bindings(evidence)}
+    return project_final(config, (
+        b for b in evidence.bindings
+        if b.path_id.device_id not in config.managed_vpns or b in exact
+    ))
+
+
 def recovery_eligibility_seed(plan: RuntimeReclaimPlan) -> frozenset[ExactEligibility]:
     allowed = exact_survivor_bindings(plan) | previously_admitted_deferred_bindings(plan)
     return frozenset(row for row in _exact_bindings(plan.evidence) if row.binding in allowed)
@@ -183,7 +200,7 @@ def recovery_eligibility_seed(plan: RuntimeReclaimPlan) -> frozenset[ExactEligib
 def replacement_managed_interfaces(plan: RuntimeReclaimPlan) -> frozenset[InterfaceIdentity]:
     """v1.3: independent structural eligibility plus retained exact identities."""
     assert plan.evidence.demand is not None
-    structural = plan.evidence.demand.desired_device_ids
+    structural = exact_lifecycle_demand(plan.config, plan.evidence).desired_device_ids
     retiring = {r.device_id for r in plan.projection.retirement_candidates}
     exact = _exact_bindings(plan.evidence)
     allowed = recovery_eligibility_seed(plan) | frozenset(
@@ -201,7 +218,7 @@ def recovery_managed_interfaces(
     """Fresh eligibility only; does not compute or replay a retirement plan."""
     _validate_inventory(config, evidence)
     assert evidence.demand is not None
-    demanded = evidence.demand.desired_device_ids
+    demanded = exact_lifecycle_demand(config, evidence).desired_device_ids
     return frozenset(
         row.binding.endpoint for row in _exact_bindings(evidence)
         if row.binding.path_id.device_id in demanded or row in seed
@@ -218,8 +235,7 @@ def affected_profiles(plan: RuntimeReclaimPlan, candidate_id: str) -> frozenset[
 
 def affected_support_ids(plan: RuntimeReclaimPlan, candidate_id: str) -> frozenset[str]:
     affected = affected_profiles(plan, candidate_id)
-    demand = plan.evidence.demand
-    assert demand is not None
+    demand = exact_lifecycle_demand(plan.config, plan.evidence)
     result = {candidate_id}
     for p in plan.profiles:
         if p.profile_id in affected:
@@ -254,8 +270,8 @@ def structural_retirement_precondition(
     if (candidate_id not in retired or candidate_id in already_retired
             or not already_retired <= retired or candidate_id in plan.mandatory_device_ids):
         return False
-    assert fresh.demand is not None
-    if candidate_id in fresh.demand.reserve_device_ids:
+    fresh_lifecycle = exact_lifecycle_demand(config, fresh)
+    if candidate_id in fresh_lifecycle.reserve_device_ids:
         return False
     if any(b.path_id.device_id in retired for b in replacement_bindings):
         return False
@@ -292,8 +308,8 @@ def structural_retirement_precondition(
             or candidate_id in fresh.unconfirmed_devices):
         return False
     # Check relevant independent reserve support and fixed ordinary floors.
-    old_demand = {p.profile_id: p for p in plan.evidence.demand.profiles}
-    fresh_demand = {p.profile_id: p for p in fresh.demand.profiles}
+    old_demand = {p.profile_id: p for p in exact_lifecycle_demand(config, plan.evidence).profiles}
+    fresh_demand = {p.profile_id: p for p in fresh_lifecycle.profiles}
     exact = {row.binding for row in _exact_bindings(fresh)}
     eligible = {b for b in replacement_bindings & expected
                 if b.path_id.device_id not in config.managed_vpns or b in exact}
@@ -482,8 +498,9 @@ def project_managed_reclaim_realizations(
     _validate_inventory(config, evidence)
     assert evidence.demand is not None
     active = frozenset(config.managed_vpns) & config.structural.active_device_ids
-    demanded = evidence.demand.desired_device_ids
-    if not retirement_ids <= active or retirement_ids & evidence.demand.reserve_device_ids:
+    lifecycle_demand = exact_lifecycle_demand(config, evidence)
+    demanded = lifecycle_demand.desired_device_ids
+    if not retirement_ids <= active or retirement_ids & lifecycle_demand.reserve_device_ids:
         raise ValueError("retirement outside ordinary reclaim scope")
     result = {row.device_id: row for row in previous_realizations}
     if len(result) != len(previous_realizations):

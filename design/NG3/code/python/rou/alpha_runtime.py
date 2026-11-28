@@ -98,7 +98,7 @@ from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .managed_device_demand import project_final
 from .managed_reclaim_runtime import (
     ExactEligibility, RuntimeReclaimPlan, ReclaimBatchOutcome,
-    build_runtime_reclaim_plan, replacement_managed_interfaces,
+    build_runtime_reclaim_plan, replacement_managed_interfaces, exact_lifecycle_demand,
     project_managed_reclaim_realizations, structural_retirement_precondition,
     replacement_peer_ownership_exact, cleanup_ownership_desired,
     execute_reclaim_batch, recovery_eligibility_seed, recovery_managed_interfaces,
@@ -996,13 +996,14 @@ def refresh_alpha_managed_reclaim_status(
             prepared, domain_spec, runner, manager, accepted,
         )
         projection = build_runtime_reclaim_plan(config, evidence, accepted).projection
+        lifecycle_demand = exact_lifecycle_demand(config, evidence)
     except Exception:
         return
     # Normal triggers are serialized, but never publish a result across a
     # changed configuration or effective-generation boundary.
     if prepared.current_config is not config or prepared.accepted_effective_state is not accepted:
         return
-    agent.confirm_managed_demand(evidence.demand)
+    agent.confirm_managed_demand(lifecycle_demand)
     agent.confirm_managed_reclaim(projection)
 
 
