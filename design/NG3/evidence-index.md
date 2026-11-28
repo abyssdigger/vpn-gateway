@@ -673,3 +673,38 @@ No remote peer availability or payload-through-reserve claim is made by this exp
 
 This evidence is isolated on the evaluation branch. It does not record a main snapshot,
 release decision or projectholder acceptance of the implementation.
+
+## EV-00310 — normal managed Device reclaim activation and exact reserve admission
+
+**Status:** verified development candidate; independent terminal review pending.  
+**Scope:** A.002/A.004/A.008/A.012/A.013/D.001–D.003 composition; careful/strict,
+exact lifecycle reserve obligation, bounded exact retirement and non-recursive F2.  
+**Requirements:** `VPNG-U001-R1.R3.R7.R4`, R1/R2; preserve R7.R3 reserve behavior.  
+**Task/review:** [#41](https://github.com/abyssdigger/vpn-gateway/issues/41),
+[exact-capacity disposition](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239014269),
+[kernel/status review](https://github.com/abyssdigger/vpn-gateway/issues/41#issuecomment-7239034859).  
+**Verified implementation/test baseline:** `a5472336c89e54b8b20a2042cc9e7171da43b317`.  
+**Executable evidence:** [NG3 Python 46143230434](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434)
+— 25/25 jobs PASS; [unit 140973642680](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434/job/140973642680)
+— 1061/1061 PASS; [linux-managed-device-runtime 140973642829](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143230434/job/140973642829)
+— PASS; lineage guard 46143230499 PASS.
+
+The shared normal startup/periodic path exercises the immutable plan, replacement policy,
+exact dependency cleanup/retirement, F2 and final status. The focused regression proves
+that careful can retire an A.013 baseline-selected Device while retaining another exact
+used survivor. Cold-start fallback, foreign same-name ordinary link and reserve withdrawal
+after ordinary recovery exercise real Linux lifecycle and policy without injected positive
+peer replies. Careful retained D.002, strict partial and remaining batch scenarios use
+real kernel interfaces, AllowedIPs, C.001 and D.001/D.003 operations with **injected technical
+peer replies**; they do not establish remote end-to-end reachability.
+
+The red test-only baseline `e689ec3c5c34dc726ace5fe362bd3a6862d796ae` failed on missing
+mandatory reserve ([unit job](https://github.com/abyssdigger/vpn-gateway/actions/runs/46143061397/job/140973110632)).
+The correction `97a40135e45a46e46fb1d5dead1c0355bb445e29` keeps raw #40 contribution/floor
+evidence separate from exact-capacity A.013 lifecycle demand. The foreign-link regression
+confirms preserved reserve and truthful DEGRADED status. No accepted pure A.013, A.004
+or reclaim selection contract changed.
+
+Evidence does not itself close R7.R4/R1/R2, authorize main publication or claim released
+0.1.0 support. Final independent review must bind documentation and architecture/trace
+reconciliation to its exact candidate.

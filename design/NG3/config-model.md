@@ -136,9 +136,10 @@ recovery remains governed by R7.R3.R3 and safe dependency release; ordinary
 membership of the same Device in another Profile must still be considered.
 
 **Implementation state:** normalized configuration, helper/model boundaries and normal
-lifecycle call sites exist in the #41 development candidate; integrated verification and
-acceptance are pending. The canonical semantics are normative, not a claim of verified
-runtime support.
+lifecycle call sites exist in the #41 development candidate; integrated baseline verification
+is recorded in EV-00310, independent acceptance remains pending. An unconfirmed managed
+same-name link does not count as lifecycle capacity or withdraw required reserve.
+The canonical semantics do not imply released support.
 
 **Requirements:**
 - `VPNG-U001-R1.R3.R7.R4`;

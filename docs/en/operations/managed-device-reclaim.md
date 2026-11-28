@@ -2,7 +2,7 @@
 
 [Русская версия](../../ru/operations/managed-device-reclaim.md) · [Documentation home](../README.md)
 
-**Applicability:** current NG3 development, exact revision containing this page. **Development candidate — not accepted for release.** Configuration parsing, helper/model code and the startup/periodic reclaim call sites are implemented in this revision; integrated evidence and acceptance of [#41](https://github.com/abyssdigger/vpn-gateway/issues/41) remain pending. The behavior below states the accepted target contract, not a claim that the integrated runtime has passed verification. It is not an operator instruction for version 0.1.0.
+**Applicability:** current NG3 development, exact revision containing this page. **Development candidate — not accepted for release.** Configuration parsing, helper/model code and the startup/periodic reclaim call sites are implemented in this revision; integrated baseline verification is recorded in [EV-00310](../../../design/NG3/evidence-index.md#ev-00310--normal-managed-device-reclaim-activation-and-exact-reserve-admission). Independent acceptance of [#41](https://github.com/abyssdigger/vpn-gateway/issues/41) remains pending. It is not an operator instruction for version 0.1.0.
 
 ## Purpose and configuration
 
@@ -21,22 +21,22 @@ After successful strict reconciliation, no individually releasable surplus manag
 
 In careful mode, an already-present exact ordinary realization confirmed as currently used remains protected even if structural demand could be satisfied by another path. The decision is reconsidered using fresh observations on later triggers. Unknown or stale usage does not prove absence of use or safe retirement.
 
-A deferred Device may remain physically present without gaining payload/probe eligibility. Independent exact structural demand can authorize eligibility, including cold startup. An already accepted deferred path can preserve exposure only while its exact binding and realization still match fresh evidence. A replacement or unknown identity does not inherit that exposure.
+A deferred Device may remain physically present without gaining payload/probe eligibility. Independent exact structural demand can authorize eligibility, including cold startup. An already accepted deferred path can preserve exposure only while its exact binding and realization still match fresh evidence. A replacement or unknown identity does not inherit that exposure. An unconfirmed managed link with the expected name does not count as lifecycle capacity. It cannot withdraw required reserve or authorize payload eligibility; raw pre-prune observation remains reclaim evidence.
 
 ## Execution and failure handling
 
-The intended normal trigger freezes one reclaim plan from fresh pre-prune state, converges replacement policy without its retirement candidates, confirms dependencies, and attempts a bounded retirement batch. It checks candidate identity/generation, affected Profile floors and required retained paths before cleanup and again before exact retirement. Managed WireGuard cleanup must be freshly confirmed: only permanent peer probe /32 prefixes may remain on the retiring Device, without Profile payload ownership.
+The normal trigger freezes one reclaim plan from fresh pre-prune state, converges replacement policy without its retirement candidates, confirms dependencies, and attempts a bounded retirement batch. It checks candidate identity/generation, affected Profile floors and required retained paths before cleanup and again before exact retirement. Managed WireGuard cleanup must be freshly confirmed: only permanent peer probe /32 prefixes may remain on the retiring Device, without Profile payload ownership.
 
 Failure or drift stops further retirement attempts. An already successful earlier retirement is not automatically rolled back. A batch failure or lower-state touch requires one non-recursive fresh recovery of normal policy. A later trigger reassesses the fresh state; it does not replay the old retirement plan. A fresh status-only projection must never authorize another release in the same recovery.
 
 ## Reading runtime status
 
-The target development status distinguishes:
+The current development status distinguishes:
 
 | Field | Meaning |
 | --- | --- |
 | `configured_intent.managed_reclaim` | Configured domain policy, not proof of retirement |
-| `managed_profile_demands` | Structural ordinary/reserve demand and observed capacity |
+| `managed_profile_demands` | Structural ordinary/reserve demand and lifecycle-admitted capacity (external and exact confirmed managed bindings) |
 | `managed_reclaim_projection` | Fresh read-only reclaim projection: survivors, retirement candidates, deferred decisions, reasons and exact identities/generations where confirmed |
 | `managed_device_realizations` | Actual lifecycle realization, including intent basis and payload eligibility |
 
@@ -59,4 +59,4 @@ Suppose two eligible ordinary managed VPNs are already present and the Profile n
 
 ## Limitations and verification state
 
-The normal runtime entrypoints now use the new reclaim path in this development candidate. Staged helper tests do not establish integrated runtime acceptance or release support. The final page must be reconciled with the exact integrated implementation, status rendering and Linux evidence before the #41 candidate is accepted. Wider NG3 documentation coverage remains incomplete.
+The implementation/test baseline passed the full NG3 Python workflow, including Linux cold-start reserve, foreign same-name ordinary link, reserve withdrawal, careful retention and strict partial/remaining batch. Careful and strict batch tests use injected positive technical peer replies with real kernel operations; they are not remote end-to-end reachability tests. The configuration illustration remains an unexecuted standalone fragment. Independent acceptance of the exact final candidate and release support are separate; wider documentation coverage remains incomplete.
