@@ -9,6 +9,7 @@ from rou.accepted_effective_state import AcceptedEffectiveState, observe_pre_rec
 from rou.alpha_runtime import (
     AlphaPreparedPolicy, AlphaReconcileResult, AlphaReconcileStatus,
     capture_reclaim_replacement_evidence, reclaim_replacement_policy_exact,
+    release_alpha_reclaim_batch,
 )
 from rou.forwarding_gate import ForwardingGateState
 from rou.alpha_runtime import StackReturnAffinityOwnerStatus
@@ -331,3 +332,44 @@ warm_paths = 1
         self.assertFalse(structural_retirement_precondition(
             plan, cfg, evidence, candidate_id="a", already_retired=frozenset(),
             replacement_bindings=frozenset()))
+
+    def test_alpha_batch_composes_fresh_guards_and_exact_retirement(self):
+        plan = self.strict_plan()
+        prepared = SimpleNamespace(current_config=plan.config)
+        replacement = SimpleNamespace(bindings=(EXT,))
+        ownership = Mock()
+        ownership.converge.return_value.confirmed = True
+        ownership.observe.side_effect = lambda desired: WireGuardPeerOwnershipObservation(
+            desired.device_id, desired.interface, desired.peers)
+        self.adapter.retire_exact.return_value = ManagedWireGuardObservation(
+            "a", ManagedWireGuardState.ABSENT)
+        with patch("rou.alpha_runtime.observe_alpha_pre_reclaim",
+                   return_value=plan.evidence) as observe, \
+             patch("rou.alpha_runtime.reclaim_replacement_policy_exact",
+                   return_value=True) as policy:
+            out = release_alpha_reclaim_batch(
+                prepared, SimpleNamespace(namespace="ns"), Mock(), self.manager,
+                plan, replacement, None, ownership)
+        self.assertEqual(out.retired, frozenset({"a"}))
+        self.assertTrue(out.requires_recovery)
+        self.assertEqual(observe.call_count, 2)
+        self.assertEqual(policy.call_count, 2)
+        ownership.converge.assert_called_once()
+        ownership.observe.assert_called_once()
+        self.adapter.retire_exact.assert_called_once_with(
+            "a", A.endpoint, "base-a", plan.config.managed_vpns["a"])
+        self.adapter.converge_absent.assert_not_called()
+
+    def test_alpha_batch_rejects_post_cleanup_policy_drift(self):
+        plan = self.strict_plan()
+        ownership = Mock()
+        ownership.converge.return_value.confirmed = True
+        with patch("rou.alpha_runtime.observe_alpha_pre_reclaim", return_value=plan.evidence), \
+             patch("rou.alpha_runtime.reclaim_replacement_policy_exact", side_effect=[True, False]):
+            out = release_alpha_reclaim_batch(
+                SimpleNamespace(current_config=plan.config), SimpleNamespace(namespace="ns"),
+                Mock(), self.manager, plan, SimpleNamespace(bindings=(EXT,)), None, ownership)
+        self.assertTrue(out.requires_recovery)
+        self.assertFalse(out.retirement_attempted)
+        self.assertFalse(out.retired)
+        self.adapter.retire_exact.assert_not_called()

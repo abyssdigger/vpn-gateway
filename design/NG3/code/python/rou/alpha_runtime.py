@@ -96,6 +96,13 @@ from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_protective_payload_gate import LinuxProtectivePayloadGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .managed_device_demand import project_final
+from .managed_reclaim_runtime import (
+    ExactEligibility, RuntimeReclaimPlan, ReclaimBatchOutcome,
+    build_runtime_reclaim_plan, replacement_managed_interfaces,
+    project_managed_reclaim_realizations, structural_retirement_precondition,
+    replacement_peer_ownership_exact, cleanup_ownership_desired,
+    execute_reclaim_batch, recovery_managed_interfaces,
+)
 from .managed_device_manager import (
     ManagedDeviceConvergence,
     converge_managed_device_presence,
@@ -110,6 +117,7 @@ from .managed_wireguard_adapter import (
 from .wireguard_peer_ownership import (
     WireGuardPeerAllowedIPs,
     WireGuardPeerOwnershipDesired,
+    WireGuardPeerOwnershipObservation,
     WireGuardPeerOwnershipEnforcer,
 )
 from .wireguard_peer_runtime import (
@@ -718,6 +726,83 @@ def reclaim_replacement_policy_exact(
         return False
 
 
+def prepare_alpha_reclaim_plan(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    convergence: ManagedDeviceConvergence,
+    previous_accepted: AcceptedEffectiveState | None,
+) -> tuple[RuntimeReclaimPlan, tuple[ManagedDeviceRealization, ...]]:
+    """Prepare a coherent new eligibility/realization projection before policy I/O."""
+    evidence = observe_alpha_pre_reclaim(
+        prepared, domain_spec, runner, manager, previous_accepted,
+    )
+    plan = build_runtime_reclaim_plan(prepared.current_config, evidence, previous_accepted)
+    eligible = replacement_managed_interfaces(plan)
+    realizations = project_managed_reclaim_realizations(
+        prepared.current_config, evidence, convergence.realizations, eligible,
+        frozenset(row.device_id for row in plan.projection.retirement_candidates),
+    )
+    # Publish only after the whole pure plan/realization composition succeeded.
+    prepared.pre_reclaim_evidence = evidence
+    prepared.confirmed_managed_interfaces = eligible
+    return plan, realizations
+
+
+def release_alpha_reclaim_batch(
+    prepared: AlphaPreparedPolicy,
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: SubprocessNftRunner,
+    manager: ManagedDeviceManager,
+    plan: RuntimeReclaimPlan,
+    replacement: ReclaimReplacementEvidence,
+    wireguard: WireGuardPeerRuntimeResult | None,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> ReclaimBatchOutcome:
+    """Execute the exact immutable batch; the caller owns mandatory F2 recovery."""
+    retirement_ids = frozenset(row.device_id for row in plan.projection.retirement_candidates)
+    bindings = frozenset(replacement.bindings)
+    peers = () if wireguard is None else wireguard.realizations
+
+    def verify(candidate, already_retired, cleaned):
+        if prepared.current_config is not plan.config:
+            return False
+        fresh = observe_alpha_pre_reclaim(
+            prepared, domain_spec, runner, manager, plan.previous_accepted,
+        )
+        if not structural_retirement_precondition(
+            plan, prepared.current_config, fresh, candidate_id=candidate.device_id,
+            already_retired=already_retired, replacement_bindings=bindings,
+        ):
+            return False
+        if not reclaim_replacement_policy_exact(
+            prepared, domain_spec, runner, replacement, retirement_ids,
+        ):
+            return False
+        if not replacement_peer_ownership_exact(
+            plan, fresh, bindings, candidate.device_id, peers, ownership.observe,
+        ):
+            return False
+        if cleaned:
+            desired = cleanup_ownership_desired(plan.config, candidate)
+            if ownership.observe(desired) != WireGuardPeerOwnershipObservation(
+                desired.device_id, desired.interface, desired.peers,
+            ):
+                return False
+        return True
+
+    def cleanup(candidate):
+        return ownership.converge(cleanup_ownership_desired(plan.config, candidate)).confirmed
+
+    def retire(candidate):
+        manager.retire_reclaim_candidate(plan.config, candidate)
+
+    return execute_reclaim_batch(
+        plan, verify=verify, cleanup=cleanup, retire=retire,
+    )
+
+
 def release_alpha_undemanded_devices(
     prepared: AlphaPreparedPolicy,
     domain_spec: ManagedNetworkDomainSpec,
@@ -1294,6 +1379,8 @@ def reconcile_alpha_after_managed_release(
     coordinator: WireGuardPeerRuntimeCoordinator,
     probe_driver: LinuxIcmpProbeDriver,
     ownership: WireGuardPeerOwnershipEnforcer,
+    *,
+    recovery_seed: frozenset[ExactEligibility] | None = None,
 ) -> AlphaPostReleaseResult:
     """Fresh recovery after possible dependency mutation, without another release.
 
@@ -1305,6 +1392,19 @@ def reconcile_alpha_after_managed_release(
         fresh = converge_alpha_managed_device_presence(
             prepared, domain_spec, runner, manager
         )
+        if recovery_seed is not None:
+            evidence = observe_alpha_pre_reclaim(
+                prepared, domain_spec, runner, manager, None,
+            )
+            eligible = recovery_managed_interfaces(
+                prepared.current_config, evidence, recovery_seed,
+            )
+            realizations = project_managed_reclaim_realizations(
+                prepared.current_config, evidence, fresh.realizations, eligible,
+            )
+            prepared.confirmed_managed_interfaces = eligible
+            prepared.pre_reclaim_evidence = None
+            fresh = replace(fresh, realizations=realizations)
         payload = reconcile_alpha_payload_once(prepared, domain_spec, runner)
         if not payload.ready:
             return AlphaPostReleaseResult(
