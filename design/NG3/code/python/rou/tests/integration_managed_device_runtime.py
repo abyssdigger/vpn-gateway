@@ -151,6 +151,35 @@ def verify_cold_start_reserve_reclaim(config: str, runtime_dir: Path, key_path: 
         assert {row.device_id for row in snapshot.managed_reclaim_projection.survivors} == {"wg-reserve"}
         print("A012_NORMAL_COLD_START_RESERVE_RECLAIM=PASS")
 
+        # A foreign same-name ordinary link is visible to raw C.004 but is
+        # not an owned D.001 realization. It must not withdraw exact reserve.
+        run("ip", "-n", NS, "link", "add", "wg0", "type", "dummy")
+        run("ip", "-n", NS, "link", "set", "wg0", "up")
+        with patch("rou.alpha_runtime.ALPHA_NAMESPACE", NS), \
+             patch.object(LinuxManagedWireGuardAdapter, "retire_exact",
+                          side_effect=AssertionError("required reserve retirement")) as retire:
+            blocked, problems = reconcile_alpha_normal_once(
+                prepared, domain, runner, manager, coordinator, probe, ownership,
+            )
+            assert {p.device_id for p in problems} == {"wg-main"}
+            assert blocked.batch is None and blocked.problem is None
+            assert blocked.final.payload.ready and blocked.final.availability.confirmed
+            assert blocked.final.wireguard_error is None, blocked.final.wireguard_error
+            retire.assert_not_called()
+            publish_alpha_normal_status(prepared, domain, runner, manager, status, blocked)
+        assert adapter.observe("wg-main").state is ManagedWireGuardState.ABSENT
+        assert adapter.observe("wg-reserve").state is ManagedWireGuardState.PRESENT
+        assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-reserve"}
+        snapshot = status.snapshot()
+        assert snapshot.readiness is RuntimeReadiness.DEGRADED
+        assert snapshot.managed_profile_demands[0].regular_deficit == 1
+        assert snapshot.managed_profile_demands[0].reserve_present == 1
+        assert snapshot.managed_reclaim_projection is not None
+        assert not snapshot.managed_reclaim_projection.retirement_candidates
+        assert {row.device_id for row in snapshot.managed_reclaim_projection.survivors} == {"wg-reserve"}
+        run("ip", "-n", NS, "link", "del", "wg0")
+        print("A012_NORMAL_UNCONFIRMED_ORDINARY_RESERVE_KERNEL=PASS")
+
         # Exercise reserve-demand withdrawal through the activated normal
         # caller, not the historical structural-demand release helper.
         key_path.chmod(0o600)
