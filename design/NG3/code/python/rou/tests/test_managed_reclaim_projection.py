@@ -162,6 +162,32 @@ class ReclaimProjectionTests(unittest.TestCase):
         self.assertEqual(ids(r.deferred), {"a", "b"})
         self.assertEqual(ids(r.retirement_candidates), {"c"})
 
+    def test_unconfirmed_contribution_never_erases_fixed_floor(self):
+        p = profile("p", 2, {"u": 1, "x": 1})
+        u = replace(obs("u"), confirmed_generation=None)
+        r = project(STRICT, [p], "ux", observations=[u, obs("x")])
+        self.assertEqual(r.floors, (("p", 2),))
+        self.assertEqual(ids(r.deferred), {"u", "x"})
+        self.assertEqual(r.retirement_candidates, ())
+        self.assertEqual(r.survivors, ())
+
+        # x's confirmed capacity remains protected and can cover q;
+        # an unrelated Profile remains independently decidable.
+        q = profile("q", 1, {"x": 1, "y": 1})
+        t = profile("t", 0, {"z": 1})
+        r = project(STRICT, [p, q, t], "uxyz",
+                    observations=[u, obs("x"), obs("y"), obs("z")])
+        self.assertEqual(ids(r.deferred), {"u", "x"})
+        self.assertEqual(ids(r.retirement_candidates), {"y", "z"})
+        self.assertEqual(r.floors, (("p", 2), ("q", 1), ("t", 0)))
+
+        # The same unconfirmed Device contributes to both positive floors.
+        q = profile("q", 2, {"u": 1, "y": 1})
+        r = project(STRICT, [p, q, t], "uxyz",
+                    observations=[u, obs("x"), obs("y"), obs("z")])
+        self.assertEqual(ids(r.deferred), {"u", "x", "y"})
+        self.assertEqual(ids(r.retirement_candidates), {"z"})
+
     def test_missing_and_conflicting_observations(self):
         p = profile("p", 0, {"a": 1, "b": 1})
         q = profile("q", 0, {"c": 1})
